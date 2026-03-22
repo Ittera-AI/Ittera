@@ -1,0 +1,51 @@
+name: Web CI
+
+on:
+  push:
+    paths:
+      - "apps/web/**"
+      - "packages/shared-types/**"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "packages/shared-types/**"
+      - ".github/workflows/web.yml"
+
+jobs:
+  lint-and-build:
+    name: Lint, Test & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install shared-types dependencies
+        working-directory: packages/shared-types
+        run: npm install
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci --legacy-peer-deps
+
+      - name: Lint (ESLint)
+        working-directory: apps/web
+        run: npm run lint
+
+      - name: Test (Vitest)
+        working-directory: apps/web
+        run: npm test
+
+      - name: Build (Next.js)
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+        run: npm run build

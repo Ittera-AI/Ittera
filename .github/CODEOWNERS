@@ -1,0 +1,19 @@
+# Iterra CODEOWNERS
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Frontend
+apps/web/                   @frontend
+packages/shared-types/      @frontend
+
+# Backend
+apps/api/                   @backend
+
+# AI Engine & Workers
+packages/ai-engine/         @ai-engineer
+workers/                    @ai-engineer
+
+# Infrastructure & CI
+infra/                      @lead
+.github/                    @lead
+docker-compose.yml          @lead
+Makefile                    @lead

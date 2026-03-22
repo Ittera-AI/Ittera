@@ -1,0 +1,71 @@
+name: API & AI Engine CI
+
+on:
+  push:
+    paths:
+      - "apps/api/**"
+      - "packages/ai-engine/**"
+      - ".github/workflows/api.yml"
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - "packages/ai-engine/**"
+      - ".github/workflows/api.yml"
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: iterra
+          POSTGRES_PASSWORD: iterra
+          POSTGRES_DB: iterra_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            apps/api/requirements-dev.txt
+            packages/ai-engine/pyproject.toml
+
+      - name: Install AI engine
+        run: pip install -e packages/ai-engine/
+
+      - name: Install API dependencies
+        run: pip install -r apps/api/requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: |
+          ruff check apps/api/
+          ruff check packages/ai-engine/
+
+      - name: Test API
+        env:
+          DATABASE_URL: postgresql://iterra:iterra@localhost:5432/iterra_test
+          SECRET_KEY: test-secret-key
+          OPENAI_API_KEY: sk-test
+        run: |
+          cd apps/api
+          pytest tests/ --cov=app --cov-report=term-missing --cov-fail-under=60
+
+      - name: Test AI Engine
+        run: |
+          cd packages/ai-engine
+          pytest tests/ --cov=iterra_ai --cov-report=term-missing --cov-fail-under=60

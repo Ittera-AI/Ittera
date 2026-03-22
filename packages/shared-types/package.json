@@ -1,0 +1,15 @@
+{
+  "name": "@iterra/shared-types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Auto-generated TypeScript types from Iterra OpenAPI spec",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "generate": "bash ../../scripts/gen_types.sh"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "openapi-typescript": "^7.4.0"
+  }
+}
