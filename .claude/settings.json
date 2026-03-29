@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\app\\api\\health",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\components\\ui",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\components\\features\\calendar",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\components\\features\\repurpose",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\components\\features\\coach",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\components\\features\\radar",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\components\\layouts",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\hooks",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\stores",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\services",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\types",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\utils",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web\\public",
+      "c:\\Users\\KIIT0001\\Desktop\\Folders\\Iterra\\apps\\web"
+    ],
+    "allow": [
+      "Bash(dir \"C:\\\\Users\\\\KIIT0001\\\\Desktop\\\\Folders\\\\Ittera\\\\src\\\\app\")"
+    ]
+  }
+}
