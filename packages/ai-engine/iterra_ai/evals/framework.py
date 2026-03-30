@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass
@@ -39,7 +40,7 @@ class EvalReport:
 class EvalRunner:
     """Run evaluation cases against an AI engine function."""
 
-    def __init__(self, engine_fn: Callable, pass_threshold: float = 0.7) -> None:
+    def __init__(self, engine_fn: Callable[..., Any], pass_threshold: float = 0.7) -> None:
         self.engine_fn = engine_fn
         self.pass_threshold = pass_threshold
 

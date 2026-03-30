@@ -13,7 +13,7 @@ const METRICS = [
 
 export default function Benefits() {
   return (
-    <section id="benefits" className="py-24 relative overflow-hidden bg-[#F9F8F6]">
+    <section id="benefits" className="py-12 sm:py-24 relative overflow-hidden bg-[#F9F8F6]">
       <div
         className="absolute bottom-0 right-0 w-[500px] h-[400px] pointer-events-none"
         style={{ background: "radial-gradient(ellipse at bottom right, rgba(163,138,112,0.04) 0%, transparent 60%)" }}
@@ -37,7 +37,7 @@ export default function Benefits() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.55, delay: 0.07, ease: EASE }}
-            className="text-[42px] sm:text-[52px] font-bold tracking-[-0.03em] leading-[1.06] text-neutral-900"
+            className="text-[28px] sm:text-[42px] lg:text-[52px] font-bold tracking-[-0.03em] leading-[1.06] text-neutral-900"
           >
             Real outcomes. <span className="gradient-text">First 90 days.</span>
           </motion.h2>
@@ -54,7 +54,7 @@ export default function Benefits() {
               className="p-7 rounded-2xl bg-white border border-[#EAEAEC]"
               style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
             >
-              <div className="text-[52px] font-bold tracking-[-0.04em] text-neutral-900 leading-none mb-2">
+              <div className="text-[36px] sm:text-[52px] font-bold tracking-[-0.04em] text-neutral-900 leading-none mb-2">
                 {metric.value}
               </div>
               <div className="text-[13px] text-neutral-400">{metric.label}</div>

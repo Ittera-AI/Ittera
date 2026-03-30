@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useTheme } from "@/context/ThemeContext";
 const EASE = [0.16, 1, 0.3, 1] as const;
 
 const PAIN_POINTS = [
@@ -31,8 +32,20 @@ const PAIN_POINTS = [
 ];
 
 export default function Problem() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
+  const cardBg     = isDark ? "#141210" : "white";
+  const cardHover  = isDark ? "#1C1916" : "#F5F5F4";
+  const gridGap    = isDark ? "#2E2922" : "#EAEAEC";
+  const numColor   = isDark ? "rgba(242,237,232,0.12)" : "#E5E5E5";
+  const titleColor = isDark ? "#F2EDE8" : "#171717";
+  const descColor  = isDark ? "rgba(242,237,232,0.5)" : "#737373";
+  const quoteColor = isDark ? "rgba(242,237,232,0.55)" : "#737373";
+  const quoteStrong= isDark ? "#F2EDE8" : "#404040";
+
   return (
-    <section id="problem" className="py-24 bg-[#F9F8F6] relative">
+    <section id="problem" className="py-12 sm:py-24 bg-[#F9F8F6] relative">
       <div
         className="absolute top-0 right-0 w-[500px] h-[500px] pointer-events-none"
         style={{ background: "radial-gradient(ellipse at top right, rgba(163,138,112,0.04) 0%, transparent 60%)" }}
@@ -56,7 +69,8 @@ export default function Problem() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.55, delay: 0.07, ease: EASE }}
-            className="text-[42px] sm:text-[52px] font-bold tracking-[-0.03em] leading-[1.06] text-neutral-900 mb-5"
+            className="text-[28px] sm:text-[42px] lg:text-[52px] font-bold tracking-[-0.03em] leading-[1.06] mb-5"
+            style={{ color: titleColor }}
           >
             Content strategy is broken
           </motion.h2>
@@ -66,14 +80,18 @@ export default function Problem() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.14, ease: EASE }}
-            className="text-[16px] text-neutral-500 leading-[1.75]"
+            className="text-[16px] leading-[1.75]"
+            style={{ color: descColor }}
           >
             Creators and marketers are drowning in tools that don&apos;t work together,
             spending more time managing content than creating it.
           </motion.p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-[#EAEAEC] rounded-2xl overflow-hidden border border-[#EAEAEC]">
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 gap-px rounded-2xl overflow-hidden"
+          style={{ background: gridGap, border: `1px solid ${gridGap}` }}
+        >
           {PAIN_POINTS.map((point, i) => (
             <motion.div
               key={point.num}
@@ -81,11 +99,14 @@ export default function Problem() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true, margin: "-40px" }}
               transition={{ duration: 0.45, delay: i * 0.06 }}
-              className="bg-white p-7 hover:bg-[#F5F5F4] transition-colors duration-300"
+              className="p-7 transition-colors duration-300"
+              style={{ background: cardBg }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = cardHover; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = cardBg; }}
             >
-              <div className="text-[11px] font-mono text-neutral-200 mb-4 tracking-wider">{point.num}</div>
-              <h3 className="text-[15px] font-semibold text-neutral-900 mb-2.5 tracking-tight">{point.title}</h3>
-              <p className="text-[13.5px] text-neutral-500 leading-[1.7]">{point.description}</p>
+              <div className="text-[11px] font-mono mb-4 tracking-wider" style={{ color: numColor }}>{point.num}</div>
+              <h3 className="text-[15px] font-semibold mb-2.5 tracking-tight" style={{ color: titleColor }}>{point.title}</h3>
+              <p className="text-[13.5px] leading-[1.7]" style={{ color: descColor }}>{point.description}</p>
             </motion.div>
           ))}
         </div>
@@ -97,9 +118,9 @@ export default function Problem() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="mt-12 pl-5 border-l-2 border-[#A38A70]/40"
         >
-          <p className="text-[17px] text-neutral-500 leading-relaxed max-w-2xl">
+          <p className="text-[17px] leading-relaxed max-w-2xl" style={{ color: quoteColor }}>
             The average creator wastes{" "}
-            <span className="text-neutral-700 font-semibold">12+ hours every week</span>{" "}
+            <span className="font-semibold" style={{ color: quoteStrong }}>12+ hours every week</span>{" "}
             on content operations that should take two.
           </p>
         </motion.div>

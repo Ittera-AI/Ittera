@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 
 function GoogleIcon() {
   return (
@@ -16,10 +17,10 @@ function GoogleIcon() {
   );
 }
 
-function GitHubIcon() {
+function LinkedInIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+      <path d="M6.94 8.5a1.56 1.56 0 1 1 0-3.12 1.56 1.56 0 0 1 0 3.12ZM5.62 9.68h2.65V18H5.62V9.68Zm4.31 0h2.54v1.14h.04c.35-.67 1.22-1.38 2.52-1.38 2.69 0 3.19 1.77 3.19 4.07V18h-2.64v-3.99c0-.95-.02-2.17-1.32-2.17-1.32 0-1.52 1.03-1.52 2.1V18H9.93V9.68Z" />
     </svg>
   );
 }
@@ -30,6 +31,7 @@ function InputField({
   onChange,
   placeholder,
   autoComplete,
+  isDark,
   children,
 }: {
   type: string;
@@ -37,8 +39,14 @@ function InputField({
   onChange: (v: string) => void;
   placeholder: string;
   autoComplete?: string;
+  isDark: boolean;
   children?: React.ReactNode;
 }) {
+  const inputBg     = isDark ? "#1C1916" : "#F9F8F6";
+  const inputBorder = isDark ? "#2E2922" : "#EAEAEC";
+  const inputColor  = isDark ? "#F2EDE8" : "#171717";
+  const focusBg     = isDark ? "#141210" : "white";
+
   return (
     <div className="relative">
       <input
@@ -49,21 +57,21 @@ function InputField({
         autoComplete={autoComplete}
         className="w-full h-11 px-4 pr-11 text-[13.5px] outline-none transition-all duration-200"
         style={{
-          background: "#F9F8F6",
-          border: "1px solid #EAEAEC",
+          background: inputBg,
+          border: `1px solid ${inputBorder}`,
           borderRadius: "8px",
-          color: "#171717",
+          color: inputColor,
         }}
         onFocus={(e) => {
           e.currentTarget.style.border = "1px solid rgba(163,138,112,0.5)";
-          e.currentTarget.style.background = "white";
+          e.currentTarget.style.background = focusBg;
         }}
         onBlur={(e) => {
-          e.currentTarget.style.border = "1px solid #EAEAEC";
-          e.currentTarget.style.background = "#F9F8F6";
+          e.currentTarget.style.border = `1px solid ${inputBorder}`;
+          e.currentTarget.style.background = inputBg;
         }}
       />
-      <style>{`input::placeholder { color: rgba(23,23,23,0.35); }`}</style>
+      <style>{`input::placeholder { color: ${isDark ? "rgba(242,237,232,0.25)" : "rgba(23,23,23,0.35)"}; }`}</style>
       {children && (
         <div className="absolute right-3.5 top-1/2 -translate-y-1/2">{children}</div>
       )}
@@ -72,7 +80,10 @@ function InputField({
 }
 
 export default function AuthModal() {
-  const { authOpen, authMode, setAuthMode, closeAuth, signIn, signUp } = useAuth();
+  const { authOpen, authMode, authSeedEmail, setAuthMode, closeAuth, signIn, signUp, signInWithGoogle, signInWithLinkedIn } = useAuth();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -83,11 +94,11 @@ export default function AuthModal() {
   // Reset fields when mode changes
   useEffect(() => {
     setName("");
-    setEmail("");
+    setEmail(authSeedEmail);
     setPassword("");
     setError("");
     setShowPw(false);
-  }, [authMode]);
+  }, [authMode, authSeedEmail]);
 
   // Escape to close
   useEffect(() => {
@@ -128,14 +139,38 @@ export default function AuthModal() {
       } else {
         await signUp(email, password, name);
       }
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const switchMode = () => setAuthMode(authMode === "signin" ? "signup" : "signin");
+
+  // Theme tokens
+  const modalBg       = isDark ? "#141210" : "rgba(255,255,255,0.98)";
+  const modalBorder   = isDark ? "#2E2922" : "#EAEAEC";
+  const modalShadow   = isDark ? "0 48px 140px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.04) inset" : "0 48px 140px rgba(0,0,0,0.15), 0 1px 0 rgba(255,255,255,0.9) inset";
+  const titleColor    = isDark ? "#F2EDE8" : "#171717";
+  const subtextColor  = isDark ? "rgba(242,237,232,0.45)" : "#737373";
+  const labelColor    = isDark ? "rgba(242,237,232,0.6)" : "#525252";
+  const dividerColor  = isDark ? "#2E2922" : "#EAEAEC";
+  const dividerText   = isDark ? "rgba(242,237,232,0.3)" : "#A3A3A3";
+  const socialBg      = isDark ? "#1C1916" : "white";
+  const socialBorder  = isDark ? "#2E2922" : "#EAEAEC";
+  const socialText    = isDark ? "rgba(242,237,232,0.6)" : "#404040";
+  const socialHoverBg     = isDark ? "#252019" : "#F5F5F4";
+  const socialHoverBorder = isDark ? "#3D3730" : "#D4D4D4";
+  const socialHoverText   = isDark ? "#F2EDE8" : "#171717";
+  const closeBtnHover = isDark ? "#1C1916" : "#F5F5F4";
+  const closeBtnColor = isDark ? "rgba(242,237,232,0.4)" : "#A3A3A3";
+  const forgotColor   = isDark ? "rgba(242,237,232,0.3)" : "#A3A3A3";
+  const legalColor    = isDark ? "rgba(242,237,232,0.25)" : "#A3A3A3";
+  const legalLinkColor= isDark ? "rgba(242,237,232,0.45)" : "#737373";
+  const submitBg      = isDark ? "linear-gradient(135deg, #C4A882 0%, #A38A70 100%)" : "#0F172A";
+  const submitColor   = isDark ? "#0C0B09" : "white";
+  const logoStop1     = isDark ? "#C4A882" : "#0F172A";
 
   return (
     <AnimatePresence>
@@ -149,7 +184,7 @@ export default function AuthModal() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-[100]"
-            style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(12px)" }}
+            style={{ background: isDark ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.35)", backdropFilter: "blur(12px)" }}
             onClick={closeAuth}
           />
 
@@ -166,9 +201,9 @@ export default function AuthModal() {
             <div
               className="relative w-full max-w-[420px] rounded-xl overflow-hidden"
               style={{
-                background: "rgba(255,255,255,0.98)",
-                border: "1px solid #EAEAEC",
-                boxShadow: "0 48px 140px rgba(0,0,0,0.15), 0 1px 0 rgba(255,255,255,0.9) inset",
+                background: modalBg,
+                border: `1px solid ${modalBorder}`,
+                boxShadow: modalShadow,
                 pointerEvents: "auto",
               }}
               onClick={(e) => e.stopPropagation()}
@@ -176,14 +211,23 @@ export default function AuthModal() {
               {/* Top glow halo */}
               <div
                 className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-32 pointer-events-none"
-                style={{ background: "radial-gradient(ellipse at top, rgba(163,138,112,0.08) 0%, transparent 70%)" }}
+                style={{ background: "radial-gradient(ellipse at top, rgba(163,138,112,0.10) 0%, transparent 70%)" }}
               />
 
               {/* Close */}
               <button
                 onClick={closeAuth}
                 aria-label="Close"
-                className="absolute top-4 right-4 z-10 w-7 h-7 rounded-lg flex items-center justify-center text-neutral-400 hover:text-neutral-600 hover:bg-[#F5F5F4] transition-all duration-200"
+                className="absolute top-4 right-4 z-10 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200"
+                style={{ color: closeBtnColor }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = closeBtnHover;
+                  (e.currentTarget as HTMLButtonElement).style.color = isDark ? "#F2EDE8" : "#404040";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                  (e.currentTarget as HTMLButtonElement).style.color = closeBtnColor;
+                }}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -195,12 +239,12 @@ export default function AuthModal() {
                     <path d="M12 2L14.5 9L21 12L14.5 15L12 22L9.5 15L3 12L9.5 9L12 2Z" fill="url(#auth-grad)" />
                     <defs>
                       <linearGradient id="auth-grad" x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#0F172A" />
+                        <stop stopColor={logoStop1} />
                         <stop offset="1" stopColor="#A38A70" />
                       </linearGradient>
                     </defs>
                   </svg>
-                  <span className="text-[14px] font-semibold tracking-tight text-neutral-900">Ittera</span>
+                  <span className="text-[14px] font-semibold tracking-tight" style={{ color: titleColor }}>Ittera</span>
                 </div>
 
                 {/* Headline */}
@@ -213,10 +257,10 @@ export default function AuthModal() {
                     transition={{ duration: 0.18 }}
                     className="mb-6"
                   >
-                    <h2 className="text-[22px] font-bold tracking-tight text-neutral-900 mb-1.5">
+                    <h2 className="text-[22px] font-bold tracking-tight mb-1.5" style={{ color: titleColor }}>
                       {authMode === "signin" ? "Welcome back" : "Join the waitlist"}
                     </h2>
-                    <p className="text-[13px] text-neutral-500">
+                    <p className="text-[13px]" style={{ color: subtextColor }}>
                       {authMode === "signin" ? (
                         <>No account?{" "}
                           <button type="button" onClick={switchMode} className="text-[#A38A70] hover:text-[#8B7260] transition-colors font-medium">
@@ -237,24 +281,33 @@ export default function AuthModal() {
                 {/* Social auth */}
                 <div className="grid grid-cols-2 gap-2 mb-5">
                   {[
-                    { label: "Google", icon: <GoogleIcon /> },
-                    { label: "GitHub", icon: <GitHubIcon /> },
+                    { label: "Google", icon: <GoogleIcon />, onClick: signInWithGoogle, disabled: false },
+                    { label: "LinkedIn", icon: <LinkedInIcon />, onClick: signInWithLinkedIn, disabled: false },
                   ].map((p) => (
                     <button
                       key={p.label}
                       type="button"
-                      className="flex items-center justify-center gap-2 h-10 rounded-xl text-[12.5px] font-medium text-neutral-700 hover:text-neutral-900 transition-all duration-200"
+                      onClick={p.onClick}
+                      disabled={p.disabled || loading}
+                      className="flex items-center justify-center gap-2 h-10 rounded-xl text-[12.5px] font-medium transition-all duration-200"
                       style={{
-                        background: "white",
-                        border: "1px solid #EAEAEC",
+                        background: socialBg,
+                        border: `1px solid ${socialBorder}`,
+                        color: socialText,
+                        opacity: p.disabled ? 0.5 : 1,
+                        cursor: p.disabled ? "not-allowed" : "pointer",
                       }}
                       onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = "#F5F5F4";
-                        (e.currentTarget as HTMLButtonElement).style.borderColor = "#D4D4D4";
+                        if (p.disabled) return;
+                        (e.currentTarget as HTMLButtonElement).style.background = socialHoverBg;
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = socialHoverBorder;
+                        (e.currentTarget as HTMLButtonElement).style.color = socialHoverText;
                       }}
                       onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = "white";
-                        (e.currentTarget as HTMLButtonElement).style.borderColor = "#EAEAEC";
+                        if (p.disabled) return;
+                        (e.currentTarget as HTMLButtonElement).style.background = socialBg;
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = socialBorder;
+                        (e.currentTarget as HTMLButtonElement).style.color = socialText;
                       }}
                     >
                       {p.icon}
@@ -265,9 +318,9 @@ export default function AuthModal() {
 
                 {/* Divider */}
                 <div className="flex items-center gap-3 mb-5">
-                  <div className="flex-1 h-px border-t border-[#EAEAEC]" />
-                  <span className="text-[10.5px] text-neutral-400 font-medium tracking-wide">OR EMAIL</span>
-                  <div className="flex-1 h-px border-t border-[#EAEAEC]" />
+                  <div className="flex-1 h-px" style={{ background: dividerColor }} />
+                  <span className="text-[10.5px] font-medium tracking-wide" style={{ color: dividerText }}>OR EMAIL</span>
+                  <div className="flex-1 h-px" style={{ background: dividerColor }} />
                 </div>
 
                 {/* Form */}
@@ -282,42 +335,48 @@ export default function AuthModal() {
                         transition={{ duration: 0.22, ease: "easeInOut" }}
                         className="overflow-hidden"
                       >
-                        <label className="block text-[12px] font-medium text-neutral-600 mb-1">Full name</label>
+                        <label className="block text-[12px] font-medium mb-1" style={{ color: labelColor }}>Full name</label>
                         <InputField
                           type="text"
                           value={name}
                           onChange={setName}
                           placeholder="Your name"
                           autoComplete="name"
+                          isDark={isDark}
                         />
                       </motion.div>
                     )}
                   </AnimatePresence>
 
                   <div>
-                    <label className="block text-[12px] font-medium text-neutral-600 mb-1">Email</label>
+                    <label className="block text-[12px] font-medium mb-1" style={{ color: labelColor }}>Email</label>
                     <InputField
                       type="email"
                       value={email}
                       onChange={setEmail}
                       placeholder="Email address"
                       autoComplete="email"
+                      isDark={isDark}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[12px] font-medium text-neutral-600 mb-1">Password</label>
+                    <label className="block text-[12px] font-medium mb-1" style={{ color: labelColor }}>Password</label>
                     <InputField
                       type={showPw ? "text" : "password"}
                       value={password}
                       onChange={setPassword}
                       placeholder="Password (min. 6 chars)"
                       autoComplete={authMode === "signin" ? "current-password" : "new-password"}
+                      isDark={isDark}
                     >
                       <button
                         type="button"
                         onClick={() => setShowPw((v) => !v)}
-                        className="text-neutral-400 hover:text-neutral-600 transition-colors"
+                        className="transition-colors"
+                        style={{ color: forgotColor }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = isDark ? "#F2EDE8" : "#525252"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = forgotColor; }}
                       >
                         {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
@@ -326,7 +385,7 @@ export default function AuthModal() {
 
                   {authMode === "signin" && (
                     <div className="text-right">
-                      <button type="button" className="text-[11.5px] text-neutral-400 hover:text-[#A38A70] transition-colors">
+                      <button type="button" className="text-[11.5px] hover:text-[#A38A70] transition-colors" style={{ color: forgotColor }}>
                         Forgot password?
                       </button>
                     </div>
@@ -338,7 +397,7 @@ export default function AuthModal() {
                         initial={{ opacity: 0, y: -4 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
-                        className="text-[12px] text-red-500 px-3 py-2 rounded-lg"
+                        className="text-[12px] text-red-400 px-3 py-2 rounded-lg"
                         style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)" }}
                       >
                         {error}
@@ -349,14 +408,15 @@ export default function AuthModal() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full h-11 text-[13.5px] font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:-translate-y-px"
+                    className="w-full h-11 text-[13.5px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:-translate-y-px"
                     style={{
-                      background: "#0F172A",
+                      background: submitBg,
+                      color: submitColor,
                       borderRadius: "8px",
                       marginTop: "8px",
                     }}
                     onMouseEnter={(e) => {
-                      if (!loading) (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 20px rgba(0,0,0,0.10)";
+                      if (!loading) (e.currentTarget as HTMLButtonElement).style.boxShadow = isDark ? "0 4px 20px rgba(163,138,112,0.25)" : "0 4px 20px rgba(0,0,0,0.10)";
                     }}
                     onMouseLeave={(e) => {
                       (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
@@ -376,11 +436,11 @@ export default function AuthModal() {
                   </button>
                 </form>
 
-                <p className="mt-5 text-[10.5px] text-neutral-400 text-center leading-relaxed">
+                <p className="mt-5 text-[10.5px] text-center leading-relaxed" style={{ color: legalColor }}>
                   By continuing you agree to our{" "}
-                  <a href="#" className="text-neutral-500 hover:text-neutral-700 underline underline-offset-2 transition-colors">Terms</a>
+                  <a href="#" className="underline underline-offset-2 transition-colors hover:text-[#A38A70]" style={{ color: legalLinkColor }}>Terms</a>
                   {" "}and{" "}
-                  <a href="#" className="text-neutral-500 hover:text-neutral-700 underline underline-offset-2 transition-colors">Privacy Policy</a>.
+                  <a href="#" className="underline underline-offset-2 transition-colors hover:text-[#A38A70]" style={{ color: legalLinkColor }}>Privacy Policy</a>.
                   {" "}No spam, ever.
                 </p>
               </div>
