@@ -58,7 +58,7 @@ const TESTIMONIALS = [
 ];
 
 const STATS = [
-  { value: "12+", label: "Creators on the waitlist" },
+  { value: "Live", label: "Waitlist intake" },
   { value: "48h", label: "Early trend signal window" },
   { value: "12h", label: "Saved per creator / week" },
   { value: "3.4×", label: "Avg engagement uplift" },
@@ -68,7 +68,7 @@ export default function SocialProof() {
   const shouldReduceMotion = useReducedMotion();
 
   return (
-    <section className="py-20 relative overflow-hidden bg-[#F9F8F6]">
+    <section className="py-10 sm:py-20 relative overflow-hidden bg-[#F9F8F6]">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{ background: "linear-gradient(180deg, transparent, rgba(163,138,112,0.04) 50%, transparent)" }}
@@ -97,7 +97,7 @@ export default function SocialProof() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-40px" }}
               transition={{ duration: 0.5, delay: i * 0.07, ease: EASE }}
-              className={`group relative p-6 rounded-2xl border border-[#EAEAEC] bg-white hover:border-[#D4D4D4] transition-all duration-300 ${i === 4 ? "md:col-span-2 lg:col-span-1" : ""}`}
+              className={`group relative p-4 sm:p-6 rounded-2xl border border-[#EAEAEC] bg-white hover:border-[#D4D4D4] transition-all duration-300 ${i === 4 ? "md:col-span-2 lg:col-span-1" : ""}`}
               style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
             >
               <div
@@ -153,7 +153,7 @@ export default function SocialProof() {
           {STATS.map((stat) => (
             <div key={stat.label} className="text-center md:text-left">
               <div
-                className="text-[32px] sm:text-[38px] font-bold tracking-[-0.03em] leading-none mb-1.5"
+                className="text-[24px] sm:text-[32px] md:text-[38px] font-bold tracking-[-0.03em] leading-none mb-1.5"
                 style={{
                   background: "linear-gradient(135deg, #171717 0%, rgba(23,23,23,0.6) 100%)",
                   WebkitBackgroundClip: "text",

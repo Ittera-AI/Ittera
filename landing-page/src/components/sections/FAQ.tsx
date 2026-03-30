@@ -1,110 +1,153 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { FAQ_ITEMS } from "@/lib/constants";
 import { Plus } from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
+
 const EASE = [0.16, 1, 0.3, 1] as const;
 
 export default function FAQ() {
   const [open, setOpen] = useState<number | null>(null);
+  const shouldReduceMotion = useReducedMotion();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
+  const sectionBg    = isDark ? "#0C0B09"                    : "#F9F8F6";
+  const headingColor = isDark ? "#F2EDE8"                    : "#171717";
+  const subColor     = isDark ? "rgba(242,237,232,0.45)"     : "#737373";
+  const linkColor    = isDark ? "rgba(242,237,232,0.7)"      : "#525252";
+  const linkHover    = isDark ? "#F2EDE8"                    : "#171717";
+  const dividerColor = isDark ? "#2E2922"                    : "#EAEAEC";
+  const itemHoverBg  = isDark ? "rgba(255,255,255,0.03)"     : "#F5F5F4";
+  const qColor       = isDark ? "rgba(242,237,232,0.75)"     : "#404040";
+  const qOpenColor   = isDark ? "#F2EDE8"                    : "#171717";
+  const aColor       = isDark ? "rgba(242,237,232,0.45)"     : "#737373";
+  const plusIdleBg   = isDark ? "#1C1916"                    : "#F3F4F6";
+  const plusIdleBorder = isDark ? "#2E2922"                  : "#EAEAEC";
+  const plusIdleColor  = isDark ? "rgba(242,237,232,0.3)"    : "#9CA3AF";
+  const plusOpenBg   = isDark ? "rgba(196,168,130,0.12)"     : "rgba(163,138,112,0.1)";
+  const plusOpenBorder = isDark ? "rgba(196,168,130,0.3)"    : "rgba(163,138,112,0.3)";
+  const plusOpenColor  = isDark ? "#C4A882"                  : "#A38A70";
 
   return (
-    <section id="faq" className="py-24 bg-[#F9F8F6] relative">
-      <div className="max-w-3xl mx-auto px-6 lg:px-10">
-        <div className="mb-14">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, ease: EASE }}
-            className="flex items-center gap-2 mb-6"
-          >
-            <div className="w-1.5 h-1.5 rounded-full bg-[#A38A70]/70" />
-            <span className="eyebrow">FAQ</span>
-          </motion.div>
+    <section id="faq" className="relative py-12 sm:py-24 overflow-hidden" style={{ background: sectionBg }}>
 
+      {/* Background orb */}
+      <motion.div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full pointer-events-none"
+        style={{ background: `radial-gradient(ellipse, ${isDark ? "rgba(163,138,112,0.04)" : "rgba(163,138,112,0.03)"} 0%, transparent 65%)`, filter: "blur(60px)" }}
+        animate={{ scale: [1, 1.06, 1], opacity: [0.6, 1, 0.6] }}
+        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+      />
+
+      {/* Shimmer top border */}
+      <motion.div
+        className="absolute top-0 left-0 right-0 h-px pointer-events-none"
+        style={{ background: "linear-gradient(90deg, transparent, rgba(163,138,112,0.2), rgba(122,139,118,0.12), transparent)" }}
+        animate={{ opacity: [0.4, 1, 0.4] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+      />
+
+      <div className="relative z-10 max-w-3xl mx-auto px-6 lg:px-10">
+
+        {/* ── Header ── */}
+        <div className="mb-14">
           <motion.h2
-            initial={{ opacity: 0, y: 14 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 14, filter: "blur(6px)" }}
+            whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             viewport={{ once: true }}
-            transition={{ duration: 0.55, delay: 0.07, ease: EASE }}
-            className="text-[42px] sm:text-[52px] font-bold tracking-[-0.03em] leading-[1.06] text-neutral-900 mb-4"
+            transition={{ duration: 0.6, ease: EASE }}
+            className="text-[28px] sm:text-[42px] lg:text-[52px] font-bold tracking-[-0.03em] leading-[1.06] mb-4"
+            style={{ color: headingColor }}
           >
-            Questions answered
+            Questions{" "}
+            <span style={{ color: isDark ? "#C4A882" : "#8B6F52" }}>answered</span>
           </motion.h2>
 
           <motion.p
-            initial={{ opacity: 0, y: 10 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.14, ease: EASE }}
-            className="text-[15px] text-neutral-500"
+            transition={{ duration: 0.5, delay: 0.12, ease: EASE }}
+            className="text-[15px]"
+            style={{ color: subColor }}
           >
             Can&apos;t find an answer?{" "}
-            <a href="#" className="text-neutral-600 hover:text-neutral-800 underline underline-offset-2 transition-colors">
+            <a
+              href="#"
+              className="underline underline-offset-2 transition-colors duration-150"
+              style={{ color: linkColor }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = linkHover; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = linkColor; }}
+            >
               Chat with us
             </a>
           </motion.p>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.1, ease: EASE }}
-          className="divide-y divide-[#EAEAEC]"
-        >
+        {/* ── Accordion ── */}
+        <div style={{ borderTop: `1px solid ${dividerColor}` }}>
           {FAQ_ITEMS.map((item, i) => (
-            <div
+            <motion.div
               key={i}
-              className="py-5 transition-colors duration-200 hover:bg-[#F5F5F4] -mx-3 px-3 rounded-lg"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.45, delay: i * 0.06, ease: EASE }}
+              style={{ borderBottom: `1px solid ${dividerColor}` }}
             >
               <button
                 onClick={() => setOpen(open === i ? null : i)}
-                className="w-full flex items-center justify-between gap-4 text-left group"
+                className="w-full flex items-center justify-between gap-4 text-left -mx-3 px-3 rounded-lg transition-colors duration-200 py-5"
+                style={{ background: open === i ? itemHoverBg : "transparent" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = itemHoverBg; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = open === i ? itemHoverBg : "transparent"; }}
               >
                 <span
-                  className={`text-[14.5px] font-medium transition-colors ${
-                    open === i ? "text-neutral-900" : "text-neutral-700 group-hover:text-neutral-900"
-                  }`}
+                  className="text-[14.5px] font-medium transition-colors duration-150"
+                  style={{ color: open === i ? qOpenColor : qColor }}
                 >
                   {item.question}
                 </span>
-                <div
-                  className={`w-6 h-6 rounded-full border flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
-                    open === i
-                      ? "border-[#A38A70]/30 bg-[#A38A70]/10"
-                      : "bg-neutral-100 border-[#EAEAEC]"
-                  }`}
+
+                <motion.div
+                  className="w-9 h-9 sm:w-7 sm:h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-200"
+                  style={{
+                    background:    open === i ? plusOpenBg     : plusIdleBg,
+                    border:        `1px solid ${open === i ? plusOpenBorder : plusIdleBorder}`,
+                    color:         open === i ? plusOpenColor  : plusIdleColor,
+                  }}
+                  animate={{ rotate: open === i ? 45 : 0 }}
+                  transition={{ duration: 0.22, ease: EASE }}
                 >
-                  <motion.div animate={{ rotate: open === i ? 45 : 0 }} transition={{ duration: 0.2 }}>
-                    <Plus
-                      className={`w-3 h-3 transition-colors ${
-                        open === i ? "text-[#A38A70]" : "text-neutral-400"
-                      }`}
-                    />
-                  </motion.div>
-                </div>
+                  <Plus className="w-3 h-3" />
+                </motion.div>
               </button>
-              <AnimatePresence>
+
+              <AnimatePresence initial={false}>
                 {open === i && (
                   <motion.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    transition={{ duration: 0.28, ease: "easeInOut" }}
                     className="overflow-hidden"
                   >
-                    <p className="pt-3 text-[13.5px] text-neutral-500 leading-relaxed max-w-xl">
+                    <p
+                      className="pb-5 px-3 text-[13.5px] leading-relaxed max-w-xl"
+                      style={{ color: aColor }}
+                    >
                       {item.answer}
                     </p>
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
+            </motion.div>
           ))}
-        </motion.div>
+        </div>
+
       </div>
     </section>
   );
