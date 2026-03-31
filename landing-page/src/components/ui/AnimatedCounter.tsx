@@ -26,8 +26,9 @@ export default function AnimatedCounter({
     if (!isInView) return;
 
     if (shouldReduceMotion) {
-      setDisplayValue(value);
-      return;
+      // Deferred so the setState doesn't happen synchronously in the effect body.
+      const id = setTimeout(() => setDisplayValue(value), 0);
+      return () => clearTimeout(id);
     }
 
     const controls = animate(0, value, {

@@ -38,7 +38,7 @@ export default function FAQ() {
       <motion.div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full pointer-events-none"
         style={{ background: `radial-gradient(ellipse, ${isDark ? "rgba(163,138,112,0.04)" : "rgba(163,138,112,0.03)"} 0%, transparent 65%)`, filter: "blur(60px)" }}
-        animate={{ scale: [1, 1.06, 1], opacity: [0.6, 1, 0.6] }}
+        animate={shouldReduceMotion ? undefined : { scale: [1, 1.06, 1], opacity: [0.6, 1, 0.6] }}
         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
       />
 
@@ -46,7 +46,7 @@ export default function FAQ() {
       <motion.div
         className="absolute top-0 left-0 right-0 h-px pointer-events-none"
         style={{ background: "linear-gradient(90deg, transparent, rgba(163,138,112,0.2), rgba(122,139,118,0.12), transparent)" }}
-        animate={{ opacity: [0.4, 1, 0.4] }}
+        animate={shouldReduceMotion ? undefined : { opacity: [0.4, 1, 0.4] }}
         transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
       />
 
@@ -113,7 +113,7 @@ export default function FAQ() {
                 </span>
 
                 <motion.div
-                  className="w-9 h-9 sm:w-7 sm:h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-200"
+                  className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-200"
                   style={{
                     background:    open === i ? plusOpenBg     : plusIdleBg,
                     border:        `1px solid ${open === i ? plusOpenBorder : plusIdleBorder}`,
@@ -136,7 +136,7 @@ export default function FAQ() {
                     className="overflow-hidden"
                   >
                     <p
-                      className="pb-5 px-3 text-[13.5px] leading-relaxed max-w-xl"
+                      className="pt-1 pb-5 px-3 text-[13.5px] leading-relaxed max-w-xl"
                       style={{ color: aColor }}
                     >
                       {item.answer}

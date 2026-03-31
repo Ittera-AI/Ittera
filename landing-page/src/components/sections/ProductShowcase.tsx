@@ -126,8 +126,7 @@ function TopStats({ tokens, scenario }: { tokens: Tokens; scenario: ScenarioId }
           key={stat.label}
           initial={{ opacity: 0, y: 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.42, delay: index * 0.05, ease: EASE }}
+          transition={{ duration: 0.25, delay: index * 0.05, ease: EASE }}
           className="rounded-2xl px-4 py-4"
           style={{ background: tokens.softSurface, border: `1px solid ${tokens.panelBorder}` }}
         >
@@ -195,7 +194,7 @@ function WorkspaceRail({ active, setActive, tokens }: { active: WorkspaceId; set
             key={workspace.id}
             type="button"
             onClick={() => setActive(workspace.id)}
-            className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition-colors"
+            className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition-all duration-150 ease-out active:scale-[0.97]"
             style={{
               background: isActive ? tokens.accentSurface : "transparent",
               color: isActive ? tokens.text : tokens.muted,
@@ -234,7 +233,7 @@ function ScenarioStrip({
             key={scenario.id}
             type="button"
             onClick={() => setActive(scenario.id)}
-            className="rounded-2xl px-4 py-3 text-left text-[11px] font-medium transition-colors"
+            className="rounded-2xl px-4 py-3 text-left text-[11px] font-medium transition-all duration-150 ease-out active:scale-[0.97]"
             style={{
               background: isActive ? tokens.text : tokens.panelBg,
               color: isActive ? tokens.panelBg : tokens.muted,
@@ -271,7 +270,7 @@ function ChannelStrip({
             key={channel.id}
             type="button"
             onClick={() => setActive(channel.id)}
-            className="h-full rounded-2xl px-3 py-3 text-left transition-colors"
+            className="h-full rounded-2xl px-3 py-3 text-left transition-all duration-150 ease-out active:scale-[0.97]"
             style={{
               background: isActive ? tokens.accentSurface : tokens.panelBg,
               border: `1px solid ${isActive ? "rgba(163,138,112,0.28)" : tokens.panelBorder}`,
@@ -421,7 +420,7 @@ function SyncPanel({ tokens, channel }: { tokens: Tokens; channel: ChannelId }) 
             <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: tokens.faint }}>Historical import</div>
             <div className="mt-2 text-[24px] font-semibold tracking-[-0.03em]" style={{ color: tokens.text }}>323 assets unified</div>
           </div>
-          <button type="button" className="rounded-full px-3 py-1.5 text-[11px] font-medium" style={{ background: tokens.panelBg, border: `1px solid ${tokens.panelBorder}`, color: tokens.muted }}>
+          <button type="button" className="rounded-full px-3 py-1.5 text-[11px] font-medium transition-transform duration-150 ease-out active:scale-[0.97]" style={{ background: tokens.panelBg, border: `1px solid ${tokens.panelBorder}`, color: tokens.muted }}>
             Refresh sources
           </button>
         </div>
@@ -433,7 +432,7 @@ function SyncPanel({ tokens, channel }: { tokens: Tokens; channel: ChannelId }) 
                 <span style={{ color: tokens.muted }}>{row.progress}%</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full" style={{ background: tokens.softSurface }}>
-                <motion.div className="h-full rounded-full" style={{ background: "linear-gradient(90deg, #A38A70, #7A8B76)" }} initial={{ width: 0 }} animate={{ width: `${row.progress}%` }} transition={{ duration: 0.55, ease: EASE }} />
+                <motion.div className="h-full rounded-full origin-left w-full" style={{ background: "linear-gradient(90deg, #A38A70, #7A8B76)" }} initial={{ scaleX: 0 }} animate={{ scaleX: row.progress / 100 }} transition={{ duration: 0.55, ease: EASE }} />
               </div>
               <div className="mt-2 text-[11px]" style={{ color: tokens.faint }}>{row.note}</div>
             </div>
@@ -530,7 +529,7 @@ function ScorePanel({
           {CHANNELS.map((item) => item.label).map((item) => {
             const active = item === platform;
             return (
-              <button key={item} type="button" onClick={() => setPlatform(item)} className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ background: active ? tokens.accentSurface : "transparent", color: active ? tokens.text : tokens.muted, border: `1px solid ${active ? "rgba(163,138,112,0.24)" : tokens.panelBorder}` }}>
+              <button key={item} type="button" onClick={() => setPlatform(item)} className="rounded-full px-3 py-1.5 text-[12px] font-medium transition-all duration-150 ease-out active:scale-[0.97]" style={{ background: active ? tokens.accentSurface : "transparent", color: active ? tokens.text : tokens.muted, border: `1px solid ${active ? "rgba(163,138,112,0.24)" : tokens.panelBorder}` }}>
                 {item}
               </button>
             );
@@ -539,7 +538,7 @@ function ScorePanel({
         <textarea value={content} onChange={(event) => setContent(event.target.value)} placeholder={`Paste your ${platform} draft`} className="mt-4 h-56 w-full resize-none rounded-[22px] p-4 text-[13px] leading-6 outline-none" style={{ background: tokens.panelBg, border: `1px solid ${tokens.panelBorder}`, color: tokens.text }} />
         <div className="mt-3 flex items-center justify-between">
           <span className="text-[11px]" style={{ color: tokens.faint }}>{content.length} characters</span>
-          <button type="button" onClick={runAnalysis} disabled={loading || !content.trim()} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold disabled:opacity-40" style={{ background: tokens.text, color: tokens.panelBg }}>
+          <button type="button" onClick={runAnalysis} disabled={loading || !content.trim()} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold transition-transform duration-150 ease-out active:scale-[0.97] disabled:opacity-40" style={{ background: tokens.text, color: tokens.panelBg }}>
             {loading ? "Analyzing..." : "Analyze draft"}
             {!loading && <ArrowRight className="h-3.5 w-3.5" />}
           </button>
@@ -565,7 +564,7 @@ function ScorePanel({
                 <span style={{ color: tokens.text }}>{metric.value || "--"}</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full" style={{ background: tokens.softSurface }}>
-                <motion.div className="h-full rounded-full" style={{ background: "linear-gradient(90deg, #A38A70, #7A8B76)" }} initial={{ width: 0 }} animate={{ width: `${metric.value}%` }} transition={{ duration: 0.55, ease: EASE }} />
+                <motion.div className="h-full rounded-full origin-left w-full" style={{ background: "linear-gradient(90deg, #A38A70, #7A8B76)" }} initial={{ scaleX: 0 }} animate={{ scaleX: metric.value / 100 }} transition={{ duration: 0.55, ease: EASE }} />
               </div>
             </div>
           ))}
@@ -911,7 +910,7 @@ function LearnPanel({ tokens, channel }: { tokens: Tokens; channel: ChannelId })
               <div key={bar.day} className="relative flex flex-1 items-end" onMouseEnter={() => setHovered(index)} onMouseLeave={() => setHovered(5)}>
                 <AnimatePresence>
                   {active && (
-                    <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="absolute left-1/2 top-0 -translate-x-1/2 rounded-xl px-3 py-2 text-[11px]" style={{ background: tokens.surface, border: `1px solid ${tokens.panelBorder}`, color: tokens.text }}>
+                    <motion.div initial={{ opacity: 0, y: -6, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.96 }} className="absolute left-1/2 top-0 -translate-x-1/2 rounded-xl px-3 py-2 text-[11px] origin-bottom" style={{ background: tokens.surface, border: `1px solid ${tokens.panelBorder}`, color: tokens.text }}>
                       {bar.day}: {bar.value}K reach
                     </motion.div>
                   )}
@@ -1008,7 +1007,7 @@ export default function ProductShowcase() {
               <div className="p-4 sm:p-5">
                 <ControlDeck activeWorkspace={activeWorkspace} activeScenario={activeScenario} activeChannel={activeChannel} tokens={tokens} />
                 <AnimatePresence mode="wait">
-                  <motion.div key={`${activeWorkspace}-${activeChannel}-${activeScenario}`} initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }} transition={{ duration: 0.22, ease: "easeInOut" }} className="mt-4">
+                  <motion.div key={`${activeWorkspace}-${activeChannel}-${activeScenario}`} initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }} className="mt-4">
                     <ActivePanel tokens={tokens} channel={activeChannel} scenario={activeScenario} />
                   </motion.div>
                 </AnimatePresence>

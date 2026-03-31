@@ -69,12 +69,12 @@ const wordVariants = {
 };
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 40, scale: 0.96 },
+  hidden: { opacity: 0, y: 28, scale: 0.97 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { duration: 0.65, delay: 0.35 + i * 0.12, ease: CUBIC_SPRING },
+    transition: { duration: 0.6, delay: 0.2 + i * 0.1, ease: CUBIC_EASE },
   }),
 };
 
@@ -118,23 +118,23 @@ export default function Founders() {
     >
       {/* Background orbs */}
       <motion.div
-        className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[700px] h-[280px] rounded-full pointer-events-none"
-        style={{ background: `radial-gradient(ellipse at bottom, ${isDark ? "rgba(163,138,112,0.07)" : "rgba(163,138,112,0.04)"} 0%, transparent 60%)`, filter: "blur(40px)" }}
-        animate={{ scale: [1, 1.08, 1], opacity: [0.6, 1, 0.6] }}
-        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute bottom-[-10%] left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full pointer-events-none"
+        style={{ background: `radial-gradient(ellipse at bottom, ${isDark ? "rgba(163,138,112,0.14)" : "rgba(163,138,112,0.08)"} 0%, transparent 70%)` }}
+        animate={shouldReduceMotion ? undefined : { scale: [1, 1.1, 1], opacity: [0.7, 1, 0.7] }}
+        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
-        className="absolute top-0 right-0 w-64 h-64 rounded-full pointer-events-none"
-        style={{ background: "radial-gradient(circle, rgba(122,139,118,0.05) 0%, transparent 70%)", filter: "blur(50px)" }}
-        animate={{ x: [0, -15, 0], y: [0, 20, 0] }}
-        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute top-[-5%] right-[-5%] w-96 h-96 rounded-full pointer-events-none"
+        style={{ background: "radial-gradient(circle, rgba(122,139,118,0.1) 0%, transparent 70%)" }}
+        animate={shouldReduceMotion ? undefined : { x: [0, -30, 0], y: [0, 40, 0] }}
+        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
       />
 
       {/* Shimmer top border */}
       <motion.div
         className="absolute top-0 left-0 right-0 h-px pointer-events-none"
         style={{ background: "linear-gradient(90deg, transparent, rgba(163,138,112,0.2), rgba(122,139,118,0.12), transparent)" }}
-        animate={{ opacity: [0.4, 1, 0.4] }}
+        animate={shouldReduceMotion ? undefined : { opacity: [0.4, 1, 0.4] }}
         transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
       />
 

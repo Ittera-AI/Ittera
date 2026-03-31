@@ -56,28 +56,28 @@ export default function FinalCTA() {
       {/* --- Animated background orbs --- */}
       <motion.div
         className="absolute top-1/3 left-1/4 w-72 h-72 rounded-full pointer-events-none"
-        style={{ background: "radial-gradient(circle, rgba(163,138,112,0.08) 0%, transparent 70%)", filter: "blur(50px)" }}
-        animate={{ x: [0, 22, -12, 0], y: [0, -18, 12, 0] }}
-        transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+        style={{ background: "radial-gradient(circle, rgba(163,138,112,0.16) 0%, transparent 70%)" }}
+        animate={shouldReduceMotion ? undefined : { x: [0, 30, -15, 0], y: [0, -25, 15, 0] }}
+        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
         className="absolute bottom-1/3 right-1/4 w-56 h-56 rounded-full pointer-events-none"
-        style={{ background: "radial-gradient(circle, rgba(122,139,118,0.06) 0%, transparent 70%)", filter: "blur(40px)" }}
-        animate={{ x: [0, -16, 10, 0], y: [0, 14, -9, 0] }}
-        transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
+        style={{ background: "radial-gradient(circle, rgba(122,139,118,0.14) 0%, transparent 70%)" }}
+        animate={shouldReduceMotion ? undefined : { x: [0, -20, 15, 0], y: [0, 20, -15, 0] }}
+        transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
         className="absolute top-1/2 right-1/3 w-40 h-40 rounded-full pointer-events-none"
-        style={{ background: "radial-gradient(circle, rgba(163,138,112,0.05) 0%, transparent 70%)", filter: "blur(30px)" }}
-        animate={{ x: [0, 12, -18, 0], y: [0, -10, 6, 0] }}
-        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+        style={{ background: "radial-gradient(circle, rgba(163,138,112,0.12) 0%, transparent 70%)" }}
+        animate={shouldReduceMotion ? undefined : { x: [0, 15, -20, 0], y: [0, -15, 8, 0] }}
+        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
       />
 
       {/* --- Shimmer top border --- */}
       <motion.div
         className="absolute top-0 left-0 right-0 h-px pointer-events-none"
         style={{ background: "linear-gradient(90deg, transparent, rgba(163,138,112,0.25), rgba(122,139,118,0.15), transparent)" }}
-        animate={{ opacity: [0.4, 1, 0.4] }}
+        animate={shouldReduceMotion ? undefined : { opacity: [0.4, 1, 0.4] }}
         transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
       />
 
@@ -162,7 +162,7 @@ export default function FinalCTA() {
               >
                 <motion.span
                   className="w-2 h-2 rounded-full bg-[#A38A70]/80"
-                  animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
+                  animate={shouldReduceMotion ? undefined : { scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
                   transition={{ duration: 1.4, repeat: Infinity }}
                 />
                 You&apos;re on the list. We&apos;ll be in touch.
@@ -180,7 +180,7 @@ export default function FinalCTA() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="flex-1 h-12 px-4 rounded-lg text-[14px] outline-none transition-colors duration-200"
+                  className="flex-1 min-w-0 h-12 px-4 rounded-lg text-[14px] outline-none transition-colors duration-200"
                   style={{ background: inputBg, border: `1px solid ${inputBorder}`, color: inputColor }}
                   whileFocus={{ scale: 1.015 }}
                   transition={{ duration: 0.2 }}
@@ -205,7 +205,7 @@ export default function FinalCTA() {
                     <>
                       Claim my spot
                       <motion.span
-                        animate={{ x: [0, 4, 0] }}
+                        animate={shouldReduceMotion ? undefined : { x: [0, 4, 0] }}
                         transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
                       >
                         <ArrowRight className="w-4 h-4" />

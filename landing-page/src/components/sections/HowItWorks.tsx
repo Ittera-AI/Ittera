@@ -66,10 +66,10 @@ function PreviewContent({
   isDark: boolean;
   shouldReduceMotion: boolean;
 }) {
-  const panelBg = isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.82)";
-  const panelBorder = isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)";
+  const panelBg = isDark ? "rgba(12,11,9,0.38)" : "rgba(15,23,42,0.03)";
   const muted = isDark ? "rgba(242,237,232,0.48)" : "#5F5A55";
   const text = isDark ? "#F2EDE8" : "#171717";
+  const divider = isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)";
 
   if (activeStep === 0) {
     const platforms = [
@@ -80,153 +80,115 @@ function PreviewContent({
     ] as const;
 
     return (
-      <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-[24px] p-4" style={{ background: panelBg, border: `1px solid ${panelBorder}` }}>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.24em] text-[#A38A70]">Connected stack</div>
-              <div className="text-sm font-semibold mt-1" style={{ color: text }}>All sources in one stream</div>
-            </div>
-            <div className="rounded-full px-3 py-1 text-[11px] font-medium text-[#7A8B76]" style={{ background: "rgba(122,139,118,0.12)" }}>
-              Sync active
-            </div>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.24em] text-[#A38A70]">Connected stack</div>
+            <div className="text-sm font-semibold mt-0.5" style={{ color: text }}>All sources in one stream</div>
           </div>
-          <div className="space-y-2.5">
-            {platforms.map(([name, status, color], index) => (
-              <motion.div
-                key={name}
-                initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: shouldReduceMotion ? 0 : index * 0.08, ease: EASE }}
-                className="flex items-center justify-between rounded-2xl px-3.5 py-3"
-                style={{ background: isDark ? "rgba(12,11,9,0.38)" : "rgba(15,23,42,0.03)" }}
-              >
-                <div>
-                  <div className="text-[13px] font-medium" style={{ color: text }}>{name}</div>
-                  <div className="text-[11px]" style={{ color: muted }}>Historical data pulled</div>
-                </div>
-                <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color }}>
-                  <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-                  {status}
-                </div>
-              </motion.div>
-            ))}
+          <div className="rounded-full px-3 py-1 text-[11px] font-medium text-[#7A8B76]" style={{ background: "rgba(122,139,118,0.12)" }}>
+            Sync active
           </div>
         </div>
-        <div className="space-y-3">
-          <div className="rounded-[24px] p-4" style={{ background: panelBg, border: `1px solid ${panelBorder}` }}>
-            <div className="text-[12px] font-semibold mb-3" style={{ color: text }}>Import timeline</div>
-            <div className="space-y-2.5">
-              {[
-                "Authenticating workspace",
-                "Backfilling posts and comments",
-                "Grouping audience signals",
-              ].map((item, index) => (
-                <motion.div
-                  key={item}
-                  initial={shouldReduceMotion ? false : { opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.4, delay: shouldReduceMotion ? 0 : 0.12 + index * 0.08, ease: EASE }}
-                  className="rounded-2xl px-3.5 py-3 text-[12px]"
-                  style={{ background: isDark ? "rgba(12,11,9,0.38)" : "rgba(15,23,42,0.03)", color: muted }}
-                >
-                  {item}
-                </motion.div>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-[24px] p-4" style={{ background: "linear-gradient(135deg, rgba(163,138,112,0.12), rgba(122,139,118,0.08))", border: "1px solid rgba(163,138,112,0.18)" }}>
-            <div className="flex items-end justify-between">
+        <div className="space-y-2">
+          {platforms.map(([name, status, color], index) => (
+            <motion.div
+              key={name}
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: shouldReduceMotion ? 0 : index * 0.08, ease: EASE }}
+              className="flex items-center justify-between rounded-2xl px-3.5 py-3"
+              style={{ background: panelBg }}
+            >
               <div>
-                <div className="text-[11px] uppercase tracking-[0.24em] text-[#8B6F52]">Immediate payoff</div>
-                <div className="text-[22px] font-semibold mt-1" style={{ color: text }}>Unified audience picture</div>
+                <div className="text-[13px] font-medium" style={{ color: text }}>{name}</div>
+                <div className="text-[11px]" style={{ color: muted }}>Historical data pulled</div>
               </div>
-              <div className="text-right">
-                <div className="text-[30px] font-bold tracking-[-0.05em]" style={{ color: text }}>2m</div>
-                <div className="text-[11px]" style={{ color: muted }}>to full sync</div>
+              <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color }}>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+                {status}
               </div>
-            </div>
-          </div>
+            </motion.div>
+          ))}
         </div>
+        <motion.div
+          initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: shouldReduceMotion ? 0 : 0.38, ease: EASE }}
+          className="flex items-end justify-between rounded-2xl px-4 py-3.5 mt-1"
+          style={{ background: "linear-gradient(135deg, rgba(163,138,112,0.12), rgba(122,139,118,0.08))", border: "1px solid rgba(163,138,112,0.18)" }}
+        >
+          <div className="text-[11px] uppercase tracking-[0.22em] text-[#8B6F52]">Full sync</div>
+          <div className="text-right">
+            <div className="text-[22px] font-bold tracking-[-0.04em]" style={{ color: text }}>2m</div>
+            <div className="text-[10px]" style={{ color: muted }}>to full history</div>
+          </div>
+        </motion.div>
       </div>
     );
   }
 
   if (activeStep === 1) {
     const bars = [34, 52, 46, 78, 64, 90, 72];
-    const formats = [["Carousels", 92], ["Threads", 81], ["Founder POV", 88]] as const;
 
     return (
-      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="rounded-[24px] p-4" style={{ background: panelBg, border: `1px solid ${panelBorder}` }}>
-          <div className="flex items-center justify-between mb-4">
+      <div className="space-y-0">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.24em] text-[#A38A70]">Audience map</div>
+            <div className="text-sm font-semibold mt-0.5" style={{ color: text }}>Engagement pattern analysis</div>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] text-[#7A8B76]">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI processing
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-4" style={{ background: panelBg }}>
+          <div className="flex items-end gap-2 h-36">
+            {bars.map((bar, index) => (
+              <div key={index} className="flex-1 h-full flex items-end">
+                <motion.div
+                  className="w-full rounded-t-[10px]"
+                  style={{
+                    background: index === 5
+                      ? "linear-gradient(180deg, rgba(163,138,112,0.96), rgba(122,139,118,0.76))"
+                      : isDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.08)",
+                  }}
+                  initial={shouldReduceMotion ? false : { height: 0 }}
+                  animate={{ height: `${bar}%` }}
+                  transition={{ duration: 0.5, delay: shouldReduceMotion ? 0 : index * 0.06, ease: EASE }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 mt-2.5 text-[10px]" style={{ color: isDark ? "rgba(242,237,232,0.32)" : "#A3A3A3" }}>
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+              <div key={day} className="text-center">{day}</div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3 h-px" style={{ background: divider }} />
+
+        <motion.div
+          initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: shouldReduceMotion ? 0 : 0.48, ease: EASE }}
+          className="mt-3 flex items-center justify-between rounded-2xl px-4 py-3.5"
+          style={{ background: "rgba(163,138,112,0.08)", border: "1px solid rgba(163,138,112,0.14)" }}
+        >
+          <div className="flex items-center gap-2.5">
+            <Clock3 className="h-4 w-4 text-[#A38A70]" />
             <div>
-              <div className="text-[11px] uppercase tracking-[0.24em] text-[#A38A70]">Audience map</div>
-              <div className="text-sm font-semibold mt-1" style={{ color: text }}>Engagement pattern analysis</div>
-            </div>
-            <div className="flex items-center gap-2 text-[11px] text-[#7A8B76]">
-              <Sparkles className="h-3.5 w-3.5" />
-              AI processing
+              <div className="text-[10px] uppercase tracking-[0.16em]" style={{ color: muted }}>Best window</div>
+              <div className="text-[22px] font-bold tracking-[-0.04em] leading-none mt-0.5" style={{ color: text }}>Thu 8:00 AM</div>
             </div>
           </div>
-          <div className="rounded-[22px] p-4" style={{ background: isDark ? "rgba(12,11,9,0.4)" : "rgba(15,23,42,0.03)" }}>
-            <div className="flex items-end gap-2 h-40">
-              {bars.map((bar, index) => (
-                <div key={index} className="flex-1 h-full flex items-end">
-                  <motion.div
-                    className="w-full rounded-t-[14px]"
-                    style={{ background: index === 5 ? "linear-gradient(180deg, rgba(163,138,112,0.96), rgba(122,139,118,0.76))" : isDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.08)" }}
-                    initial={shouldReduceMotion ? false : { height: 0 }}
-                    animate={{ height: `${bar}%` }}
-                    transition={{ duration: 0.5, delay: shouldReduceMotion ? 0 : index * 0.06, ease: EASE }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 mt-3 text-[10px]" style={{ color: isDark ? "rgba(242,237,232,0.32)" : "#A3A3A3" }}>
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <div key={day} className="text-center">{day}</div>)}
-            </div>
+          <div className="rounded-full px-2.5 py-1 text-[11px] font-medium text-[#7A8B76]" style={{ background: "rgba(122,139,118,0.12)" }}>
+            2.8× reach
           </div>
-        </div>
-        <div className="space-y-3">
-          <div className="rounded-[24px] p-4" style={{ background: panelBg, border: `1px solid ${panelBorder}` }}>
-            <div className="flex items-center gap-2">
-              <Clock3 className="h-4 w-4 text-[#A38A70]" />
-              <div className="text-[12px] font-semibold" style={{ color: text }}>Best posting window</div>
-            </div>
-            <div className="mt-4 rounded-[22px] p-4" style={{ background: "rgba(163,138,112,0.08)" }}>
-              <div className="text-[30px] font-bold tracking-[-0.05em]" style={{ color: text }}>Thu 8:00 AM</div>
-              <p className="mt-2 text-[12px] leading-relaxed" style={{ color: muted }}>
-                2.8x expected reach based on recency, saves, and comment velocity.
-              </p>
-            </div>
-          </div>
-          <div className="rounded-[24px] p-4" style={{ background: panelBg, border: `1px solid ${panelBorder}` }}>
-            <div className="flex items-center gap-2 mb-3">
-              <BarChart3 className="h-4 w-4 text-[#7A8B76]" />
-              <div className="text-[12px] font-semibold" style={{ color: text }}>Format resonance</div>
-            </div>
-            <div className="space-y-3">
-              {formats.map(([name, score], index) => (
-                <div key={name}>
-                  <div className="flex items-center justify-between mb-1.5 text-[11px]">
-                    <span style={{ color: muted }}>{name}</span>
-                    <span className="font-semibold" style={{ color: text }}>{score}</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full" style={{ background: isDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.06)" }}>
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{ background: "linear-gradient(90deg, #A38A70, #7A8B76)" }}
-                      initial={shouldReduceMotion ? false : { width: 0 }}
-                      animate={{ width: `${score}%` }}
-                      transition={{ duration: 0.55, delay: shouldReduceMotion ? 0 : 0.16 + index * 0.08, ease: EASE }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
@@ -239,72 +201,48 @@ function PreviewContent({
   ] as const;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-      <div className="rounded-[24px] p-4" style={{ background: panelBg, border: `1px solid ${panelBorder}` }}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.24em] text-[#A38A70]">AI calendar</div>
-            <div className="text-sm font-semibold mt-1" style={{ color: text }}>Recommended posts, already queued</div>
-          </div>
-          <CalendarDays className="h-4 w-4 text-[#7A8B76]" />
+    <div className="space-y-3">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.24em] text-[#A38A70]">AI calendar</div>
+          <div className="text-sm font-semibold mt-0.5" style={{ color: text }}>Recommended posts, already queued</div>
         </div>
-        <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
-          {queue.map(([day, label, time], index) => (
-            <motion.div
-              key={day}
-              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: shouldReduceMotion ? 0 : index * 0.08, ease: EASE }}
-              className="rounded-[22px] p-3.5"
-              style={{ background: index === 2 ? "rgba(163,138,112,0.16)" : isDark ? "rgba(12,11,9,0.38)" : "rgba(15,23,42,0.03)" }}
-            >
-              <div className="text-[10px] uppercase tracking-[0.18em]" style={{ color: isDark ? "rgba(242,237,232,0.32)" : "#A3A3A3" }}>{day}</div>
-              <div className="mt-2 text-[14px] font-semibold" style={{ color: text }}>{label}</div>
-              <div className="mt-1 text-[11px]" style={{ color: muted }}>Publish at {time}</div>
-            </motion.div>
-          ))}
-        </div>
+        <CalendarDays className="h-4 w-4 text-[#7A8B76]" />
       </div>
-      <div className="space-y-3">
-        <div className="rounded-[24px] p-4" style={{ background: panelBg, border: `1px solid ${panelBorder}` }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-[12px] font-semibold" style={{ color: text }}>Approval queue</div>
-            <div className="rounded-full px-2.5 py-1 text-[10px] font-medium text-[#8B6F52]" style={{ background: "rgba(163,138,112,0.1)" }}>
-              3 awaiting review
-            </div>
-          </div>
-          <div className="space-y-2.5">
-            {[
-              "Thursday 8:00 AM selected for max reach",
-              "Caption tuned for comment-first engagement",
-              "Variants generated for X and LinkedIn",
-            ].map((item, index) => (
-              <motion.div
-                key={item}
-                initial={shouldReduceMotion ? false : { opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: shouldReduceMotion ? 0 : 0.12 + index * 0.08, ease: EASE }}
-                className="rounded-2xl px-3.5 py-3 text-[12px]"
-                style={{ background: isDark ? "rgba(12,11,9,0.38)" : "rgba(15,23,42,0.03)", color: muted }}
-              >
-                {item}
-              </motion.div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-[24px] p-4" style={{ background: "linear-gradient(135deg, rgba(15,23,42,0.92), rgba(163,138,112,0.82))", border: "1px solid rgba(163,138,112,0.18)" }}>
-          <div className="flex items-end justify-between">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.24em] text-white/70">Execution confidence</div>
-              <div className="text-[24px] font-semibold mt-1 text-white">Strategy running on cadence</div>
-            </div>
-            <div className="text-right text-white">
-              <div className="text-[30px] font-bold tracking-[-0.04em]">94%</div>
-              <div className="text-[11px] text-white/70">calendar coverage</div>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        {queue.map(([day, label, time], index) => (
+          <motion.div
+            key={day}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: shouldReduceMotion ? 0 : index * 0.07, ease: EASE }}
+            className="rounded-[18px] p-3.5"
+            style={{
+              background: index === 2
+                ? "rgba(163,138,112,0.16)"
+                : panelBg,
+              border: index === 2 ? "1px solid rgba(163,138,112,0.22)" : "none",
+            }}
+          >
+            <div className="text-[10px] uppercase tracking-[0.18em]" style={{ color: isDark ? "rgba(242,237,232,0.32)" : "#A3A3A3" }}>{day}</div>
+            <div className="mt-1.5 text-[13px] font-semibold" style={{ color: text }}>{label}</div>
+            <div className="mt-0.5 text-[11px]" style={{ color: muted }}>at {time}</div>
+          </motion.div>
+        ))}
       </div>
+      <motion.div
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, delay: shouldReduceMotion ? 0 : 0.34, ease: EASE }}
+        className="flex items-end justify-between rounded-2xl px-4 py-3.5"
+        style={{ background: "linear-gradient(135deg, rgba(15,23,42,0.92), rgba(163,138,112,0.82))", border: "1px solid rgba(163,138,112,0.18)" }}
+      >
+        <div className="text-[11px] uppercase tracking-[0.22em] text-white/70">Calendar coverage</div>
+        <div className="text-right text-white">
+          <div className="text-[26px] font-bold tracking-[-0.04em]">94%</div>
+          <div className="text-[10px] text-white/60">strategy on cadence</div>
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -323,7 +261,7 @@ export default function HowItWorks() {
   }, [hasInteracted, shouldReduceMotion]);
 
   return (
-    <section id="how-it-works" className="relative overflow-hidden bg-[#F9F8F6] py-10 sm:py-20">
+    <section id="how-it-works" className="relative overflow-hidden py-10 sm:py-20" style={{ background: isDark ? "#0C0B09" : "#F9F8F6" }}>
       <div className="absolute left-[-8%] top-20 h-72 w-72 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(163,138,112,0.09) 0%, rgba(163,138,112,0) 72%)", filter: "blur(14px)" }} />
       <div className="absolute right-[-6%] bottom-10 h-80 w-80 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(122,139,118,0.08) 0%, rgba(122,139,118,0) 72%)", filter: "blur(20px)" }} />
 
@@ -345,7 +283,8 @@ export default function HowItWorks() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.55, delay: 0.07, ease: EASE }}
-            className="text-[28px] sm:text-[42px] lg:text-[52px] font-bold tracking-[-0.03em] leading-[1.04] text-neutral-900"
+            className="text-[28px] sm:text-[42px] lg:text-[52px] font-bold tracking-[-0.03em] leading-[1.04]"
+            style={{ color: isDark ? "#F2EDE8" : "#171717" }}
           >
             From connection to <span className="gradient-text">compounding growth</span>
           </motion.h2>
@@ -362,7 +301,8 @@ export default function HowItWorks() {
           </motion.p>
         </div>
 
-        <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] xl:gap-8">
+        <div className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-6 xl:gap-8">
+          {/* Step buttons — left column */}
           <div className="space-y-3">
             {STEPS.map((step, index) => {
               const isActive = activeStep === index;
@@ -379,24 +319,37 @@ export default function HowItWorks() {
                   onMouseEnter={() => { setHasInteracted(true); setActiveStep(index as StepIndex); }}
                   onFocus={() => { setHasInteracted(true); setActiveStep(index as StepIndex); }}
                   onClick={() => { setHasInteracted(true); setActiveStep(index as StepIndex); }}
-                  className="group relative flex w-full overflow-hidden rounded-[28px] p-5 text-left transition-transform duration-300 hover:-translate-y-0.5"
+                  className="group relative flex w-full overflow-hidden rounded-[20px] sm:rounded-[28px] p-4 sm:p-5 text-left transition-transform duration-300 hover:-translate-y-0.5"
                   style={{
-                    background: isActive ? (isDark ? "linear-gradient(180deg, rgba(28,25,22,0.98), rgba(20,18,16,0.98))" : "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(249,248,246,0.98))") : (isDark ? "rgba(20,18,16,0.7)" : "rgba(255,255,255,0.7)"),
+                    background: isActive
+                      ? (isDark ? "linear-gradient(180deg, rgba(28,25,22,0.98), rgba(20,18,16,0.98))" : "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(249,248,246,0.98))")
+                      : (isDark ? "rgba(20,18,16,0.7)" : "rgba(255,255,255,0.7)"),
                     border: `1px solid ${isActive ? "rgba(163,138,112,0.26)" : isDark ? "#2E2922" : "rgba(15,23,42,0.08)"}`,
                     boxShadow: isActive ? (isDark ? "0 20px 45px rgba(0,0,0,0.26)" : "0 18px 40px rgba(15,23,42,0.06)") : "none",
                   }}
                 >
-                  {isActive && <motion.div layoutId="how-it-works-active-glow" className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(circle at top right, rgba(163,138,112,0.12), rgba(163,138,112,0) 45%)" }} />}
+                  {isActive && (
+                    <motion.div
+                      layoutId="how-it-works-active-glow"
+                      className="pointer-events-none absolute inset-0"
+                      style={{ background: "radial-gradient(circle at top right, rgba(163,138,112,0.12), rgba(163,138,112,0) 45%)" }}
+                    />
+                  )}
 
                   <div className="relative z-10 flex min-h-full w-full flex-col">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-4">
-                        <div className="h-12 w-12 rounded-2xl flex items-center justify-center" style={{ background: isActive ? "rgba(163,138,112,0.14)" : isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.04)", border: `1px solid ${isActive ? "rgba(163,138,112,0.2)" : isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)"}` }}>
-                          <Icon className="h-5 w-5" style={{ color: isActive ? "#A38A70" : isDark ? "rgba(242,237,232,0.45)" : "#737373" }} />
+                        <div
+                          className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0"
+                          style={{
+                            background: isActive ? "rgba(163,138,112,0.14)" : isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.04)",
+                            border: `1px solid ${isActive ? "rgba(163,138,112,0.2)" : isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)"}`,
+                          }}
+                        >
+                          <Icon className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: isActive ? "#A38A70" : isDark ? "rgba(242,237,232,0.45)" : "#737373" }} />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            {/* number + step-label pair — always aligned as a unit */}
                             <div className="flex items-center gap-1.5">
                               <div
                                 className="rounded-[10px] px-2.5 py-1 text-[11px] font-mono tracking-[0.22em]"
@@ -419,7 +372,6 @@ export default function HowItWorks() {
                                 {step.stepLabel}
                               </div>
                             </div>
-                            {/* data pills */}
                             <div
                               className="rounded-[10px] px-2.5 py-1 text-[11px] leading-none"
                               style={{
@@ -443,25 +395,47 @@ export default function HowItWorks() {
                               <span className="font-semibold text-[11px]">{step.headerValue}</span>
                             </div>
                           </div>
-                          <h3 className="text-[18px] font-semibold tracking-tight mt-1" style={{ color: isDark ? "#F2EDE8" : "#171717" }}>{step.title}</h3>
+                          <h3 className="text-[15px] sm:text-[18px] font-semibold tracking-tight mt-1" style={{ color: isDark ? "#F2EDE8" : "#171717" }}>
+                            {step.title}
+                          </h3>
                         </div>
                       </div>
-                      <ChevronRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-0.5" style={{ color: isActive ? "#A38A70" : isDark ? "rgba(242,237,232,0.28)" : "#A3A3A3" }} />
+                      <ChevronRight
+                        className="h-5 w-5 shrink-0 transition-transform duration-300 group-hover:translate-x-0.5"
+                        style={{ color: isActive ? "#A38A70" : isDark ? "rgba(242,237,232,0.28)" : "#A3A3A3" }}
+                      />
                     </div>
 
-                    <p className="mt-3.5 text-[14px] leading-[1.75]" style={{ color: isDark ? "rgba(242,237,232,0.56)" : "#5F5A55" }}>{step.description}</p>
+                    <p className="mt-2 sm:mt-3 text-[13px] sm:text-[14px] leading-[1.7]" style={{ color: isDark ? "rgba(242,237,232,0.56)" : "#5F5A55" }}>
+                      {step.description}
+                    </p>
 
-                    <div className="mt-3.5 flex flex-wrap content-start gap-2">
+                    <div className="mt-2.5 flex flex-wrap content-start gap-1.5">
                       {step.chips.map((chip) => (
-                        <span key={chip} className="rounded-full px-3 py-1.5 text-[11px] font-medium" style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.04)", color: isDark ? "rgba(242,237,232,0.62)" : "#525252", border: `1px solid ${isDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.05)"}` }}>
+                        <span
+                          key={chip}
+                          className="rounded-full px-3 py-1 text-[11px] font-medium"
+                          style={{
+                            background: isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.04)",
+                            color: isDark ? "rgba(242,237,232,0.62)" : "#525252",
+                            border: `1px solid ${isDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.05)"}`,
+                          }}
+                        >
                           {chip}
                         </span>
                       ))}
                     </div>
 
-                    <div className="mt-auto flex items-center justify-between rounded-[20px] px-4 py-3" style={{ background: isDark ? "rgba(12,11,9,0.38)" : "rgba(15,23,42,0.03)" }}>
-                      <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: isDark ? "rgba(242,237,232,0.28)" : "#A3A3A3" }}>{step.statLabel}</div>
-                      <div className="text-[20px] font-semibold tracking-[-0.03em]" style={{ color: isDark ? "#F2EDE8" : "#171717" }}>{step.statValue}</div>
+                    <div
+                      className="mt-auto flex items-center justify-between rounded-[20px] px-4 py-2 sm:py-2.5"
+                      style={{ background: isDark ? "rgba(12,11,9,0.38)" : "rgba(15,23,42,0.03)" }}
+                    >
+                      <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.18em]" style={{ color: isDark ? "rgba(242,237,232,0.28)" : "#A3A3A3" }}>
+                        {step.statLabel}
+                      </div>
+                      <div className="text-[17px] sm:text-[20px] font-semibold tracking-[-0.03em]" style={{ color: isDark ? "#F2EDE8" : "#171717" }}>
+                        {step.statValue}
+                      </div>
                     </div>
                   </div>
                 </motion.button>
@@ -469,28 +443,43 @@ export default function HowItWorks() {
             })}
           </div>
 
+          {/* Right panel */}
           <motion.div
             initial={shouldReduceMotion ? false : { opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-60px" }}
             transition={{ duration: 0.55, delay: 0.12, ease: EASE }}
-            className="relative overflow-hidden rounded-[32px] p-4 sm:p-5"
+            className="relative overflow-hidden rounded-[24px] sm:rounded-[32px] p-4 sm:p-5"
             style={{
-              background: isDark ? "linear-gradient(180deg, rgba(20,18,16,0.96), rgba(28,25,22,0.96))" : "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(249,248,246,0.96))",
+              background: isDark
+                ? "linear-gradient(180deg, rgba(20,18,16,0.96), rgba(28,25,22,0.96))"
+                : "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(249,248,246,0.96))",
               border: `1px solid ${isDark ? "#2E2922" : "rgba(15,23,42,0.08)"}`,
               boxShadow: isDark ? "0 24px 60px rgba(0,0,0,0.35)" : "0 24px 60px rgba(15,23,42,0.08)",
             }}
           >
-            <div className="pointer-events-none absolute -top-16 right-0 h-48 w-48 rounded-full" style={{ background: "radial-gradient(circle, rgba(163,138,112,0.16) 0%, rgba(163,138,112,0) 72%)", filter: "blur(10px)" }} />
+            {/* Top orb */}
+            <div
+              className="pointer-events-none absolute -top-16 right-0 h-48 w-48 rounded-full"
+              style={{ background: "radial-gradient(circle, rgba(163,138,112,0.16) 0%, rgba(163,138,112,0) 72%)", filter: "blur(10px)" }}
+            />
+
             <div className="relative z-10">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              {/* Browser chrome */}
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex gap-1.5">
                     <div className="h-2.5 w-2.5 rounded-full bg-[#FF5F57]/80" />
                     <div className="h-2.5 w-2.5 rounded-full bg-[#FEBC2E]/80" />
                     <div className="h-2.5 w-2.5 rounded-full bg-[#28C840]/80" />
                   </div>
-                  <div className="rounded-full px-3 py-1 text-[11px]" style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.04)", color: isDark ? "rgba(242,237,232,0.42)" : "#737373" }}>
+                  <div
+                    className="rounded-full px-3 py-1 text-[11px]"
+                    style={{
+                      background: isDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.04)",
+                      color: isDark ? "rgba(242,237,232,0.42)" : "#737373",
+                    }}
+                  >
                     app.ittera.ai / onboarding
                   </div>
                 </div>
@@ -500,29 +489,43 @@ export default function HowItWorks() {
                 </div>
               </div>
 
-              <div className="mb-4 grid grid-cols-3 gap-2">
+              {/* Step progress tabs */}
+              <div className="mb-3 grid grid-cols-3 gap-2">
                 {STEPS.map((step, index) => (
-                  <div key={step.num} className="rounded-full px-3 py-2 text-[11px] font-medium text-center" style={{ background: index === activeStep ? "linear-gradient(135deg, rgba(163,138,112,0.18), rgba(122,139,118,0.12))" : isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.04)", color: index === activeStep ? (isDark ? "#F2EDE8" : "#171717") : isDark ? "rgba(242,237,232,0.42)" : "#737373", border: `1px solid ${index === activeStep ? "rgba(163,138,112,0.24)" : isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.05)"}` }}>
+                  <div
+                    key={step.num}
+                    className="rounded-full px-3 py-2 text-[11px] font-medium text-center"
+                    style={{
+                      background: index === activeStep
+                        ? "linear-gradient(135deg, rgba(163,138,112,0.18), rgba(122,139,118,0.12))"
+                        : isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.04)",
+                      color: index === activeStep
+                        ? (isDark ? "#F2EDE8" : "#171717")
+                        : isDark ? "rgba(242,237,232,0.42)" : "#737373",
+                      border: `1px solid ${index === activeStep ? "rgba(163,138,112,0.24)" : isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.05)"}`,
+                    }}
+                  >
                     {step.num}
                   </div>
                 ))}
               </div>
 
+              {/* Animated step content */}
               <div className="overflow-hidden">
                 <AnimatePresence initial={false} mode="wait">
-                <motion.div
-                  key={activeStep}
-                  initial={shouldReduceMotion ? false : { opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }}
-                  transition={{ duration: 0.45, ease: EASE }}
-                >
-                  <PreviewContent activeStep={activeStep} isDark={isDark} shouldReduceMotion={shouldReduceMotion} />
-                </motion.div>
+                  <motion.div
+                    key={activeStep}
+                    initial={shouldReduceMotion ? false : { opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }}
+                    transition={{ duration: 0.45, ease: EASE }}
+                  >
+                    <PreviewContent activeStep={activeStep} isDark={isDark} shouldReduceMotion={shouldReduceMotion} />
+                  </motion.div>
                 </AnimatePresence>
               </div>
 
-              {/* Persistent AI insight summary — always visible below the preview */}
+              {/* Persistent AI insight snapshot */}
               <div
                 className="mt-4 rounded-[22px] p-4"
                 style={{
@@ -545,8 +548,8 @@ export default function HowItWorks() {
                     <span className="rounded-full px-2 py-0.5 text-[10px] font-medium text-[#7A8B76]" style={{ background: "rgba(122,139,118,0.12)" }}>2.8× reach</span>
                   </div>
                   <div className="text-[11px] uppercase tracking-[0.16em]" style={{ color: isDark ? "rgba(242,237,232,0.32)" : "#A3A3A3" }}>Top formats</div>
-                  <div className="flex items-center gap-1.5">
-                    {([["Carousels", 92], ["Threads", 81], ["Founder POV", 88]] as const).map(([label, score]) => (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {(["Carousels", "Threads", "Founder POV"] as const).map((label) => (
                       <span
                         key={label}
                         className="rounded-[8px] px-2 py-1 text-[10px] font-medium"
@@ -556,7 +559,7 @@ export default function HowItWorks() {
                           color: isDark ? "rgba(242,237,232,0.7)" : "#525252",
                         }}
                       >
-                        {label} <span className="font-semibold" style={{ color: isDark ? "#F2EDE8" : "#171717" }}>{score}</span>
+                        {label}
                       </span>
                     ))}
                   </div>
@@ -569,7 +572,13 @@ export default function HowItWorks() {
                       <div className="relative flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: isDark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.06)" }}>
                         <motion.div
                           className="absolute inset-y-0 left-0 rounded-full"
-                          style={{ background: i === 0 ? "linear-gradient(90deg,#A38A70,#C4A882)" : i === 2 ? "linear-gradient(90deg,#7A8B76,#9AAD96)" : "linear-gradient(90deg,#A38A70,#7A8B76)" }}
+                          style={{
+                            background: i === 0
+                              ? "linear-gradient(90deg,#A38A70,#C4A882)"
+                              : i === 2
+                              ? "linear-gradient(90deg,#7A8B76,#9AAD96)"
+                              : "linear-gradient(90deg,#A38A70,#7A8B76)",
+                          }}
                           initial={shouldReduceMotion ? false : { width: 0 }}
                           whileInView={{ width: `${score}%` }}
                           viewport={{ once: true }}

@@ -21,6 +21,7 @@ function useTypewriter(words: string[], speed = 80, pause = 1800) {
     if (!deleting && charIdx < current.length)     timer.current = setTimeout(() => setCharIdx(c => c + 1), speed);
     else if (!deleting && charIdx === current.length) timer.current = setTimeout(() => setDeleting(true), pause);
     else if (deleting && charIdx > 0)              timer.current = setTimeout(() => setCharIdx(c => c - 1), speed / 2);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (deleting && charIdx === 0)            { setDeleting(false); setWordIdx(i => (i + 1) % words.length); }
     setDisplay(current.slice(0, charIdx));
     return () => { if (timer.current) clearTimeout(timer.current); };
@@ -140,6 +141,21 @@ function DashboardMockup({ isDark }: { isDark: boolean }) {
   const glowX  = useSpring(mouseX, { stiffness: 80, damping: 20 });
   const glowY  = useSpring(mouseY, { stiffness: 80, damping: 20 });
 
+  const innerGlowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const update = () => {
+      if (!innerGlowRef.current) return;
+      const x = glowX.get() * 100;
+      const y = glowY.get() * 100;
+      const color = isDark ? "rgba(196,168,130,0.07)" : "rgba(163,138,112,0.06)";
+      innerGlowRef.current.style.background =
+        `radial-gradient(300px circle at ${x}% ${y}%, ${color}, transparent 60%)`;
+    };
+    const unsubX = glowX.on("change", update);
+    const unsubY = glowY.on("change", update);
+    return () => { unsubX(); unsubY(); };
+  }, [glowX, glowY, isDark]);
+
   const win      = isDark ? "#141210"                  : "white";
   const winBrd   = isDark ? "#2E2922"                  : "#EAEAEC";
   const hdrBg    = isDark ? "#1C1916"                  : "#F5F5F4";
@@ -201,14 +217,9 @@ function DashboardMockup({ isDark }: { isDark: boolean }) {
         transition={{ duration: 0.3 }}
       >
         {/* Inner glow follows cursor */}
-        <motion.div
-          className="absolute inset-0 pointer-events-none rounded-2xl"
-          style={{
-            background: isDark
-              ? `radial-gradient(300px circle at ${glowX.get() * 100}% ${glowY.get() * 100}%, rgba(196,168,130,0.07), transparent 60%)`
-              : `radial-gradient(300px circle at ${glowX.get() * 100}% ${glowY.get() * 100}%, rgba(163,138,112,0.06), transparent 60%)`,
-            zIndex: 0,
-          }}
+        <div
+          ref={innerGlowRef}
+          className="absolute inset-0 z-0 pointer-events-none rounded-2xl"
         />
 
         {/* ── Title bar ── */}
@@ -268,7 +279,7 @@ function DashboardMockup({ isDark }: { isDark: boolean }) {
                     onClick={() => { if (item.tab >= 0) setActiveTab(item.tab); }}
                     className="w-full h-8 rounded-lg flex items-center justify-center"
                     style={{
-                      background: isActive ? navAct : "transparent",
+                      background: isActive ? navAct : "rgba(0,0,0,0)",
                       color: isActive ? brand : txtMuted,
                     }}
                     whileHover={{ background: isActive ? navAct : isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", scale: 1.08 }}
@@ -399,7 +410,7 @@ function DashboardMockup({ isDark }: { isDark: boolean }) {
                             return (
                               <motion.div key={day}
                                 className="flex flex-col items-center py-1 rounded-md cursor-pointer"
-                                style={{ background: isToday ? brand : hoveredDay === num ? brandDim : "transparent" }}
+                                style={{ background: isToday ? brand : hoveredDay === num ? brandDim : "rgba(0,0,0,0)" }}
                                 whileHover={{ scale: 1.12 }}
                                 transition={{ duration: 0.12 }}
                                 onMouseEnter={() => setHoveredDay(num)}
@@ -689,16 +700,17 @@ export default function Hero() {
     >
       <motion.div
         className="absolute top-[-10%] left-[-5%] w-[700px] h-[700px] rounded-full pointer-events-none"
-        style={{ background: "radial-gradient(circle, rgba(163,138,112,0.07) 0%, transparent 65%)", filter: "blur(60px)" }}
-        animate={{ x: [0, 20, -10, 0], y: [0, -20, 12, 0] }}
-        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+        style={{ background: "radial-gradient(circle, rgba(163,138,112,0.22) 0%, transparent 65%)" }}
+        animate={{ x: [0, 40, -20, 0], y: [0, -40, 24, 0] }}
+        transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
         className="absolute bottom-[-5%] right-[-5%] w-[500px] h-[500px] rounded-full pointer-events-none"
-        style={{ background: "radial-gradient(circle, rgba(122,139,118,0.05) 0%, transparent 65%)", filter: "blur(60px)" }}
-        animate={{ x: [0, -15, 8, 0], y: [0, 15, -10, 0] }}
-        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+        style={{ background: "radial-gradient(circle, rgba(122,139,118,0.18) 0%, transparent 65%)" }}
+        animate={{ x: [0, -30, 15, 0], y: [0, 30, -20, 0] }}
+        transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
       />
+
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-10 w-full">
         <div className="grid lg:grid-cols-[1fr_1.25fr] gap-10 items-center">
@@ -766,12 +778,12 @@ export default function Hero() {
                   <ArrowRight className="w-4 h-4" />
                 </motion.span>
               </motion.a>
-              <a href="#showcase"
+              <a href="/demo"
                 className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg text-[14.5px] font-medium transition-all duration-200"
                 style={{ color: secBtnColor, border: `1px solid ${secBtnBorder}` }}
                 onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = secBtnHover; (e.currentTarget as HTMLAnchorElement).style.background = secBtnHoverBg; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = secBtnBorder; (e.currentTarget as HTMLAnchorElement).style.background = "transparent"; }}
-              >See it in action</a>
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = secBtnBorder; (e.currentTarget as HTMLAnchorElement).style.background = "rgba(0,0,0,0)"; }}
+              >Explore the demo</a>
             </motion.div>
 
             <motion.div

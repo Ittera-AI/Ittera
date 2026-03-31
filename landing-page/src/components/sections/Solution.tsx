@@ -169,8 +169,8 @@ export default function Solution() {
         className="pointer-events-none absolute left-1/2 top-[44%] h-[680px] w-[980px] -translate-x-1/2 -translate-y-1/2"
         style={{
           background: isDark
-            ? "radial-gradient(ellipse, rgba(196,168,130,0.08) 0%, transparent 68%)"
-            : "radial-gradient(ellipse, rgba(163,138,112,0.08) 0%, transparent 68%)",
+            ? "radial-gradient(ellipse, rgba(163,138,112,0.15) 0%, transparent 70%)"
+            : "radial-gradient(ellipse, rgba(163,138,112,0.1) 0%, transparent 70%)",
         }}
       />
 

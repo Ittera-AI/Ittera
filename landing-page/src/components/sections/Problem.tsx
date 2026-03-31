@@ -99,7 +99,7 @@ export default function Problem() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true, margin: "-40px" }}
               transition={{ duration: 0.45, delay: i * 0.06 }}
-              className="p-7 transition-colors duration-300"
+              className="p-5 sm:p-7 transition-colors duration-300"
               style={{ background: cardBg }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = cardHover; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = cardBg; }}
@@ -116,9 +116,9 @@ export default function Problem() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="mt-12 pl-5 border-l-2 border-[#A38A70]/40"
+          className="mt-10 sm:mt-12 pl-4 sm:pl-5 border-l-[1.5px] sm:border-l-2 border-[#A38A70]/40"
         >
-          <p className="text-[17px] leading-relaxed max-w-2xl" style={{ color: quoteColor }}>
+          <p className="text-[15px] sm:text-[17px] leading-relaxed max-w-2xl" style={{ color: quoteColor }}>
             The average creator wastes{" "}
             <span className="font-semibold" style={{ color: quoteStrong }}>12+ hours every week</span>{" "}
             on content operations that should take two.

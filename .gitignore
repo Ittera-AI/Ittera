@@ -74,3 +74,28 @@ celerybeat.pid
 *.pem
 *.key
 *.p12
+
+# Platform / Hosting
+.vercel/
+.netlify/
+.serverless/
+
+# General Temp
+.temp/
+**/.temp/
+
+# Agentic Tools
+.agents/
+.claude/
+.windsurf/
+.cursor/
+.codeium/
+.gemini/
+.copilot/
+
+# Python / Jupyter
+.python-version
+poetry.lock
+pdm.lock
+Pipfile.lock
+.ipynb_checkpoints/

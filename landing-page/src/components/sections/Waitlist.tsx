@@ -6,6 +6,7 @@ import { ArrowRight, Zap, Star, Shield, Users, ChevronRight, TrendingUp } from "
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { supabase } from "@/lib/supabase";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 const DEFAULT_TOTAL_SEATS = 100;
@@ -17,12 +18,6 @@ type WaitlistStats = {
   recent_joiners: string[];
 };
 
-type WaitlistJoinResponse = WaitlistStats & {
-  message: string;
-  position: number;
-  already_joined: boolean;
-};
-
 type WaitlistMemberStatus = {
   email: string;
   joined: boolean;
@@ -30,10 +25,6 @@ type WaitlistMemberStatus = {
   total_joined: number;
   total_seats: number;
   remaining_seats: number;
-};
-
-type ErrorResponse = {
-  detail?: string;
 };
 
 function useCounter(target: number, duration = 1800) {
@@ -102,8 +93,6 @@ export default function Waitlist() {
   const { user, openAuth } = useAuth();
   const isDark = theme === "dark";
 
-  const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [profession, setProfession] = useState("");
@@ -116,25 +105,26 @@ export default function Waitlist() {
   const [memberStatus, setMemberStatus] = useState<WaitlistMemberStatus | null>(null);
   const { count, ref } = useCounter(stats.total_joined);
 
+  // Load total waitlist count from Supabase
   useEffect(() => {
     let cancelled = false;
 
     const loadStats = async () => {
       try {
-        const res = await fetch(`${API}/api/v1/waitlist`, { cache: "no-store" });
-        if (!res.ok) return;
+        const { count: total } = await supabase
+          .from("waitlist")
+          .select("*", { count: "exact", head: true });
 
-        const data: WaitlistStats = await res.json();
-        if (!cancelled) {
+        if (!cancelled && total !== null) {
           setStats({
-            total_joined: data.total_joined ?? 0,
-            total_seats: data.total_seats ?? DEFAULT_TOTAL_SEATS,
-            remaining_seats: data.remaining_seats ?? DEFAULT_TOTAL_SEATS,
-            recent_joiners: data.recent_joiners ?? [],
+            total_joined: total,
+            total_seats: DEFAULT_TOTAL_SEATS,
+            remaining_seats: Math.max(DEFAULT_TOTAL_SEATS - total, 0),
+            recent_joiners: [],
           });
         }
       } catch {
-        // Keep local fallback values when the API is unavailable.
+        // Keep local fallback values when Supabase is unavailable.
       }
     };
 
@@ -142,36 +132,41 @@ export default function Waitlist() {
     return () => {
       cancelled = true;
     };
-  }, [API]);
+  }, []);
 
+  // Check if signed-in user is already on the waitlist
   useEffect(() => {
-    if (!user) {
+    if (!user?.email) {
       setMemberStatus(null);
       return;
     }
-
-    const token = localStorage.getItem("ittera_token");
-    if (!token) return;
 
     let cancelled = false;
 
     const loadMemberStatus = async () => {
       try {
-        const res = await fetch(`${API}/api/v1/waitlist/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        if (!res.ok) return;
+        const { data: row } = await supabase
+          .from("waitlist")
+          .select("created_at")
+          .eq("email", user.email)
+          .single();
 
-        const data: WaitlistMemberStatus = await res.json();
+        if (!row || cancelled) return;
+
+        const { count: pos } = await supabase
+          .from("waitlist")
+          .select("*", { count: "exact", head: true })
+          .lte("created_at", row.created_at);
+
         if (!cancelled) {
-          setMemberStatus(data);
-          setStats((current) => ({
-            total_joined: data.total_joined ?? current.total_joined,
-            total_seats: data.total_seats ?? current.total_seats,
-            remaining_seats: data.remaining_seats ?? current.remaining_seats,
-            recent_joiners: current.recent_joiners,
-          }));
+          setMemberStatus({
+            email: user.email,
+            joined: true,
+            position: pos ?? null,
+            total_joined: stats.total_joined,
+            total_seats: stats.total_seats,
+            remaining_seats: stats.remaining_seats,
+          });
         }
       } catch {
         // Keep the waitlist state interactive even if the status lookup fails.
@@ -182,7 +177,8 @@ export default function Waitlist() {
     return () => {
       cancelled = true;
     };
-  }, [API, user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   useEffect(() => {
     if (memberStatus?.joined && memberStatus.position) {
@@ -200,7 +196,6 @@ export default function Waitlist() {
     event.preventDefault();
 
     const normalizedEmail = email.trim().toLowerCase();
-    const matchesSignedInUser = user?.email?.toLowerCase() === normalizedEmail;
     if (!normalizedEmail.includes("@") || !normalizedEmail.includes(".")) {
       setError("Please enter a valid email address.");
       return;
@@ -211,42 +206,58 @@ export default function Waitlist() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API}/api/v1/waitlist`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: normalizedEmail,
-          name: name.trim() || null,
-          profession: profession || null,
-        }),
-      });
-      const data: WaitlistJoinResponse | ErrorResponse = await res.json();
+      // Attempt insert — unique constraint on email catches duplicates
+      const { data: inserted, error: insertError } = await supabase
+        .from("waitlist")
+        .insert({ email: normalizedEmail, name: name.trim() || null, profession: profession || null })
+        .select("created_at")
+        .single();
 
-      if (!res.ok) {
-        setError((data as ErrorResponse).detail || "Something went wrong. Try again.");
-        return;
+      let pos: number | null = null;
+      let isAlreadyJoined = false;
+
+      if (insertError) {
+        // PostgreSQL unique violation code
+        if (insertError.code === "23505") {
+          isAlreadyJoined = true;
+          const { data: existing } = await supabase
+            .from("waitlist")
+            .select("created_at")
+            .eq("email", normalizedEmail)
+            .single();
+
+          if (existing) {
+            const { count } = await supabase
+              .from("waitlist")
+              .select("*", { count: "exact", head: true })
+              .lte("created_at", existing.created_at);
+            pos = count ?? null;
+          }
+        } else {
+          setError(insertError.message || "Something went wrong. Try again.");
+          return;
+        }
+      } else if (inserted) {
+        const { count } = await supabase
+          .from("waitlist")
+          .select("*", { count: "exact", head: true })
+          .lte("created_at", inserted.created_at);
+        pos = count ?? null;
       }
 
-      const joinData = data as WaitlistJoinResponse;
-      setPosition(joinData.position ?? 0);
-      setAlreadyJoined(Boolean(joinData.already_joined));
+      const { count: newTotal } = await supabase
+        .from("waitlist")
+        .select("*", { count: "exact", head: true });
+
+      setPosition(pos ?? 0);
+      setAlreadyJoined(isAlreadyJoined);
       setSubmitted(true);
-      setStats((current) => ({
-        total_joined: joinData.total_joined ?? current.total_joined,
-        total_seats: joinData.total_seats ?? current.total_seats,
-        remaining_seats: joinData.remaining_seats ?? Math.max(current.total_seats - current.total_joined, 0),
-        recent_joiners: joinData.recent_joiners ?? current.recent_joiners,
-      }));
-      if (matchesSignedInUser) {
-        setMemberStatus({
-          email: normalizedEmail,
-          joined: true,
-          position: joinData.position ?? null,
-          total_joined: joinData.total_joined ?? 0,
-          total_seats: joinData.total_seats ?? DEFAULT_TOTAL_SEATS,
-          remaining_seats: joinData.remaining_seats ?? Math.max(DEFAULT_TOTAL_SEATS - (joinData.total_joined ?? 0), 0),
-        });
-      }
+      setStats({
+        total_joined: newTotal ?? stats.total_joined,
+        total_seats: DEFAULT_TOTAL_SEATS,
+        remaining_seats: Math.max(DEFAULT_TOTAL_SEATS - (newTotal ?? stats.total_joined), 0),
+        recent_joiners: [],
+      });
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -482,7 +493,7 @@ export default function Waitlist() {
                     onFocus={(e) => { e.currentTarget.style.border = "1px solid rgba(163,138,112,0.5)"; }}
                     onBlur={(e) => { e.currentTarget.style.border = `1px solid ${inputBorder}`; }}
                   />
-                  <div className="relative">
+                  <div>
                     <input
                       type="email"
                       value={email}
@@ -494,7 +505,7 @@ export default function Waitlist() {
                       onFocus={(e) => { e.currentTarget.style.border = "1px solid rgba(163,138,112,0.5)"; }}
                       onBlur={(e) => { e.currentTarget.style.border = `1px solid ${inputBorder}`; }}
                     />
-                    {error && <p className="absolute -bottom-5 left-0 text-[11px] text-red-400/70">{error}</p>}
+                    {error && <p className="mt-1 text-[11px] text-red-400/70">{error}</p>}
                   </div>
                 </div>
 
@@ -555,7 +566,7 @@ export default function Waitlist() {
           >
             {/* live stat strip */}
             <div
-              className="mx-auto flex max-w-md items-center justify-between rounded-xl px-4 py-3 gap-4"
+              className="mx-auto flex flex-wrap max-w-md items-center justify-between rounded-xl px-4 py-3 gap-x-4 gap-y-2"
               style={{ background: isDark ? "rgba(255,255,255,0.03)" : "rgba(15,23,42,0.03)", border: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.06)"}` }}
             >
               <div className="flex items-center gap-2">

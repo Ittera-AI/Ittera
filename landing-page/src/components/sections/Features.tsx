@@ -117,6 +117,7 @@ function PublisherMini({ isDark }: { isDark: boolean }) {
 function FeatureCard({ feature, index, isDark }: { feature: ReturnType<typeof buildFeatures>[0]; index: number; isDark: boolean }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
+  const rectRef = useRef<DOMRect | null>(null);
   const shouldReduceMotion = useReducedMotion();
   const { icon: Icon, title, description, Visual, wide } = feature;
 
@@ -127,10 +128,14 @@ function FeatureCard({ feature, index, isDark }: { feature: ReturnType<typeof bu
   const iconBg    = isDark ? "rgba(196,168,130,0.1)" : "rgba(163,138,112,0.1)";
   const iconBorder= isDark ? "rgba(196,168,130,0.2)" : "rgba(163,138,112,0.15)";
 
+  const onMouseEnter = () => {
+    if (cardRef.current) rectRef.current = cardRef.current.getBoundingClientRect();
+  };
+
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current || !glowRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    glowRef.current.style.background = `radial-gradient(280px circle at ${e.clientX - rect.left}px ${e.clientY - rect.top}px, rgba(163,138,112,${isDark ? "0.1" : "0.06"}), transparent 65%)`;
+    if (!rectRef.current || !glowRef.current) return;
+    const rect = rectRef.current;
+    glowRef.current.style.background = `radial-gradient(280px circle at ${e.clientX - rect.left}px ${e.clientY - rect.top}px, rgba(163,138,112,${isDark ? "0.14" : "0.08"}), transparent 65%)`;
     glowRef.current.style.opacity = "1";
   };
 
@@ -141,8 +146,8 @@ function FeatureCard({ feature, index, isDark }: { feature: ReturnType<typeof bu
       initial={shouldReduceMotion ? false : { opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.5, delay: index * 0.07, ease: EASE }}
-      onMouseMove={onMouseMove} onMouseLeave={onMouseLeave}
-      className={`relative group p-6 rounded-2xl cursor-default transition-all duration-300 ${wide ? "md:col-span-2" : ""}`}
+      onMouseEnter={onMouseEnter} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave}
+      className={`relative group p-6 rounded-2xl cursor-default transition-[border-color,box-shadow] duration-300 ${wide ? "md:col-span-2" : ""}`}
       style={{ border: `1px solid ${cardBorder}`, background: cardBg, boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.06)" }}
     >
       <div ref={glowRef} className="absolute inset-0 rounded-2xl pointer-events-none transition-opacity duration-200" style={{ opacity: 0 }} />
@@ -179,7 +184,7 @@ export default function Features() {
   return (
     <section id="features" className="py-12 sm:py-24 bg-[#F9F8F6] relative">
       <div className="absolute top-0 right-0 w-[600px] h-[600px] pointer-events-none"
-        style={{ background: "radial-gradient(ellipse at top right, rgba(163,138,112,0.05) 0%, transparent 60%)" }} />
+        style={{ background: "radial-gradient(ellipse at top right, rgba(163,138,112,0.12) 0%, transparent 65%)" }} />
       <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-10">
         <div className="max-w-xl mb-14">
           <motion.div initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }}

@@ -1,12 +1,15 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 
 export type User = { email: string; name: string; initials: string };
 export type AuthMode = "signin" | "signup";
 
 interface AuthContextType {
   user: User | null;
+  sessionLoading: boolean;
   authOpen: boolean;
   authMode: AuthMode;
   authSeedEmail: string;
@@ -17,6 +20,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string) => Promise<void>;
   signInWithGoogle: () => void;
   signInWithLinkedIn: () => void;
+  resetPassword: (email: string) => Promise<void>;
+  // Kept for interface compatibility — no longer used directly
   completeOAuthSignIn: (token: string) => Promise<void>;
   signOut: () => void;
 }
@@ -32,11 +37,46 @@ function makeInitials(name: string) {
     .join("");
 }
 
+function userFromSupabase(supabaseUser: SupabaseUser): User {
+  const name =
+    (supabaseUser.user_metadata?.full_name as string | undefined) ||
+    (supabaseUser.user_metadata?.name as string | undefined) ||
+    supabaseUser.email?.split("@")[0] ||
+    "User";
+  return {
+    email: supabaseUser.email ?? "",
+    name,
+    initials: makeInitials(name),
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [authSeedEmail, setAuthSeedEmail] = useState("");
+
+  useEffect(() => {
+    // Restore session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ? userFromSupabase(session.user) : null);
+      setSessionLoading(false);
+    });
+
+    // Listen for sign-in / sign-out / token refresh
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ? userFromSupabase(session.user) : null);
+      if (session) {
+        setAuthOpen(false);
+        setAuthSeedEmail("");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const openAuth = useCallback((mode: AuthMode = "signup", seedEmail = "") => {
     setAuthMode(mode);
@@ -49,93 +89,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthSeedEmail("");
   }, []);
 
-  const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-  const fetchCurrentUser = useCallback(async (token: string) => {
-    const res = await fetch(`${API}/api/v1/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail ?? "Unable to restore your session");
-    }
-
-    const data = await res.json();
-    return {
-      email: data.email,
-      name: data.name,
-      initials: makeInitials(data.name),
-    } satisfies User;
-  }, [API]);
-
-  useEffect(() => {
-    const token = localStorage.getItem("ittera_token");
-    if (!token) return;
-
-    let cancelled = false;
-
-    fetchCurrentUser(token)
-      .then((currentUser) => {
-        if (!cancelled) setUser(currentUser);
-      })
-      .catch(() => {
-        localStorage.removeItem("ittera_token");
-        if (!cancelled) setUser(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchCurrentUser]);
-
-  const completeOAuthSignIn = useCallback(async (token: string) => {
-    localStorage.setItem("ittera_token", token);
-    const currentUser = await fetchCurrentUser(token);
-    setUser(currentUser);
-    setAuthSeedEmail("");
-    setAuthOpen(false);
-  }, [fetchCurrentUser]);
-
   const signIn = useCallback(async (email: string, password: string) => {
-    const res = await fetch(`${API}/api/v1/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
     });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail ?? "Invalid email or password");
-    }
-    const { access_token } = await res.json();
-    await completeOAuthSignIn(access_token);
-  }, [API, completeOAuthSignIn]);
+    if (error) throw new Error(error.message);
+  }, []);
 
   const signUp = useCallback(async (email: string, password: string, name: string) => {
-    const res = await fetch(`${API}/api/v1/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim().toLowerCase(), password, name: name.trim() }),
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: {
+        data: { full_name: name.trim(), name: name.trim() },
+      },
     });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail ?? "Registration failed");
+    if (error) throw new Error(error.message);
+    // If no session was returned, Supabase requires email confirmation first
+    if (!data.session) {
+      throw new Error(
+        "Account created! Check your inbox and confirm your email before signing in.",
+      );
     }
-    // Auto sign in after register
-    await signIn(email, password);
-  }, [API, signIn]);
+    // Session returned means email confirmation is off — onAuthStateChange handles login
+  }, []);
 
   const signInWithGoogle = useCallback(() => {
-    window.location.href = `${API}/api/v1/auth/google/start`;
-  }, [API]);
+    supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+  }, []);
 
   const signInWithLinkedIn = useCallback(() => {
-    window.location.href = `${API}/api/v1/auth/linkedin/start`;
-  }, [API]);
+    supabase.auth.signInWithOAuth({
+      provider: "linkedin_oidc",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+  }, []);
 
-  const signOut = useCallback(() => {
-    localStorage.removeItem("ittera_token");
+  const resetPassword = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      email.trim().toLowerCase(),
+      { redirectTo: `${window.location.origin}/auth/callback` },
+    );
+    if (error) throw new Error(error.message);
+  }, []);
+
+  // No-op kept for backwards interface compatibility
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const completeOAuthSignIn = useCallback(async (_token: string) => {}, []);
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
     setUser(null);
     setAuthOpen(false);
   }, []);
@@ -144,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        sessionLoading,
         authOpen,
         authMode,
         authSeedEmail,
@@ -154,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         signInWithGoogle,
         signInWithLinkedIn,
+        resetPassword,
         completeOAuthSignIn,
         signOut,
       }}

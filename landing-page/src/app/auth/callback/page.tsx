@@ -2,50 +2,56 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-
-import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { completeOAuthSignIn } = useAuth();
-  const [message, setMessage] = useState("Completing Google sign-in...");
+
+  // Derive URL-level errors directly — no synchronous setState in effect.
+  const urlError = searchParams.get("error");
+  const urlErrorDesc = searchParams.get("error_description");
+  const code = searchParams.get("code");
+
+  const [asyncError, setAsyncError] = useState<string | null>(null);
+
+  // Displayed message: URL error takes priority, then async error, then default.
+  const message = urlError
+    ? (urlErrorDesc ?? urlError)
+    : asyncError ?? "Completing sign-in…";
 
   useEffect(() => {
-    const token = searchParams.get("token");
-    const error = searchParams.get("error");
+    // URL already carries the error — nothing async to do.
+    if (urlError) return;
 
-    if (error) {
-      setMessage(error);
-      return;
-    }
-
-    if (!token) {
-      setMessage("Missing OAuth token.");
+    // No code and no error means direct visit — send home.
+    if (!code) {
+      router.replace("/");
       return;
     }
 
     let cancelled = false;
 
-    completeOAuthSignIn(token)
-      .then(() => {
-        if (!cancelled) router.replace("/");
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setMessage(err instanceof Error ? err.message : "Unable to complete Google sign-in.");
+    supabase.auth
+      .exchangeCodeForSession(code)
+      .then(({ error: sessionError }) => {
+        if (cancelled) return;
+        if (sessionError) {
+          setAsyncError(sessionError.message);
+          return;
         }
+        router.replace("/");
       });
 
     return () => {
       cancelled = true;
     };
-  }, [completeOAuthSignIn, router, searchParams]);
+  }, [router, code, urlError]);
 
   return (
     <main className="min-h-screen flex items-center justify-center px-6 bg-[#F9F8F6] text-[#171717]">
       <div className="max-w-md text-center">
-        <h1 className="text-2xl font-semibold tracking-tight mb-3">Google Sign-In</h1>
+        <h1 className="text-2xl font-semibold tracking-tight mb-3">Signing in…</h1>
         <p className="text-sm text-[#525252]">{message}</p>
       </div>
     </main>
@@ -58,8 +64,8 @@ export default function AuthCallbackPage() {
       fallback={
         <main className="min-h-screen flex items-center justify-center px-6 bg-[#F9F8F6] text-[#171717]">
           <div className="max-w-md text-center">
-            <h1 className="text-2xl font-semibold tracking-tight mb-3">Google Sign-In</h1>
-            <p className="text-sm text-[#525252]">Completing Google sign-in...</p>
+            <h1 className="text-2xl font-semibold tracking-tight mb-3">Signing in…</h1>
+            <p className="text-sm text-[#525252]">Completing sign-in…</p>
           </div>
         </main>
       }
