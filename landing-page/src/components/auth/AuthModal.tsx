@@ -80,7 +80,7 @@ function InputField({
 }
 
 export default function AuthModal() {
-  const { authOpen, authMode, authSeedEmail, setAuthMode, closeAuth, signIn, signUp, signInWithGoogle, signInWithLinkedIn } = useAuth();
+  const { authOpen, authMode, authSeedEmail, setAuthMode, closeAuth, signIn, signUp, signInWithGoogle, signInWithLinkedIn, resetPassword } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
@@ -90,6 +90,7 @@ export default function AuthModal() {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [resetSent, setResetSent] = useState(false);
 
   // Reset fields when mode changes
   useEffect(() => {
@@ -98,6 +99,7 @@ export default function AuthModal() {
     setPassword("");
     setError("");
     setShowPw(false);
+    setResetSent(false);
   }, [authMode, authSeedEmail]);
 
   // Escape to close
@@ -385,8 +387,29 @@ export default function AuthModal() {
 
                   {authMode === "signin" && (
                     <div className="text-right">
-                      <button type="button" className="text-[11.5px] hover:text-[#A38A70] transition-colors" style={{ color: forgotColor }}>
-                        Forgot password?
+                      <button
+                        type="button"
+                        disabled={loading}
+                        className="text-[11.5px] hover:text-[#A38A70] transition-colors disabled:opacity-50"
+                        style={{ color: resetSent ? "#A38A70" : forgotColor }}
+                        onClick={async () => {
+                          if (!email.includes("@")) {
+                            setError("Enter your email address above first.");
+                            return;
+                          }
+                          setLoading(true);
+                          setError("");
+                          try {
+                            await resetPassword(email);
+                            setResetSent(true);
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Failed to send reset email.");
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                      >
+                        {resetSent ? "Reset email sent — check your inbox" : "Forgot password?"}
                       </button>
                     </div>
                   )}

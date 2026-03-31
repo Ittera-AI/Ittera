@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { Twitter, Linkedin, Github, Youtube } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 
 const FOOTER_LINKS = {
   Product: [
     { label: "Features", href: "#features" },
+    { label: "Demo", href: "/demo" },
     { label: "How it works", href: "#how-it-works" },
     { label: "Pricing", href: "#pricing" },
     { label: "Changelog", href: "#" },
@@ -55,10 +57,10 @@ export default function Footer() {
   return (
     <footer style={{ background: footerBg, borderTop: `1px solid ${borderColor}` }}>
       <div className="max-w-7xl mx-auto px-6 lg:px-10 py-10 sm:py-16">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-8 sm:gap-10 lg:gap-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-12">
           {/* Brand */}
-          <div className="col-span-2">
-            <a href="/" className="flex items-center gap-2.5 mb-4">
+          <div className="sm:col-span-2 lg:col-span-2">
+            <Link href="/" className="flex items-center gap-2.5 mb-4">
               <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
                 <path d="M11 2L13.5 8.5L20 11L13.5 13.5L11 20L8.5 13.5L2 11L8.5 8.5L11 2Z" fill="url(#footer-logo-grad)" />
                 <defs>
@@ -69,7 +71,7 @@ export default function Footer() {
                 </defs>
               </svg>
               <span className="text-[15px] font-semibold tracking-tight" style={{ color: brandColor }}>Ittera</span>
-            </a>
+            </Link>
             <p className="text-[13px] leading-[1.75] max-w-xs mb-6" style={{ color: descColor }}>
               The AI content strategy engine for creators, founders, and marketers who play to win.
             </p>
@@ -79,7 +81,7 @@ export default function Footer() {
                   key={label}
                   href={href}
                   aria-label={label}
-                  className="w-10 h-10 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-all duration-200"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200"
                   style={{ background: socialBg, border: `1px solid ${borderColor}`, color: socialColor }}
                   onMouseEnter={(e) => {
                     (e.currentTarget as HTMLAnchorElement).style.background = socialBgH;

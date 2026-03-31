@@ -1,5 +1,8 @@
 from typing import List
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_INSECURE_SECRET = "change-me-in-production"
 
 
 class Settings(BaseSettings):
@@ -11,7 +14,18 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # Auth
-    SECRET_KEY: str = "change-me-in-production"
+    SECRET_KEY: str = _INSECURE_SECRET
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def secret_key_must_be_changed(cls, v: str) -> str:
+        import os
+        if v == _INSECURE_SECRET and os.getenv("ENVIRONMENT", "development") == "production":
+            raise ValueError(
+                "SECRET_KEY must be set to a secure random value in production. "
+                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+        return v
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     ALGORITHM: str = "HS256"
     GOOGLE_CLIENT_ID: str = ""

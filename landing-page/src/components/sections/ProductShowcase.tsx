@@ -6,10 +6,15 @@ import {
   ArrowRight,
   BarChart3,
   CalendarDays,
+  Check,
   ChevronRight,
+  ClipboardCopy,
+  Edit3,
+  Loader2,
   RefreshCw,
   Send,
   Sparkles,
+  ThumbsUp,
   Wand2,
 } from "lucide-react";
 
@@ -98,6 +103,31 @@ function useTokens(): Tokens {
   };
 }
 
+function CopyButton({ text, tokens }: { text: string; tokens: Tokens }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium transition-all duration-150 active:scale-95"
+      style={{
+        background: copied ? "rgba(122,139,118,0.14)" : tokens.softSurface,
+        color: copied ? tokens.success : tokens.faint,
+        border: `1px solid ${copied ? "rgba(122,139,118,0.3)" : tokens.panelBorder}`,
+      }}
+    >
+      {copied ? <Check className="h-3 w-3" /> : <ClipboardCopy className="h-3 w-3" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
 const SCENARIO_STATS: Record<ScenarioId, { label: string; value: string }[]> = {
   launch: [
     { label: "Accounts connected", value: "5 channels" },
@@ -126,8 +156,7 @@ function TopStats({ tokens, scenario }: { tokens: Tokens; scenario: ScenarioId }
           key={stat.label}
           initial={{ opacity: 0, y: 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.42, delay: index * 0.05, ease: EASE }}
+          transition={{ duration: 0.25, delay: index * 0.05, ease: EASE }}
           className="rounded-2xl px-4 py-4"
           style={{ background: tokens.softSurface, border: `1px solid ${tokens.panelBorder}` }}
         >
@@ -173,8 +202,8 @@ function WorkspaceIntro({ active, tokens }: { active: WorkspaceId; tokens: Token
         {copy[2]}
       </p>
       <a
-        href="#waitlist"
-        className="mt-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold"
+        href="/#waitlist"
+        className="mt-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90 active:scale-95"
         style={{ background: tokens.text, color: tokens.panelBg }}
       >
         Join the private beta
@@ -195,7 +224,7 @@ function WorkspaceRail({ active, setActive, tokens }: { active: WorkspaceId; set
             key={workspace.id}
             type="button"
             onClick={() => setActive(workspace.id)}
-            className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition-colors"
+            className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition-all duration-150 ease-out active:scale-[0.97]"
             style={{
               background: isActive ? tokens.accentSurface : "transparent",
               color: isActive ? tokens.text : tokens.muted,
@@ -229,20 +258,38 @@ function ScenarioStrip({
     <div className="grid gap-2 sm:grid-cols-3">
       {SCENARIOS.map((scenario) => {
         const isActive = scenario.id === active;
+        // Light mode: use warm accent surface with accent text (not black-on-black)
+        // Dark mode: invert to near-white bg with dark text
+        const activeBg = tokens.isDark
+          ? "linear-gradient(135deg, rgba(196,168,130,0.22) 0%, rgba(163,138,112,0.18) 100%)"
+          : "linear-gradient(135deg, rgba(163,138,112,0.16) 0%, rgba(196,168,130,0.12) 100%)";
+        const activeBorder = tokens.isDark ? "rgba(196,168,130,0.36)" : "rgba(163,138,112,0.4)";
+        const activeLabelColor = tokens.isDark ? "#E7D3BB" : "#6B4F35";
+        const activeBriefColor = tokens.isDark ? "rgba(231,211,187,0.62)" : "rgba(107,79,53,0.7)";
         return (
           <button
             key={scenario.id}
             type="button"
             onClick={() => setActive(scenario.id)}
-            className="rounded-2xl px-4 py-3 text-left text-[11px] font-medium transition-colors"
+            className="rounded-2xl px-4 py-3 text-left text-[11px] font-medium transition-all duration-200 ease-out active:scale-[0.97] hover:scale-[1.01]"
             style={{
-              background: isActive ? tokens.text : tokens.panelBg,
-              color: isActive ? tokens.panelBg : tokens.muted,
-              border: `1px solid ${isActive ? tokens.text : tokens.panelBorder}`,
+              background: isActive ? activeBg : tokens.panelBg,
+              border: `1px solid ${isActive ? activeBorder : tokens.panelBorder}`,
+              boxShadow: isActive ? (tokens.isDark ? "0 0 0 1px rgba(196,168,130,0.18) inset" : "0 0 0 1px rgba(163,138,112,0.1) inset") : "none",
             }}
           >
-            <div>{scenario.label}</div>
-            <div className="mt-1 text-[10px]" style={{ color: isActive ? "rgba(20,18,16,0.64)" : tokens.faint }}>
+            <div className="flex items-center gap-2">
+              {isActive && (
+                <span
+                  className="h-1.5 w-1.5 rounded-full animate-pulse"
+                  style={{ background: tokens.isDark ? "#C4A882" : "#A38A70" }}
+                />
+              )}
+              <span style={{ color: isActive ? activeLabelColor : tokens.muted, fontWeight: isActive ? 600 : 500 }}>
+                {scenario.label}
+              </span>
+            </div>
+            <div className="mt-1.5 text-[10px] leading-[1.6]" style={{ color: isActive ? activeBriefColor : tokens.faint }}>
               {scenario.brief}
             </div>
           </button>
@@ -271,7 +318,7 @@ function ChannelStrip({
             key={channel.id}
             type="button"
             onClick={() => setActive(channel.id)}
-            className="h-full rounded-2xl px-3 py-3 text-left transition-colors"
+            className="h-full rounded-2xl px-3 py-3 text-left transition-all duration-150 ease-out active:scale-[0.97]"
             style={{
               background: isActive ? tokens.accentSurface : tokens.panelBg,
               border: `1px solid ${isActive ? "rgba(163,138,112,0.28)" : tokens.panelBorder}`,
@@ -352,6 +399,20 @@ function ControlDeck({
 }
 
 function SyncPanel({ tokens, channel }: { tokens: Tokens; channel: ChannelId }) {
+  const [syncing, setSyncing] = useState(false);
+  const [syncDone, setSyncDone] = useState(false);
+
+  const handleRefresh = () => {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncDone(false);
+    window.setTimeout(() => {
+      setSyncing(false);
+      setSyncDone(true);
+      window.setTimeout(() => setSyncDone(false), 2200);
+    }, 1800);
+  };
+
   const syncRows: Record<ChannelId, { label: string; progress: number; note: string }[]> = {
     linkedin: [
       { label: "LinkedIn post history", progress: 100, note: "Imported 94 posts and 18 top performers" },
@@ -421,8 +482,21 @@ function SyncPanel({ tokens, channel }: { tokens: Tokens; channel: ChannelId }) 
             <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: tokens.faint }}>Historical import</div>
             <div className="mt-2 text-[24px] font-semibold tracking-[-0.03em]" style={{ color: tokens.text }}>323 assets unified</div>
           </div>
-          <button type="button" className="rounded-full px-3 py-1.5 text-[11px] font-medium" style={{ background: tokens.panelBg, border: `1px solid ${tokens.panelBorder}`, color: tokens.muted }}>
-            Refresh sources
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={syncing}
+            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-all duration-150 ease-out active:scale-[0.97] disabled:opacity-70"
+            style={{ background: syncDone ? "rgba(122,139,118,0.14)" : tokens.panelBg, border: `1px solid ${syncDone ? "rgba(122,139,118,0.4)" : tokens.panelBorder}`, color: syncDone ? tokens.success : tokens.muted }}
+          >
+            {syncing ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : syncDone ? (
+              <Check className="h-3 w-3" />
+            ) : (
+              <RefreshCw className="h-3 w-3" />
+            )}
+            {syncing ? "Syncing..." : syncDone ? "Up to date" : "Refresh sources"}
           </button>
         </div>
         <div className="mt-5 space-y-3">
@@ -433,7 +507,7 @@ function SyncPanel({ tokens, channel }: { tokens: Tokens; channel: ChannelId }) 
                 <span style={{ color: tokens.muted }}>{row.progress}%</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full" style={{ background: tokens.softSurface }}>
-                <motion.div className="h-full rounded-full" style={{ background: "linear-gradient(90deg, #A38A70, #7A8B76)" }} initial={{ width: 0 }} animate={{ width: `${row.progress}%` }} transition={{ duration: 0.55, ease: EASE }} />
+                <motion.div className="h-full rounded-full origin-left w-full" style={{ background: "linear-gradient(90deg, #A38A70, #7A8B76)" }} initial={{ scaleX: 0 }} animate={{ scaleX: row.progress / 100 }} transition={{ duration: 0.55, ease: EASE }} />
               </div>
               <div className="mt-2 text-[11px]" style={{ color: tokens.faint }}>{row.note}</div>
             </div>
@@ -443,11 +517,18 @@ function SyncPanel({ tokens, channel }: { tokens: Tokens; channel: ChannelId }) 
       <div className="rounded-[24px] p-5" style={{ background: tokens.panelBg, border: `1px solid ${tokens.panelBorder}` }}>
         <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: tokens.faint }}>Ittera sees</div>
         <div className="mt-4 grid gap-3">
-          {insights[channel].map((item) => (
-            <div key={item.label} className="rounded-2xl px-4 py-3" style={{ background: tokens.surface, border: `1px solid ${tokens.panelBorder}` }}>
+          {insights[channel].map((item, i) => (
+            <motion.div
+              key={item.label}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, delay: i * 0.06 }}
+              className="rounded-2xl px-4 py-3"
+              style={{ background: tokens.surface, border: `1px solid ${tokens.panelBorder}` }}
+            >
               <div className="text-[11px]" style={{ color: tokens.faint }}>{item.label}</div>
               <div className="mt-1 text-[13px] font-medium" style={{ color: tokens.text }}>{item.value}</div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>
@@ -530,7 +611,7 @@ function ScorePanel({
           {CHANNELS.map((item) => item.label).map((item) => {
             const active = item === platform;
             return (
-              <button key={item} type="button" onClick={() => setPlatform(item)} className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ background: active ? tokens.accentSurface : "transparent", color: active ? tokens.text : tokens.muted, border: `1px solid ${active ? "rgba(163,138,112,0.24)" : tokens.panelBorder}` }}>
+              <button key={item} type="button" onClick={() => setPlatform(item)} className="rounded-full px-3 py-1.5 text-[12px] font-medium transition-all duration-150 ease-out active:scale-[0.97]" style={{ background: active ? tokens.accentSurface : "transparent", color: active ? tokens.text : tokens.muted, border: `1px solid ${active ? "rgba(163,138,112,0.24)" : tokens.panelBorder}` }}>
                 {item}
               </button>
             );
@@ -539,7 +620,7 @@ function ScorePanel({
         <textarea value={content} onChange={(event) => setContent(event.target.value)} placeholder={`Paste your ${platform} draft`} className="mt-4 h-56 w-full resize-none rounded-[22px] p-4 text-[13px] leading-6 outline-none" style={{ background: tokens.panelBg, border: `1px solid ${tokens.panelBorder}`, color: tokens.text }} />
         <div className="mt-3 flex items-center justify-between">
           <span className="text-[11px]" style={{ color: tokens.faint }}>{content.length} characters</span>
-          <button type="button" onClick={runAnalysis} disabled={loading || !content.trim()} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold disabled:opacity-40" style={{ background: tokens.text, color: tokens.panelBg }}>
+          <button type="button" onClick={runAnalysis} disabled={loading || !content.trim()} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold transition-transform duration-150 ease-out active:scale-[0.97] disabled:opacity-40" style={{ background: tokens.text, color: tokens.panelBg }}>
             {loading ? "Analyzing..." : "Analyze draft"}
             {!loading && <ArrowRight className="h-3.5 w-3.5" />}
           </button>
@@ -565,13 +646,18 @@ function ScorePanel({
                 <span style={{ color: tokens.text }}>{metric.value || "--"}</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full" style={{ background: tokens.softSurface }}>
-                <motion.div className="h-full rounded-full" style={{ background: "linear-gradient(90deg, #A38A70, #7A8B76)" }} initial={{ width: 0 }} animate={{ width: `${metric.value}%` }} transition={{ duration: 0.55, ease: EASE }} />
+                <motion.div className="h-full rounded-full origin-left w-full" style={{ background: "linear-gradient(90deg, #A38A70, #7A8B76)" }} initial={{ scaleX: 0 }} animate={{ scaleX: metric.value / 100 }} transition={{ duration: 0.55, ease: EASE }} />
               </div>
             </div>
           ))}
         </div>
         <div className="mt-5 rounded-[20px] p-4" style={{ background: tokens.surface, border: `1px solid ${tokens.panelBorder}` }}>
-          <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: tokens.faint }}>Rewrite suggestion</div>
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: tokens.faint }}>Rewrite suggestion</div>
+            {result && (
+              <CopyButton text={result.rewrite} tokens={tokens} />
+            )}
+          </div>
           <p className="mt-3 text-[13px] leading-6" style={{ color: tokens.text }}>{result ? result.verdict : "Run a score to see what the draft gets right and where it is likely to lose attention."}</p>
           <p className="mt-3 text-[13px] leading-6" style={{ color: tokens.muted }}>{result ? result.rewrite : "Ittera will suggest a stronger first line, a clearer structure, and a better CTA based on platform fit."}</p>
         </div>
@@ -771,7 +857,7 @@ function RepurposePanel({ tokens, scenario }: { tokens: Tokens; scenario: Scenar
 }
 
 function PublishPanel({ tokens, scenario }: { tokens: Tokens; scenario: ScenarioId }) {
-  const queue =
+  const initialQueue =
     scenario === "launch"
       ? [
           { label: "LinkedIn launch post", when: "Today, 8:00 AM", status: "Scheduled" },
@@ -786,6 +872,29 @@ function PublishPanel({ tokens, scenario }: { tokens: Tokens; scenario: Scenario
           { label: "Newsletter recap", when: "Friday, 7:30 AM", status: "Queued" },
         ];
 
+  const [queue, setQueue] = useState(initialQueue);
+
+  // Reset queue when scenario changes
+  useEffect(() => {
+    setQueue(scenario === "launch"
+      ? [
+          { label: "LinkedIn launch post", when: "Today, 8:00 AM", status: "Scheduled" },
+          { label: "X launch thread", when: "Today, 9:30 AM", status: "Scheduled" },
+          { label: "Instagram launch carousel", when: "Tomorrow, 6:00 PM", status: "In review" },
+          { label: "Waitlist email", when: "Friday, 7:30 AM", status: "Queued" },
+        ]
+      : [
+          { label: "LinkedIn founder post", when: "Today, 8:00 AM", status: "Scheduled" },
+          { label: "X thread variant", when: "Today, 9:30 AM", status: "Scheduled" },
+          { label: "Instagram carousel", when: "Tomorrow, 6:00 PM", status: "In review" },
+          { label: "Newsletter recap", when: "Friday, 7:30 AM", status: "Queued" },
+        ]);
+  }, [scenario]);
+
+  const approve = (label: string) => {
+    setQueue((q) => q.map((item) => item.label === label ? { ...item, status: "Scheduled" } : item));
+  };
+
   return (
     <div className="grid gap-4 xl:grid-cols-[1.02fr_0.98fr]">
       <div className="rounded-[24px] p-5" style={{ background: tokens.surface, border: `1px solid ${tokens.panelBorder}` }}>
@@ -797,7 +906,30 @@ function PublishPanel({ tokens, scenario }: { tokens: Tokens; scenario: Scenario
                 <div className="text-[13px] font-medium" style={{ color: tokens.text }}>{item.label}</div>
                 <div className="rounded-full px-2.5 py-1 text-[10px] font-medium" style={{ background: item.status === "Scheduled" ? "rgba(122,139,118,0.14)" : tokens.softSurface, color: item.status === "Scheduled" ? tokens.success : tokens.muted }}>{item.status}</div>
               </div>
-              <div className="mt-2 text-[11px]" style={{ color: tokens.faint }}>{item.when}</div>
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-[11px]" style={{ color: tokens.faint }}>{item.when}</span>
+                {item.status !== "Scheduled" && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => approve(item.label)}
+                      className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-all duration-150 active:scale-95"
+                      style={{ background: "rgba(122,139,118,0.14)", color: tokens.success, border: "1px solid rgba(122,139,118,0.28)" }}
+                    >
+                      <ThumbsUp className="h-2.5 w-2.5" />
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium transition-all duration-150 active:scale-95"
+                      style={{ background: tokens.softSurface, color: tokens.muted, border: `1px solid ${tokens.panelBorder}` }}
+                    >
+                      <Edit3 className="h-2.5 w-2.5" />
+                      Edit
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -911,7 +1043,7 @@ function LearnPanel({ tokens, channel }: { tokens: Tokens; channel: ChannelId })
               <div key={bar.day} className="relative flex flex-1 items-end" onMouseEnter={() => setHovered(index)} onMouseLeave={() => setHovered(5)}>
                 <AnimatePresence>
                   {active && (
-                    <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="absolute left-1/2 top-0 -translate-x-1/2 rounded-xl px-3 py-2 text-[11px]" style={{ background: tokens.surface, border: `1px solid ${tokens.panelBorder}`, color: tokens.text }}>
+                    <motion.div initial={{ opacity: 0, y: -6, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.96 }} className="absolute left-1/2 top-0 -translate-x-1/2 rounded-xl px-3 py-2 text-[11px] origin-bottom" style={{ background: tokens.surface, border: `1px solid ${tokens.panelBorder}`, color: tokens.text }}>
                       {bar.day}: {bar.value}K reach
                     </motion.div>
                   )}
@@ -952,7 +1084,7 @@ export default function ProductShowcase() {
   const ActivePanel = PANELS[activeWorkspace];
 
   return (
-    <section id="showcase" className="relative overflow-hidden bg-[#F9F8F6] py-12 sm:py-24">
+    <section id="showcase" className="relative overflow-hidden py-12 sm:py-24" style={{ background: tokens.isDark ? "#0C0B09" : "#F9F8F6" }}>
       <div className="pointer-events-none absolute left-0 top-10 h-[420px] w-[520px]" style={{ background: tokens.pageGlow }} />
       <div className="pointer-events-none absolute bottom-0 right-0 h-[420px] w-[520px]" style={{ background: "radial-gradient(circle, rgba(15,23,42,0.05) 0%, transparent 72%)" }} />
       <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10">
@@ -961,10 +1093,10 @@ export default function ProductShowcase() {
             <div className="h-1.5 w-1.5 rounded-full bg-[#A38A70]/70" />
             <span className="eyebrow">Product Experience</span>
           </motion.div>
-          <motion.h2 initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.52, delay: 0.05 }} className="mt-6 text-[28px] sm:text-[42px] lg:text-[58px] font-bold leading-[1.03] tracking-[-0.045em] text-neutral-900">
+          <motion.h2 initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.52, delay: 0.05 }} className="mt-6 text-[28px] sm:text-[42px] lg:text-[58px] font-bold leading-[1.03] tracking-[-0.045em]" style={{ color: tokens.text }}>
             The moment the stack <span className="gradient-text">clicks</span>
           </motion.h2>
-          <motion.p initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.45, delay: 0.1 }} className="mt-5 text-[15px] leading-8 text-neutral-500">
+          <motion.p initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.45, delay: 0.1 }} className="mt-5 text-[15px] leading-8" style={{ color: tokens.muted }}>
             Connect accounts, score drafts, map the calendar, repurpose winners, publish everywhere, and learn from real performance in one continuous workflow.
           </motion.p>
         </div>
@@ -998,17 +1130,21 @@ export default function ProductShowcase() {
                 </div>
               </div>
             </div>
-            <div className="grid xl:grid-cols-[240px_1fr]">
-              <div className="border-b p-4 xl:border-b-0 xl:border-r" style={{ borderColor: tokens.panelBorder, background: tokens.surface }}>
-                <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: tokens.faint }}>Try the workflow</div>
-                <div className="mt-4">
-                  <WorkspaceRail active={activeWorkspace} setActive={setActiveWorkspace} tokens={tokens} />
-                </div>
+            <div className="flex xl:flex-row flex-col">
+              {/* Sidebar: Try the workflow */}
+              <div
+                className="xl:w-[220px] flex-shrink-0 p-4 xl:border-r border-b xl:border-b-0 xl:self-stretch"
+                style={{ borderColor: tokens.panelBorder, background: tokens.surface }}
+              >
+                <div className="text-[11px] uppercase tracking-[0.18em] mb-1" style={{ color: tokens.faint }}>Try the workflow</div>
+                <div className="text-[10px] mb-4" style={{ color: tokens.faint, opacity: 0.7 }}>Select a workspace module</div>
+                <WorkspaceRail active={activeWorkspace} setActive={setActiveWorkspace} tokens={tokens} />
               </div>
-              <div className="p-4 sm:p-5">
+              {/* Main content area */}
+              <div className="flex-1 min-w-0 p-4 sm:p-5">
                 <ControlDeck activeWorkspace={activeWorkspace} activeScenario={activeScenario} activeChannel={activeChannel} tokens={tokens} />
                 <AnimatePresence mode="wait">
-                  <motion.div key={`${activeWorkspace}-${activeChannel}-${activeScenario}`} initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }} transition={{ duration: 0.22, ease: "easeInOut" }} className="mt-4">
+                  <motion.div key={`${activeWorkspace}-${activeChannel}-${activeScenario}`} initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }} className="mt-4">
                     <ActivePanel tokens={tokens} channel={activeChannel} scenario={activeScenario} />
                   </motion.div>
                 </AnimatePresence>

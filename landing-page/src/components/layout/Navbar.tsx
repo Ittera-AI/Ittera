@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, LogOut, ChevronDown } from "lucide-react";
 import { NAV_LINKS } from "@/lib/constants";
@@ -18,22 +19,43 @@ export default function Navbar() {
   const [activeSection, setActiveSection] = useState("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  // Scroll + active section detection
+  // Navbar blur on scroll
   useEffect(() => {
-    const onScroll = () => {
-      setScrolled(window.scrollY > 60);
-      const sections = NAV_LINKS.map((l) => l.href.replace("#", ""));
-      for (const id of [...sections].reverse()) {
-        const el = document.getElementById(id);
-        if (el && el.getBoundingClientRect().top <= 100) {
-          setActiveSection(id);
-          return;
-        }
-      }
-      setActiveSection("");
-    };
+    const onScroll = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Active section via IntersectionObserver — reliable, no scroll event needed
+  useEffect(() => {
+    const sectionIds = NAV_LINKS
+      .filter((l) => l.href.startsWith("#"))
+      .map((l) => l.href.slice(1));
+
+    const visible = new Set<string>();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            visible.add(entry.target.id);
+          } else {
+            visible.delete(entry.target.id);
+          }
+        });
+        // Pick the topmost visible section (first in page order)
+        setActiveSection(sectionIds.find((id) => visible.has(id)) ?? "");
+      },
+      // Active zone: from 64px below top (below navbar) to 45% up from bottom
+      { rootMargin: "-64px 0px -45% 0px", threshold: 0 }
+    );
+
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
   }, []);
 
   // Close user menu on outside click
@@ -91,7 +113,7 @@ export default function Navbar() {
           <div className="flex items-center justify-between h-16">
 
             {/* Logo */}
-            <a href="/" className="flex items-center gap-2.5 group flex-shrink-0">
+            <Link href="/" className="flex items-center gap-2.5 group flex-shrink-0">
               <div className="relative">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                   <path d="M12 2L14.5 9L21 12L14.5 15L12 22L9.5 15L3 12L9.5 9L12 2Z" fill="url(#nav-grad)" />
@@ -109,37 +131,38 @@ export default function Navbar() {
               >
                 Ittera
               </span>
-            </a>
+            </Link>
 
             {/* Desktop nav links */}
             <div className="hidden md:flex items-center gap-1">
               {NAV_LINKS.map((link) => {
-                const isActive = activeSection === link.href.replace("#", "");
-                return (
-                  <a
-                    key={link.href}
-                    href={link.href}
-                    className="relative px-3 py-1.5 text-[13px] font-medium transition-colors duration-200 rounded-lg"
-                    style={{ color: isActive ? linkActive : linkMuted }}
-                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = linkHover; }}
-                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = linkMuted; }}
-                  >
+                const isPageLink = !link.href.startsWith("#");
+                const isActive = !isPageLink && activeSection === link.href.slice(1);
+                const sharedProps = {
+                  className: "relative px-3 py-1.5 text-[13px] font-medium transition-colors duration-200 rounded-lg",
+                  style: { color: isActive ? linkActive : linkMuted } as React.CSSProperties,
+                  onMouseEnter: (e: React.MouseEvent<HTMLElement>) => { if (!isActive) (e.currentTarget as HTMLElement).style.color = linkHover; },
+                  onMouseLeave: (e: React.MouseEvent<HTMLElement>) => { if (!isActive) (e.currentTarget as HTMLElement).style.color = linkMuted; },
+                };
+                const inner = (
+                  <>
                     {isActive && (
                       <motion.div
                         layoutId="nav-active"
                         className="absolute inset-0 rounded-lg"
                         style={{
-                          background: isDark
-                            ? "rgba(196,168,130,0.1)"
-                            : "rgba(163,138,112,0.08)",
+                          background: isDark ? "rgba(196,168,130,0.1)" : "rgba(163,138,112,0.08)",
                           border: `1px solid ${isDark ? "rgba(196,168,130,0.22)" : "rgba(163,138,112,0.2)"}`,
                         }}
                         transition={{ type: "spring", bounce: 0.25, duration: 0.4 }}
                       />
                     )}
                     <span className="relative z-10">{link.label}</span>
-                  </a>
+                  </>
                 );
+                return isPageLink
+                  ? <Link key={link.href} href={link.href} {...sharedProps}>{inner}</Link>
+                  : <a key={link.href} href={link.href} {...sharedProps}>{inner}</a>;
               })}
             </div>
 
@@ -311,28 +334,28 @@ export default function Navbar() {
             }}
           >
             <div className="max-w-7xl mx-auto px-6 py-5 flex flex-col gap-1">
-              {NAV_LINKS.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileOpen(false)}
-                  className="text-[15px] py-3 px-2 rounded-lg transition-colors"
-                  style={{
+              {NAV_LINKS.map((link) => {
+                const isPageLink = !link.href.startsWith("#");
+                const sharedMobileProps = {
+                  onClick: () => setMobileOpen(false),
+                  className: "text-[15px] py-3 px-2 rounded-lg transition-colors",
+                  style: {
                     color: isDark ? "rgba(242,237,232,0.5)" : "#737373",
                     borderBottom: `1px solid ${isDark ? "#2E2922" : "#EAEAEC"}`,
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLAnchorElement).style.color = isDark ? "#F2EDE8" : "#171717";
-                    (e.currentTarget as HTMLAnchorElement).style.background = isDark ? "#1C1916" : "#F5F5F4";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLAnchorElement).style.color = isDark ? "rgba(242,237,232,0.5)" : "#737373";
-                    (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-                  }}
-                >
-                  {link.label}
-                </a>
-              ))}
+                  } as React.CSSProperties,
+                  onMouseEnter: (e: React.MouseEvent<HTMLElement>) => {
+                    (e.currentTarget as HTMLElement).style.color = isDark ? "#F2EDE8" : "#171717";
+                    (e.currentTarget as HTMLElement).style.background = isDark ? "#1C1916" : "#F5F5F4";
+                  },
+                  onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
+                    (e.currentTarget as HTMLElement).style.color = isDark ? "rgba(242,237,232,0.5)" : "#737373";
+                    (e.currentTarget as HTMLElement).style.background = "transparent";
+                  },
+                };
+                return isPageLink
+                  ? <Link key={link.href} href={link.href} {...sharedMobileProps}>{link.label}</Link>
+                  : <a key={link.href} href={link.href} {...sharedMobileProps}>{link.label}</a>;
+              })}
 
               {/* Theme toggle row */}
               <div

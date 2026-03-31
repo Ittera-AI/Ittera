@@ -5,13 +5,11 @@ import AuthModal from "@/components/auth/AuthModal";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import Hero from "@/components/sections/Hero";
-import SocialProof from "@/components/sections/SocialProof";
 import Problem from "@/components/sections/Problem";
-import Solution from "@/components/sections/Solution";
+import Transformation from "@/components/sections/Transformation";
 import Features from "@/components/sections/Features";
-import ProductShowcase from "@/components/sections/ProductShowcase";
+import DemoStrip from "@/components/sections/DemoStrip";
 import HowItWorks from "@/components/sections/HowItWorks";
-import Benefits from "@/components/sections/Benefits";
 import Waitlist from "@/components/sections/Waitlist";
 import FAQ from "@/components/sections/FAQ";
 import Founders from "@/components/sections/Founders";
@@ -27,16 +25,14 @@ export default function Home() {
       <Navbar />
       <main className="relative" style={{ zIndex: 1 }}>
         <Hero />
-        {false && <SocialProof />}
         <Problem />
-        <Solution />
+        <Transformation />
         <Features />
-        <ProductShowcase />
+        <DemoStrip />
         <HowItWorks />
-        {false && <Benefits />}
+        <Founders />
         <Waitlist />
         <FAQ />
-        <Founders />
         <FinalCTA />
       </main>
       <Footer />

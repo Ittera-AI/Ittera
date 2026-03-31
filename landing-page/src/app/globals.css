@@ -19,8 +19,6 @@
   --shadow-sm:   rgba(0,0,0,0.06);
   --shadow-md:   rgba(0,0,0,0.10);
   --dot-color:   rgba(0,0,0,0.035);
-  --cx: -9999px;
-  --cy: -9999px;
 }
 
 /* ─── Dark mode tokens ───────────────────────────────────────────── */
@@ -53,8 +51,8 @@ body {
   overflow-x: hidden;
   position: relative;
   isolation: isolate;
-  transition: background-color 0.4s cubic-bezier(0.16,1,0.3,1),
-              color 0.4s cubic-bezier(0.16,1,0.3,1);
+  transition: background-color 200ms cubic-bezier(0.23, 1, 0.32, 1),
+              color 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 /* Dot grid — sits behind all content */
@@ -71,18 +69,6 @@ body::before {
   transition: none;
 }
 
-/* Cursor spotlight — warm bronze, no interaction */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(700px circle at var(--cx) var(--cy), rgba(163,138,112,0.06), transparent 70%);
-  z-index: 9998;
-}
-.dark body::after {
-  background: radial-gradient(700px circle at var(--cx) var(--cy), rgba(196,168,130,0.05), transparent 70%);
-}
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
@@ -199,13 +185,13 @@ body::after {
 
 .btn-glow {
   box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.06);
-  transition: box-shadow 0.4s cubic-bezier(0.16,1,0.3,1), transform 0.4s cubic-bezier(0.16,1,0.3,1);
+  transition: box-shadow 200ms cubic-bezier(0.23, 1, 0.32, 1), transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 .btn-glow:hover {
   box-shadow: 0 4px 20px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08);
   transform: translateY(-1px);
 }
-.btn-glow:active { transform: scale(0.98); }
+.btn-glow:active { transform: scale(0.97); }
 
 /* Float animations for hero badges */
 @keyframes float-badge-1 {
@@ -275,5 +261,5 @@ body::after {
 
 @layer utilities {
   .text-balance { text-wrap: balance; }
-  .transition-refined { transition: all 0.4s cubic-bezier(0.16,1,0.3,1); }
+  .transition-refined { transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1), background-color 200ms cubic-bezier(0.23, 1, 0.32, 1), color 200ms cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms cubic-bezier(0.23, 1, 0.32, 1); }
 }
