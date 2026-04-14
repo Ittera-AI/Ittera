@@ -48,8 +48,29 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://iterra:iterra@db:5432/iterra
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=${DATABASE_URL:-postgresql://iterra:iterra@db:5432/iterra}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.worker
+    command: ["celery", "-A", "workers.celery.app.celery_app", "beat", "--loglevel=info"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://iterra:iterra@db:5432/iterra}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
     restart: unless-stopped
 
   db:

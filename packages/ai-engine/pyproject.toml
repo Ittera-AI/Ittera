@@ -9,6 +9,7 @@ description = "AI engines for the Iterra Content Strategy Platform"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.10",
+    "anthropic>=0.40",
     "openai>=1.58",
     "langchain>=0.3",
     "langchain-openai>=0.2",

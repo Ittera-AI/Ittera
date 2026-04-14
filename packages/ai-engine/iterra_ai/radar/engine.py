@@ -1,7 +1,10 @@
-from iterra_ai.radar.schemas import RadarInput, RadarOutput
+from datetime import datetime
+
+from iterra_ai.core.base_engine import BaseEngine
+from iterra_ai.radar.schemas import RadarInput, RadarOutput, TrendItem
 
 
-class TrendRadar:
+class TrendRadar(BaseEngine[RadarInput, RadarOutput]):
     """Scans and surfaces trending topics relevant to a given niche.
 
     TODO: Implement using web search APIs + LLM summarization.
@@ -9,19 +12,21 @@ class TrendRadar:
     """
 
     def scan(self, input: RadarInput) -> RadarOutput:
-        """Scan for current trends in the given niche.
+        trends = [
+            TrendItem(
+                topic=f"{input.niche.title()} operating loops",
+                score=9.2,
+                platforms=input.platforms,
+                summary="Creators are shifting from one-off posts to repeatable content systems.",
+            ),
+            TrendItem(
+                topic="AI-assisted review",
+                score=8.7,
+                platforms=input.platforms,
+                summary="Teams want speed without losing human taste and approval.",
+            ),
+        ][: input.limit]
+        return RadarOutput(trends=trends, scanned_at=datetime.utcnow())
 
-        Args:
-            input: Niche, platform list, and result limit.
-
-        Returns:
-            RadarOutput with ranked trend items.
-
-        Raises:
-            NotImplementedError: Until the engine is implemented.
-        """
-        # TODO: implement trend scanning using search API + LLM
-        raise NotImplementedError(
-            "TrendRadar.scan is not yet implemented. "
-            "See iterra_ai/radar/engine.py to implement."
-        )
+    def generate(self, input: RadarInput) -> RadarOutput:
+        return self.scan(input)

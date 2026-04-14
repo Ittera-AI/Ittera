@@ -1,13 +1,12 @@
-import pytest
-
 from iterra_ai.coach.engine import EngagementCoach
 from iterra_ai.coach.schemas import CoachInput
 
 
-def test_coach_engine_raises_not_implemented(coach_input):
+def test_coach_engine_returns_mock_analysis(coach_input):
     engine = EngagementCoach()
-    with pytest.raises(NotImplementedError):
-        engine.analyze(coach_input)
+    output = engine.analyze(coach_input)
+    assert output.score > 0
+    assert output.suggestions
 
 
 def test_coach_input_valid():

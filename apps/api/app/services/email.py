@@ -50,8 +50,6 @@ def send_waitlist_confirmation_email(
         return
 
     first = _first_name(name, email)
-    sign_in_url = settings.FRONTEND_URL.rstrip("/")
-    safe_url = escape(sign_in_url, quote=True)
     c = _waitlist_email_copy(position)
 
     # ── plain text ──────────────────────────────────────────────────────────

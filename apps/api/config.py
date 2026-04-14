@@ -12,6 +12,8 @@ class Settings(BaseSettings):
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
 
     # Auth
     SECRET_KEY: str = _INSECURE_SECRET
@@ -44,8 +46,15 @@ class Settings(BaseSettings):
     MAIL_FROM: str = ""
     REPLY_TO_EMAIL: str = ""
 
+    # Supabase — used by the backend to verify Supabase-issued JWTs
+    # Find this in: Supabase Dashboard → Project Settings → API → JWT Settings → JWT Secret
+    SUPABASE_JWT_SECRET: str = ""
+    SUPABASE_URL: str = ""
+
     # AI
     OPENAI_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-sonnet-4-5"
 
     # App
     ENVIRONMENT: str = "development"

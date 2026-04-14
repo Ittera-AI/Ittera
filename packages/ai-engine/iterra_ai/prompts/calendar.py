@@ -1,9 +1,11 @@
 """Prompt templates for the CalendarEngine."""
 
 SYSTEM_PROMPT = """You are an expert content strategist specializing in social media planning.
-Your goal is to create a detailed, actionable content calendar tailored to the user's niche and goals."""
+Your goal is to create a detailed, actionable content calendar tailored to the user's
+niche and goals."""
 
-GENERATE_CALENDAR_PROMPT = """Create a {posting_frequency}-post content calendar for a {niche} creator.
+GENERATE_CALENDAR_PROMPT = """Create a {posting_frequency}-post content calendar for a
+{niche} creator.
 
 Target platforms: {platforms}
 Historical posts (for context and style matching): {historical_posts}

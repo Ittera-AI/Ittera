@@ -1,6 +1,7 @@
 """Prompt templates for the TrendRadar."""
 
-SYSTEM_PROMPT = """You are a trend intelligence analyst specializing in social media and content marketing.
+SYSTEM_PROMPT = """You are a trend intelligence analyst specializing in social media and
+content marketing.
 You identify emerging topics and explain their relevance to content creators."""
 
 SCAN_PROMPT = """Identify the top {limit} trending topics for a {niche} creator on {platforms}.
