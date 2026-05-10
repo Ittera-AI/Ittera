@@ -11,19 +11,13 @@ const nextConfig = {
     root: __dirname,
   },
 
-  // Standalone output matches `infra/docker/Dockerfile.web` (`node server.js`).
-  output: "standalone",
 
   /**
    * When the browser calls same-origin `/api/v1/*`, forward to FastAPI so we avoid CORS.
    * - Local Next dev: default target http://127.0.0.1:8000
    * - Docker web image: pass API_PROXY_TARGET=http://api:8000 at build time
    */
-  async redirects() {
-    return [
-      { source: "/Dashboard", destination: "/dashboard", permanent: false },
-    ];
-  },
+
 
   async rewrites() {
     const target = (process.env.API_PROXY_TARGET || "http://127.0.0.1:8000").replace(/\/$/, "");
