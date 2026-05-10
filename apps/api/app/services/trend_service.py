@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.db.datetime_helpers import utc_now
 from app.models.trend_snapshot import TrendSnapshot
 from app.models.user import User
 from app.services.mock_data import topics_for_niche
@@ -22,7 +23,7 @@ def refresh_trends(db: Session, user: User) -> dict:
         db.add(snapshot)
     snapshot.trends = trends
     snapshot.top_pick = trends[0] if trends else None
-    snapshot.fetched_at = datetime.utcnow()
+    snapshot.fetched_at = utc_now()
     db.commit()
     db.refresh(snapshot)
     return _response(snapshot)
@@ -46,11 +47,14 @@ def _mock_trends(niche: str | None) -> list[dict]:
 
 
 def _response(snapshot: TrendSnapshot) -> dict:
-    fetched_at = snapshot.fetched_at or datetime.utcnow()
+    fetched_at = snapshot.fetched_at or utc_now()
+    if fetched_at.tzinfo is None:
+        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
     return {
         "niche": snapshot.niche,
         "trends": snapshot.trends,
         "top_pick": snapshot.top_pick,
         "fetched_at": fetched_at,
-        "cache_age_minutes": int((datetime.utcnow() - fetched_at).total_seconds() // 60),
+        "cache_age_minutes": int((now - fetched_at).total_seconds() // 60),
     }

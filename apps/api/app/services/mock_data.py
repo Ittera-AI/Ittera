@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 BASE_TOPICS = {
     "ai": ["agentic workflows", "prompt audits", "AI operating systems", "human review loops"],
@@ -22,7 +22,7 @@ def topics_for_niche(niche: str | None) -> list[str]:
 
 def mock_posts(niche: str | None) -> list[dict]:
     topics = topics_for_niche(niche)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     return [
         {
             "platform_post_id": f"mock-li-{idx + 1}-{niche_key(niche)}",

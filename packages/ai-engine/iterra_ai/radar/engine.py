@@ -1,4 +1,6 @@
-from datetime import datetime
+"""EXPERIMENTAL — synthetic trends until real signal ingestion is wired."""
+
+from datetime import datetime, timezone
 
 from iterra_ai.core.base_engine import BaseEngine
 from iterra_ai.radar.schemas import RadarInput, RadarOutput, TrendItem
@@ -26,7 +28,7 @@ class TrendRadar(BaseEngine[RadarInput, RadarOutput]):
                 summary="Teams want speed without losing human taste and approval.",
             ),
         ][: input.limit]
-        return RadarOutput(trends=trends, scanned_at=datetime.utcnow())
+        return RadarOutput(trends=trends, scanned_at=datetime.now(timezone.utc))
 
     def generate(self, input: RadarInput) -> RadarOutput:
         return self.scan(input)

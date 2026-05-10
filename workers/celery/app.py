@@ -12,6 +12,7 @@ celery_app = Celery(
         "workers.celery.tasks.radar_scan",
         "workers.celery.tasks.performance_sync",
         "workers.celery.tasks.weekly_reports",
+        "workers.celery.tasks.scraper",
     ],
 )
 

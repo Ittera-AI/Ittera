@@ -5,6 +5,8 @@ COPY apps/web/package.json apps/web/package-lock.json* ./
 RUN npm ci --legacy-peer-deps
 
 FROM base AS builder
+ARG API_PROXY_TARGET=http://127.0.0.1:8000
+ENV API_PROXY_TARGET=${API_PROXY_TARGET}
 COPY apps/web/ .
 COPY packages/shared-types/ /packages/shared-types/
 RUN npm run build

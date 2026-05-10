@@ -96,14 +96,13 @@ iterra/
 │
 ├── infra/
 │   ├── docker/               # Per-service Dockerfiles
-│   ├── nginx/                # Reverse proxy config
-│   └── k8s/                  # Kubernetes manifests (future scaling)
+│   └── nginx/                # Reverse proxy config
 │
 ├── docs/
 │   ├── adr/                  # Architecture Decision Records
-│   ├── api/                  # Auto-generated OpenAPI reference
 │   ├── onboarding/           # Getting started guide
-│   └── research/             # Market research and competitor notes
+│   ├── features/             # maturity matrix and product notes
+│   └── runbooks/             # ops / local-dev procedures
 │
 ├── .github/
 │   ├── workflows/            # CI per service (web.yml, api.yml, ai-engine.yml)
@@ -113,6 +112,7 @@ iterra/
 ├── scripts/
 │   ├── setup.sh              # One-command local setup
 │   ├── seed_db.py            # Dev database seeding
+│   ├── export_openapi.py     # Dump OpenAPI JSON without a running server
 │   └── gen_types.sh          # Regenerate shared-types from OpenAPI
 │
 ├── .env.example              # Environment variable template
@@ -156,6 +156,8 @@ The full setup should complete in under 15 minutes on a fresh machine.
 ### Manual Setup (step by step)
 
 If you prefer to set up manually:
+
+**Windows note:** If `make` is not installed, use the same commands from a Git Bash or WSL shell, or run the equivalents by hand (see [docs/runbooks/local-dev.md](docs/runbooks/local-dev.md) for Docker, pytest, OpenAPI export, and `openapi-typescript` without Make).
 
 ```bash
 # 1. Copy environment variables

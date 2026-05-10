@@ -1,6 +1,6 @@
 import secrets
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import httpx
@@ -26,12 +26,12 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def make_token(user_id: str) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return jwt.encode({"sub": user_id, "exp": expire}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def make_oauth_state(purpose: str) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=10)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=10)
     payload = {
         "purpose": purpose,
         "nonce": secrets.token_urlsafe(16),
@@ -86,6 +86,7 @@ def complete_onboarding(db: Session, user: User, payload: OnboardingRequest) -> 
     user.niche = payload.niche.strip()
     user.goals = payload.goals.strip() if payload.goals else None
     user.primary_platform = payload.primary_platform
+    user.storage_preference = payload.storage_preference
     user.onboarding_complete = True
     db.commit()
     db.refresh(user)

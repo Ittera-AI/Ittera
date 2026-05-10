@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -77,7 +77,7 @@ def repurpose(db: Session, user: User, payload: RepurposeRequest) -> dict:
     versions = dict(draft.repurposed_versions or {})
     versions[payload.target_platform] = content
     draft.repurposed_versions = versions
-    draft.updated_at = datetime.utcnow()
+    draft.updated_at = datetime.now(timezone.utc)
     db.commit()
     return {"draft_id": draft.id, "content": content, "platform": payload.target_platform}
 
@@ -99,7 +99,7 @@ def update_draft(db: Session, user: User, draft_id: str, payload) -> ContentDraf
         value = getattr(payload, field, None)
         if value is not None:
             setattr(draft, field, value)
-    draft.updated_at = datetime.utcnow()
+    draft.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(draft)
     return draft
@@ -107,7 +107,7 @@ def update_draft(db: Session, user: User, draft_id: str, payload) -> ContentDraf
 
 def publish_now(db: Session, user: User, draft_id: str) -> dict:
     draft = _draft(db, user, draft_id)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     draft.status = "published"
     draft.published_at = now
     draft.platform_post_id = f"mock-published-{draft.id[:8]}"
@@ -117,7 +117,7 @@ def publish_now(db: Session, user: User, draft_id: str) -> dict:
 
 
 def schedule_post(db: Session, user: User, payload: ScheduleRequest) -> dict:
-    if payload.scheduled_for <= datetime.utcnow():
+    if payload.scheduled_for <= datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Schedule time must be in the future")
     draft = _draft(db, user, payload.draft_id)
     draft.status = "scheduled"
@@ -159,7 +159,7 @@ def calendar_events(db: Session, user: User) -> list[dict]:
 
 
 def suggested_times() -> list[datetime]:
-    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     return [now + timedelta(days=1, hours=9), now + timedelta(days=2, hours=12), now + timedelta(days=3, hours=9)]
 
 

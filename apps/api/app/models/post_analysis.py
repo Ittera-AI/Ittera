@@ -1,10 +1,10 @@
 import uuid
-from datetime import datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from app.db.datetime_helpers import utc_now
 
 
 class PostAnalysis(Base):
@@ -18,6 +18,6 @@ class PostAnalysis(Base):
     cta_effectiveness = Column(String, nullable=False)
     coach_feedback = Column(JSON, nullable=False, default=dict)
     rewrite_suggestion = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     post = relationship("Post", back_populates="analysis")

@@ -1,9 +1,9 @@
 import uuid
-from datetime import datetime
 
 from sqlalchemy import Column, DateTime, String
 
 from app.db.base import Base
+from app.db.datetime_helpers import utc_now
 
 
 class WaitlistEntry(Base):
@@ -13,4 +13,4 @@ class WaitlistEntry(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=True)
     profession = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)

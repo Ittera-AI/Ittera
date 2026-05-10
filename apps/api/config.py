@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     LINKEDIN_CLIENT_ID: str = ""
     LINKEDIN_CLIENT_SECRET: str = ""
     LINKEDIN_REDIRECT_URI: str = ""
+    # Google Drive OAuth (separate redirect from Google auth login)
+    GOOGLE_DRIVE_REDIRECT_URI: str = "http://localhost:8000/api/v1/social/callback/google-drive"
+    # LinkedIn scraper session cookie (alternative to username/password)
+    LINKEDIN_SESSION_COOKIE: str = ""
     FRONTEND_URL: str = "http://localhost:3000"
     WAITLIST_TOTAL_SEATS: int = 100
     SMTP_HOST: str = ""
@@ -55,10 +59,14 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-5"
+    # When true and Anthropic credentials are configured, calendar generation uses CalendarEngine (LLM).
+    # Otherwise the API returns a deterministic mock plan for demos and offline tests.
+    USE_ITERRA_AI_CALENDAR: bool = False
 
     # App
     ENVIRONMENT: str = "development"
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
+    # Include 127.0.0.1 — browsers treat it as a different origin than localhost.
+    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -1,10 +1,10 @@
 import uuid
-from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, JSON, String
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from app.db.datetime_helpers import utc_now
 
 
 class SocialConnection(Base):
@@ -21,7 +21,9 @@ class SocialConnection(Base):
     scopes = Column(JSON, nullable=False, default=list)
     last_synced_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Platform-specific extras: Drive folder IDs, encrypted LinkedIn creds, etc.
+    connection_metadata = Column("metadata", JSON, nullable=True, default=dict)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     user = relationship("User", back_populates="social_connections")

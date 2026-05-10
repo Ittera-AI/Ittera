@@ -1,9 +1,9 @@
 import uuid
-from datetime import datetime
 
 from sqlalchemy import Column, DateTime, JSON, String, UniqueConstraint
 
 from app.db.base import Base
+from app.db.datetime_helpers import utc_now
 
 
 class TrendSnapshot(Base):
@@ -14,4 +14,4 @@ class TrendSnapshot(Base):
     niche = Column(String, nullable=False)
     trends = Column(JSON, nullable=False, default=list)
     top_pick = Column(JSON, nullable=True)
-    fetched_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime, default=utc_now)

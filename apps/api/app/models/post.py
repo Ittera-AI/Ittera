@@ -1,10 +1,10 @@
 import uuid
-from datetime import datetime
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from app.db.datetime_helpers import utc_now
 
 
 class Post(Base):
@@ -26,7 +26,7 @@ class Post(Base):
     tone = Column(String, nullable=True)
     raw_api_response = Column(JSON, nullable=True)
     synced_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     user = relationship("User", back_populates="posts")
     analysis = relationship("PostAnalysis", back_populates="post", cascade="all, delete-orphan", uselist=False)

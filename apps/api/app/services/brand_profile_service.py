@@ -1,7 +1,6 @@
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
+from app.db.datetime_helpers import utc_now
 from app.models.brand_profile import BrandProfile
 from app.models.post import Post
 from app.models.user import User
@@ -45,8 +44,8 @@ def generate_profile(db: Session, user: User) -> dict:
     profile.version = (profile.version or 0) + 1
     profile.ai_confidence_score = 0.86 if posts else 0.68
     profile.analysis_based_on_posts = len(posts)
-    profile.generated_at = datetime.utcnow()
-    profile.updated_at = datetime.utcnow()
+    profile.generated_at = utc_now()
+    profile.updated_at = utc_now()
     db.commit()
     db.refresh(profile)
     return _response(profile)
@@ -59,7 +58,7 @@ def update_profile(db: Session, user: User, payload: BrandProfileData) -> dict:
         db.add(profile)
     profile.profile = payload.model_dump()
     profile.is_confirmed = False
-    profile.updated_at = datetime.utcnow()
+    profile.updated_at = utc_now()
     db.commit()
     db.refresh(profile)
     return _response(profile)
@@ -70,8 +69,8 @@ def confirm_profile(db: Session, user: User) -> dict:
     if profile is None:
         return generate_profile(db, user)
     profile.is_confirmed = True
-    profile.confirmed_at = datetime.utcnow()
-    profile.updated_at = datetime.utcnow()
+    profile.confirmed_at = utc_now()
+    profile.updated_at = utc_now()
     db.commit()
     db.refresh(profile)
     return _response(profile)
@@ -96,6 +95,7 @@ def _response(profile: BrandProfile | None) -> dict:
         "ai_confidence_score": profile.ai_confidence_score,
         "is_confirmed": profile.is_confirmed,
         "analysis_based_on_posts": profile.analysis_based_on_posts,
+        "drive_analysis_file_id": profile.drive_analysis_file_id,
         "generated_at": profile.generated_at,
         "confirmed_at": profile.confirmed_at,
         "updated_at": profile.updated_at,

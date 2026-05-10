@@ -3,7 +3,21 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import app.models  # noqa: F401
 from app.config import settings
-from app.routers import analytics, auth, brand_profile, calendar, coach, content, linkedin, onboarding, radar, repurpose, trends
+from app.routers import (
+    analytics,
+    auth,
+    brand_profile,
+    calendar,
+    coach,
+    content,
+    linkedin,
+    onboarding,
+    radar,
+    repurpose,
+    social,
+    storage,
+    trends,
+)
 from app.routers import waitlist
 
 app = FastAPI(
@@ -33,6 +47,8 @@ app.include_router(calendar.router, prefix="/api/v1/calendar", tags=["calendar"]
 app.include_router(repurpose.router, prefix="/api/v1/repurpose", tags=["repurpose"])
 app.include_router(coach.router, prefix="/api/v1/coach", tags=["coach"])
 app.include_router(radar.router, prefix="/api/v1/radar", tags=["radar"])
+app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
+app.include_router(storage.router, prefix="/api/v1/storage", tags=["storage"])
 
 
 @app.get("/health", tags=["health"])

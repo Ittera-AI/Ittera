@@ -1,3 +1,5 @@
+"""Calendar engine — LLM-backed when keys are configured; keep evals in sync with prompt changes."""
+
 from iterra_ai.calendar.schemas import CalendarInput, CalendarOutput
 from iterra_ai.core.base_engine import BaseEngine
 from iterra_ai.prompts.calendar import GENERATE_CALENDAR_PROMPT, SYSTEM_PROMPT

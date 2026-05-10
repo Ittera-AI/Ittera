@@ -5,11 +5,17 @@ on:
     paths:
       - "apps/api/**"
       - "packages/ai-engine/**"
+      - "packages/shared-types/**"
+      - "scripts/**"
+      - "workers/**"
       - ".github/workflows/api.yml"
   pull_request:
     paths:
       - "apps/api/**"
       - "packages/ai-engine/**"
+      - "packages/shared-types/**"
+      - "scripts/**"
+      - "workers/**"
       - ".github/workflows/api.yml"
 
 jobs:
@@ -69,3 +75,16 @@ jobs:
         run: |
           cd packages/ai-engine
           pytest tests/ --cov=iterra_ai --cov-report=term-missing --cov-fail-under=60
+
+      - name: Set up Node 20 (OpenAPI typegen)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify shared-types match offline OpenAPI
+        env:
+          SECRET_KEY: test-secret-key
+          OPENAI_API_KEY: sk-test
+        run: |
+          bash scripts/gen_types.sh
+          git diff --exit-code packages/shared-types/src/index.ts

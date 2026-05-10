@@ -1,3 +1,5 @@
+"""EXPERIMENTAL — deterministic placeholder until full LLM-backed coach ships."""
+
 from iterra_ai.coach.schemas import CoachInput, CoachOutput
 from iterra_ai.core.base_engine import BaseEngine
 

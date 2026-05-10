@@ -10,3 +10,15 @@ passlib[bcrypt]==1.7.4
 celery==5.4.0
 redis==5.2.0
 httpx==0.28.1
+
+# LinkedIn scraper (unofficial — uses LinkedIn internal endpoints)
+linkedin-api==2.1.1
+
+# Google Drive
+google-api-python-client==2.108.0
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+
+# Encryption for credential storage
+cryptography==41.0.5

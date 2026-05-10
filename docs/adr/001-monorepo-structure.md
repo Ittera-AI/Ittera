@@ -19,8 +19,8 @@ We will use a **monorepo** with the following top-level layout:
 - `packages/ai-engine` — Internal pip package (`iterra_ai`) installed via `pip install -e`
 - `packages/shared-types` — Auto-generated TypeScript types from the FastAPI OpenAPI spec
 - `workers/celery` — Celery background task workers
-- `infra/` — Docker, Nginx, and Kubernetes configs
-- `docs/` — Architecture Decision Records, API docs, onboarding guides
+- `infra/` — Docker and Nginx configs
+- `docs/` — Architecture Decision Records and onboarding guides
 
 The AI engine is a standalone installable package (`pyproject.toml`) rather than a module within `apps/api` so it can be versioned, tested, and evaluated independently without coupling to the HTTP layer.
 

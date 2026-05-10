@@ -47,7 +47,7 @@ echo "   ✅ Migrations complete"
 # 6. Seed database
 echo ""
 echo "🌱 Seeding database..."
-docker-compose run --rm api python /app/../scripts/seed_db.py || true
+docker-compose run --rm -v "$REPO_ROOT/scripts:/scripts" api python /scripts/seed_db.py
 echo "   ✅ Database seeded"
 
 # 7. Start all services

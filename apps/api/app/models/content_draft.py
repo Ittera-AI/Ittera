@@ -1,10 +1,10 @@
 import uuid
-from datetime import datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, JSON, String, Text
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from app.db.datetime_helpers import utc_now
 
 
 class ContentDraft(Base):
@@ -13,7 +13,8 @@ class ContentDraft(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     platform = Column(String, nullable=False, default="linkedin")
-    content = Column(Text, nullable=False)
+    content = Column(Text, nullable=True)  # nullable: Drive-backed drafts store content in Drive
+    drive_file_id = Column(String, nullable=True)  # Google Drive file ID for draft content
     repurposed_versions = Column(JSON, nullable=False, default=dict)
     prompt_used = Column(Text, nullable=True)
     trend_used = Column(String, nullable=True)
@@ -24,7 +25,7 @@ class ContentDraft(Base):
     platform_post_id = Column(String, nullable=True)
     published_at = Column(DateTime, nullable=True)
     publish_error = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     user = relationship("User", back_populates="content_drafts")

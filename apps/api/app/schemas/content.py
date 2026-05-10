@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 Platform = Literal["linkedin", "instagram", "twitter"]
@@ -34,6 +34,7 @@ class GenerateRequest(BaseModel):
 class GenerateResponse(BaseModel):
     draft_id: str
     content: str
+    drive_file_id: str | None = None  # set when content is written to Google Drive
     word_count: int
     within_platform_limit: bool
 
@@ -58,18 +59,19 @@ class DraftUpdateRequest(BaseModel):
 class DraftResponse(BaseModel):
     id: str
     platform: str
-    content: str
-    repurposed_versions: dict
+    content: str | None = None      # None when content lives in Google Drive
+    drive_file_id: str | None = None  # Google Drive file ID for draft content
+    repurposed_versions: dict[str, str] = Field(default_factory=dict)
     status: str
     scheduled_for: datetime | None = None
     platform_post_id: str | None = None
     published_at: datetime | None = None
     publish_error: str | None = None
+    trend_used: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PublishRequest(BaseModel):

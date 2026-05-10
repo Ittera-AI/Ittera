@@ -27,6 +27,7 @@ class UserResponse(BaseModel):
     goals: str | None = None
     primary_platform: str = "linkedin"
     onboarding_complete: bool = False
+    storage_preference: str = "google_drive"
     is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
@@ -37,3 +38,4 @@ class OnboardingRequest(BaseModel):
     niche: str
     goals: str | None = None
     primary_platform: str = "linkedin"
+    storage_preference: str = "google_drive"  # "google_drive" | "local" | "iterra"

@@ -1,10 +1,10 @@
 import uuid
-from datetime import datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, JSON, String
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from app.db.datetime_helpers import utc_now
 
 
 class ContentPlan(Base):
@@ -15,6 +15,6 @@ class ContentPlan(Base):
     niche = Column(String, nullable=False)
     platforms = Column(JSON, nullable=False, default=list)
     slots = Column(JSON, nullable=False, default=list)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     user = relationship("User", back_populates="content_plans")

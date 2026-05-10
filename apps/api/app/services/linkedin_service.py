@@ -1,6 +1,6 @@
-from datetime import datetime
-
 from sqlalchemy.orm import Session
+
+from app.db.datetime_helpers import utc_now
 
 from app.models.post import Post
 from app.models.social_connection import SocialConnection
@@ -61,7 +61,7 @@ def sync_mock_posts(db: Session, user: User) -> dict:
         else:
             for key, value in item.items():
                 setattr(post, key, value)
-    now = datetime.utcnow()
+    now = utc_now()
     connection.last_synced_at = now
     db.commit()
     return {

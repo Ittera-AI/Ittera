@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 
 def _token(client):
@@ -71,7 +71,7 @@ def test_mock_first_product_loop(client):
     assert analysis.status_code == 200
     assert analysis.json()["hook_score"] >= 1
 
-    schedule_for = (datetime.utcnow() + timedelta(days=1)).isoformat()
+    schedule_for = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
     schedule = client.post(
         "/api/v1/content/schedule",
         json={"draft_id": draft_id, "scheduled_for": schedule_for},

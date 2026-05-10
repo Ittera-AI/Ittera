@@ -1,3 +1,5 @@
+"""EXPERIMENTAL — template repurposing until LLM path is production-hardened."""
+
 from iterra_ai.core.base_engine import BaseEngine
 from iterra_ai.repurpose.schemas import RepurposedItem, RepurposeInput, RepurposeOutput
 
