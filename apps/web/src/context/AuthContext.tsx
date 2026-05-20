@@ -90,11 +90,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
     if (error) throw new Error(error.message);
+    if (data.session?.user) {
+      setUser(userFromSupabase(data.session.user));
+    }
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, name: string) => {
@@ -106,6 +109,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
     if (error) throw new Error(error.message);
+    if (data.session?.user) {
+      setUser(userFromSupabase(data.session.user));
+    }
     // If no session was returned, Supabase requires email confirmation first
     return { needsEmailConfirmation: !data.session };
   }, []);
