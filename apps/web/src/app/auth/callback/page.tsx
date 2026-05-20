@@ -34,12 +34,13 @@ function AuthCallbackContent() {
 
     supabase.auth
       .exchangeCodeForSession(code)
-      .then(({ error: sessionError }) => {
+      .then(async ({ error: sessionError }) => {
         if (cancelled) return;
         if (sessionError) {
           setAsyncError(sessionError.message);
           return;
         }
+        await supabase.auth.getSession();
         router.replace("/dashboard");
       });
 
