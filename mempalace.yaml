@@ -1,0 +1,50 @@
+wing: ittera
+rooms:
+- name: apps
+  description: Files from apps/
+  keywords:
+  - apps
+  - apps
+- name: documentation
+  description: Files from docs/
+  keywords:
+  - documentation
+  - docs
+- name: configuration
+  description: Files from infra/
+  keywords:
+  - configuration
+  - infra
+- name: packages
+  description: Files from packages/
+  keywords:
+  - packages
+  - packages
+- name: scripts
+  description: Files from scripts/
+  keywords:
+  - scripts
+  - scripts
+- name: supabase
+  description: Files from supabase/
+  keywords:
+  - supabase
+  - supabase
+- name: workers
+  description: Files from workers/
+  keywords:
+  - workers
+  - workers
+- name: backend
+  description: Files from api/
+  keywords:
+  - backend
+  - api
+- name: research
+  description: Files from research/
+  keywords:
+  - research
+  - research
+- name: general
+  description: Files that don't fit other rooms
+  keywords: []

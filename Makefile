@@ -29,7 +29,7 @@ test:
 	cd apps/web && npm test
 
 migrate:
-	docker-compose run --rm api alembic upgrade head
+	docker-compose exec api alembic upgrade head
 
 types:
 	bash scripts/gen_types.sh
@@ -43,4 +43,4 @@ lint:
 	cd apps/web && npm run lint
 
 seed:
-	docker-compose run --rm api python /scripts/seed_db.py
+	docker-compose exec api python /scripts/seed_db.py

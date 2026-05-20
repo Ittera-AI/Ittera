@@ -1,13 +1,12 @@
-import pytest
-
 from iterra_ai.radar.engine import TrendRadar
 from iterra_ai.radar.schemas import RadarInput
 
 
-def test_radar_engine_raises_not_implemented(radar_input):
+def test_radar_engine_returns_mock_trends(radar_input):
     engine = TrendRadar()
-    with pytest.raises(NotImplementedError):
-        engine.scan(radar_input)
+    output = engine.scan(radar_input)
+    assert output.trends
+    assert output.trends[0].platforms == radar_input.platforms
 
 
 def test_radar_input_defaults():

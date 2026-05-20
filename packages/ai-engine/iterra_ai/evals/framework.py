@@ -51,7 +51,12 @@ class EvalRunner:
                 actual = self.engine_fn(case.input)
                 score = case.scorer(actual, case.expected) if case.scorer else 1.0
                 report.results.append(
-                    EvalResult(case=case, actual=actual, score=score, passed=score >= self.pass_threshold)
+                    EvalResult(
+                        case=case,
+                        actual=actual,
+                        score=score,
+                        passed=score >= self.pass_threshold,
+                    )
                 )
             except Exception as exc:
                 report.results.append(

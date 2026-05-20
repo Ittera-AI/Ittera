@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class RegisterRequest(BaseModel):
@@ -15,13 +15,27 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user: "UserResponse"
 
 
 class UserResponse(BaseModel):
     id: str
     email: str
     name: str
+    full_name: str | None = None
+    niche: str | None = None
+    goals: str | None = None
+    primary_platform: str = "linkedin"
+    onboarding_complete: bool = False
+    storage_preference: str = "google_drive"
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OnboardingRequest(BaseModel):
+    full_name: str
+    niche: str
+    goals: str | None = None
+    primary_platform: str = "linkedin"
+    storage_preference: str = "google_drive"  # "google_drive" | "local" | "iterra"

@@ -119,3 +119,10 @@ iterra/
 **Python import errors:** Ensure `iterra_ai` is installed: `pip install -e packages/ai-engine`
 
 **Type errors after API change:** Run `make types` to regenerate `packages/shared-types/src/index.ts`
+
+## Known Issues Ledger (May 2026)
+
+- `make` is not available on some Windows setups; use direct script commands (`bash scripts/gen_types.sh`, `docker-compose` commands) or install GNU Make.
+- `scripts/setup.sh` now mounts `scripts/` into the API container for seeding; if seed fails, setup should fail rather than silently succeeding.
+- Placeholder Celery beat jobs are disabled by default (`ENABLE_PLACEHOLDER_TASKS=false`) until full worker pipelines are implemented.
+- API social/storage routes are mounted in `apps/api/main.py`; if unavailable, restart/rebuild the API service.

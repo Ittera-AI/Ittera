@@ -9,7 +9,15 @@ from app.services.repurpose_service import RepurposeService
 router = APIRouter()
 
 
-@router.post("/", response_model=RepurposeOutput)
+@router.post(
+    "/",
+    response_model=RepurposeOutput,
+    summary="Repurpose content for other platforms",
+    description=(
+        "Maps one idea to multiple platform shaped drafts using `iterra_ai.RepurposeEngine` "
+        "(EXPERIMENTAL template path in the AI package — not a production LLM repurposing pipeline yet)."
+    ),
+)
 async def repurpose_content(
     payload: RepurposeInput,
     db: Session = Depends(get_db),

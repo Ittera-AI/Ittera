@@ -1,13 +1,12 @@
-import pytest
-
 from iterra_ai.repurpose.engine import RepurposeEngine
 from iterra_ai.repurpose.schemas import RepurposeInput
 
 
-def test_repurpose_engine_raises_not_implemented(repurpose_input):
+def test_repurpose_engine_returns_mock_outputs(repurpose_input):
     engine = RepurposeEngine()
-    with pytest.raises(NotImplementedError):
-        engine.repurpose(repurpose_input)
+    output = engine.repurpose(repurpose_input)
+    assert output.repurposed
+    assert output.repurposed[0].content
 
 
 def test_repurpose_input_valid():

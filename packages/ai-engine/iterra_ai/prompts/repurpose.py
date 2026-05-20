@@ -14,4 +14,5 @@ For each target platform, adapt the content to match:
 - Platform-specific features (hashtags, threads, carousels, etc.)
 - Native engagement patterns
 
-Return a JSON array with: platform, content (adapted text), format (e.g., "tweet-thread", "linkedin-post")."""
+Return a JSON array with: platform, content (adapted text), format
+(e.g., "tweet-thread", "linkedin-post")."""

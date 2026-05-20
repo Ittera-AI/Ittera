@@ -24,15 +24,26 @@ The four core product modules are:
 
 ```
 iterra/
-├── apps/web/          Next.js 14, TypeScript, Tailwind, Zustand
-├── apps/api/          FastAPI, Python 3.11+, SQLAlchemy, Alembic
+├── .agents/           AI agent definitions and skills
+├── .claude/           Claude workspace and config
+├── .github/           CI workflows, CODEOWNERS, PR templates
+├── apps/
+│   ├── api/           FastAPI, Python 3.11+, SQLAlchemy, Alembic
+│   └── web/           Next.js 14, TypeScript, Tailwind, Zustand
+├── docs/              Documentation (ADRs, API, onboarding, research)
+├── infra/             Docker, Nginx, k8s scaffolding
 ├── packages/
 │   ├── ai-engine/     pip install -e . → importable as iterra_ai
 │   └── shared-types/  Auto-generated TypeScript types from OpenAPI
+├── scripts/           Setup and utility scripts
+├── supabase/          Supabase configuration and edge functions
 ├── workers/celery/    Async background jobs (Celery + Redis)
-├── infra/             Docker, Nginx, k8s scaffolding
-├── docs/adr/          Architecture Decision Records
-└── .github/           CI workflows, CODEOWNERS, PR templates
+├── .env.example       Environment template
+├── .gitignore         Git ignore rules
+├── CLAUDE.md          AI coding context
+├── Makefile           Build and task commands
+├── README.md          Project overview
+└── docker-compose.yml Local development services
 ```
 
 ---
@@ -320,11 +331,12 @@ class CalendarEngine:
 |---|---|
 | `apps/web/**` | `@frontend` |
 | `apps/api/**` | `@backend` |
+| `supabase/**` | `@backend` |
 | `packages/ai-engine/**` | `@ai-engineer` |
 | `workers/**` | `@ai-engineer` |
 | `packages/shared-types/**` | `@backend` |
-| `infra/**`, `.github/**`, `Makefile`, `docker-compose.yml` | `@architect` |
-| `docs/adr/**` | `@architect` |
+| `infra/**`, `.github/**`, `scripts/**`, `Makefile`, `docker-compose.yml`, `.*`, `*.md` | `@architect` |
+| `docs/**`, `.agents/**`, `.claude/**` | `@architect` |
 | Cross-service PR (multiple folders) | `@architect` |
 
 When a task touches multiple domains, `@architect` takes the lead and delegates

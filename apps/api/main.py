@@ -1,10 +1,23 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import app.models  # noqa: F401
 from app.config import settings
-from app.db.base import Base
-from app.db.session import engine
-from app.routers import auth, calendar, coach, radar, repurpose
+from app.routers import (
+    analytics,
+    auth,
+    brand_profile,
+    calendar,
+    coach,
+    content,
+    linkedin,
+    onboarding,
+    radar,
+    repurpose,
+    social,
+    storage,
+    trends,
+)
 from app.routers import waitlist
 
 app = FastAPI(
@@ -22,22 +35,20 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-async def startup():
-    # Import all models so Base knows about them before create_all
-    import app.models.user  # noqa: F401
-    import app.models.content_plan  # noqa: F401
-    import app.models.post  # noqa: F401
-    import app.models.waitlist  # noqa: F401
-    Base.metadata.create_all(bind=engine)
-
-
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(onboarding.router, prefix="/api/v1/onboarding", tags=["onboarding"])
+app.include_router(linkedin.router, prefix="/api/v1/linkedin", tags=["linkedin"])
+app.include_router(brand_profile.router, prefix="/api/v1/brand-profile", tags=["brand-profile"])
+app.include_router(trends.router, prefix="/api/v1/trends", tags=["trends"])
+app.include_router(content.router, prefix="/api/v1/content", tags=["content"])
+app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 app.include_router(waitlist.router, prefix="/api/v1/waitlist", tags=["waitlist"])
 app.include_router(calendar.router, prefix="/api/v1/calendar", tags=["calendar"])
 app.include_router(repurpose.router, prefix="/api/v1/repurpose", tags=["repurpose"])
 app.include_router(coach.router, prefix="/api/v1/coach", tags=["coach"])
 app.include_router(radar.router, prefix="/api/v1/radar", tags=["radar"])
+app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
+app.include_router(storage.router, prefix="/api/v1/storage", tags=["storage"])
 
 
 @app.get("/health", tags=["health"])
