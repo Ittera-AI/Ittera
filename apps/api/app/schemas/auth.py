@@ -1,17 +1,15 @@
-from typing import Literal
-
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6, max_length=128)
-    name: str = Field(min_length=1, max_length=120)
+    password: str
+    name: str
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=1, max_length=128)
+    password: str
 
 
 class LoginResponse(BaseModel):
@@ -35,19 +33,9 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class WorkspaceAccessResponse(BaseModel):
-    email: str
-    has_access: bool
-    waitlisted: bool
-    access_approved: bool
-    is_admin: bool
-    approved_at: str | None = None
-    reason: str | None = None
-
-
 class OnboardingRequest(BaseModel):
-    full_name: str | None = Field(default=None, max_length=120)
-    niche: str | None = Field(default=None, max_length=160)
-    goals: str | None = Field(default=None, max_length=1000)
-    primary_platform: Literal["linkedin", "instagram", "twitter"] = "linkedin"
-    storage_preference: Literal["google_drive", "local", "iterra"] = "google_drive"
+    full_name: str
+    niche: str
+    goals: str | None = None
+    primary_platform: str = "linkedin"
+    storage_preference: str = "google_drive"  # "google_drive" | "local" | "iterra"

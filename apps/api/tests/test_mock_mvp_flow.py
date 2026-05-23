@@ -1,34 +1,20 @@
 from datetime import datetime, timezone, timedelta
 
-from app.models.waitlist import WaitlistEntry
 
-
-def _approve_access(db, email: str):
-    entry = db.query(WaitlistEntry).filter(WaitlistEntry.email == email).first()
-    if entry is None:
-        entry = WaitlistEntry(email=email)
-        db.add(entry)
-    entry.access_approved = True
-    db.commit()
-
-
-def _token(client, db):
-    email = "mvp@example.com"
+def _token(client):
     client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": "secret", "name": "MVP User"},
+        json={"email": "mvp@example.com", "password": "secret", "name": "MVP User"},
     )
-    client.post("/api/v1/waitlist", json={"email": email})
-    _approve_access(db, email)
     response = client.post(
         "/api/v1/auth/login",
-        json={"email": email, "password": "secret"},
+        json={"email": "mvp@example.com", "password": "secret"},
     )
     return response.json()["access_token"]
 
 
-def test_mock_first_product_loop(client, db):
-    token = _token(client, db)
+def test_mock_first_product_loop(client):
+    token = _token(client)
     headers = {"Authorization": f"Bearer {token}"}
 
     onboarding = client.post(

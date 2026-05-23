@@ -6,14 +6,14 @@ Routes: /api/v1/storage/*
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.dependencies.auth import get_current_workspace_user
+from app.dependencies.auth import get_current_user
 from app.dependencies.db import get_db
 from app.models.brand_profile import BrandProfile
 from app.models.content_draft import ContentDraft
 from app.models.social_connection import SocialConnection
 from app.models.user import User
 from app.schemas.storage import DeleteDataResponse, StorageExportResponse, StorageFileInfo, StorageStatus
-from app.services.social_service import decrypt_stored_secret, get_drive_connection
+from app.services.social_service import get_drive_connection
 from app.services.storage_service import StorageError, StorageService
 
 router = APIRouter()
@@ -21,7 +21,7 @@ router = APIRouter()
 
 @router.get("/status", response_model=StorageStatus)
 async def storage_status(
-    current_user: User = Depends(get_current_workspace_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     conn = get_drive_connection(db, str(current_user.id))
@@ -56,7 +56,7 @@ async def storage_status(
 
 @router.get("/export", response_model=StorageExportResponse)
 async def export_data(
-    current_user: User = Depends(get_current_workspace_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Lists all Iterra files in user's Drive. Files are in Drive — user downloads directly."""
@@ -69,10 +69,7 @@ async def export_data(
     if not folder_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Iterra folder not found in Drive")
 
-    storage = StorageService(
-        decrypt_stored_secret(conn.access_token) or "",
-        decrypt_stored_secret(conn.refresh_token),
-    )
+    storage = StorageService(conn.access_token, conn.refresh_token)
     try:
         files = storage.list_all_iterra_files(folder_id)
     except StorageError as exc:
@@ -93,7 +90,7 @@ async def export_data(
 
 @router.delete("/data", response_model=DeleteDataResponse)
 async def delete_all_data(
-    current_user: User = Depends(get_current_workspace_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -108,10 +105,7 @@ async def delete_all_data(
         meta = conn.connection_metadata or {}
         folder_id = meta.get("iterra_folder_id")
         if folder_id:
-            storage = StorageService(
-                decrypt_stored_secret(conn.access_token) or "",
-                decrypt_stored_secret(conn.refresh_token),
-            )
+            storage = StorageService(conn.access_token, conn.refresh_token)
             files = storage.list_all_iterra_files(folder_id)
             for f in files:
                 try:

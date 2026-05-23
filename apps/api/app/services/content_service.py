@@ -117,8 +117,6 @@ def publish_now(db: Session, user: User, draft_id: str) -> dict:
 
 
 def schedule_post(db: Session, user: User, payload: ScheduleRequest) -> dict:
-    if payload.scheduled_for.tzinfo is None or payload.scheduled_for.utcoffset() is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Schedule time must include a timezone")
     if payload.scheduled_for <= datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Schedule time must be in the future")
     draft = _draft(db, user, payload.draft_id)
@@ -147,15 +145,14 @@ def calendar_events(db: Session, user: User) -> list[dict]:
     for draft in list_drafts(db, user):
         starts_at = draft.scheduled_for or draft.published_at
         if starts_at and draft.status in {"scheduled", "published"}:
-            content = draft.content or "Untitled draft"
             events.append(
                 {
                     "id": draft.id,
-                    "title": content.splitlines()[0][:80],
+                    "title": draft.content.splitlines()[0][:80],
                     "platform": draft.platform,
                     "status": draft.status,
                     "starts_at": starts_at,
-                    "content": content,
+                    "content": draft.content,
                 }
             )
     return events

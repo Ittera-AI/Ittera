@@ -7,12 +7,12 @@ from fastapi.testclient import TestClient
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
-from sqlalchemy import create_engine  # noqa: E402
-from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-from app.db.base import Base  # noqa: E402
-from app.dependencies.db import get_db  # noqa: E402
-from main import app  # noqa: E402
+from app.db.base import Base
+from app.dependencies.db import get_db
+from main import app
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
@@ -29,14 +29,11 @@ def setup_db():
 
 @pytest.fixture()
 def db():
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()
     try:
         yield session
     finally:
         session.close()
-        Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture()

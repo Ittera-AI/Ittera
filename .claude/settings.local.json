@@ -1,17 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx skills:*)",
-      "PowerShell(Get-Process *)",
-      "PowerShell(netstat *)",
-      "PowerShell(Start-Process -FilePath \"npm\" -ArgumentList \"run\",\"dev\" -WorkingDirectory \"C:\\\\Users\\\\anand\\\\Desktop\\\\ittera\\\\Ittera\\\\apps\\\\web\" -NoNewWindow -PassThru)",
-      "Read(//mnt/c/Users/anand/Desktop/ittera/Ittera/apps/**)",
-      "Bash(npm run *)",
-      "Bash(echo \"PID: $!\")",
-      "PowerShell(Get-ChildItem -Recurse \"C:\\\\Users\\\\anand\\\\Desktop\\\\ittera\\\\Ittera\\\\apps\\\\web\\\\src\" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"route|constant\" } | Select-Object FullName)",
-      "PowerShell(Get-ChildItem -Recurse \"C:\\\\Users\\\\anand\\\\Desktop\\\\ittera\\\\Ittera\\\\apps\\\\web\\\\src\" -ErrorAction SilentlyContinue | Select-Object Name | Sort-Object Name | Where-Object { $_.Name -match \"\\\\.ts$|\\\\.tsx$\" })",
-      "Bash(npx tsc *)",
-      "PowerShell(Start-Process -FilePath \"cmd.exe\" -ArgumentList \"/c cd /d `\"C:\\\\Users\\\\anand\\\\Desktop\\\\ittera\\\\Ittera\\\\apps\\\\web`\" && npm run dev\" -WindowStyle Normal; Write-Output \"Dev server started in new window\")"
+      "Bash(npx skills:*)"
     ]
   }
 }

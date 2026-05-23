@@ -13,7 +13,6 @@ import {
   LogOut,
   Menu,
   X,
-  ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
 import type { User } from "@/context/AuthContext";
@@ -46,11 +45,10 @@ type ProductSidebarProps = {
   pathname: string;
   onNavigate: () => void;
   user: User | null;
-  isAdmin?: boolean;
   onSignOut: () => void | Promise<void>;
 };
 
-function ProductSidebar({ pathname, onNavigate, user, isAdmin, onSignOut }: ProductSidebarProps) {
+function ProductSidebar({ pathname, onNavigate, user, onSignOut }: ProductSidebarProps) {
   const initials = userInitials(user);
 
   return (
@@ -118,20 +116,6 @@ function ProductSidebar({ pathname, onNavigate, user, isAdmin, onSignOut }: Prod
           );
         })}
 
-        {isAdmin && (
-          <Link
-            href="/admin"
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.97]",
-              pathname === "/admin" ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <ShieldCheck size={16} strokeWidth={1.8} className="opacity-60" />
-            Admin
-          </Link>
-        )}
-
         <div className="mt-2 flex items-center gap-3 rounded-lg px-3 py-2.5">
           <div
             className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
@@ -159,7 +143,7 @@ function ProductSidebar({ pathname, onNavigate, user, isAdmin, onSignOut }: Prod
 
 export function ProductShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, signOut, isAdmin } = useAuth() as any;
+  const { user, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeMobile = () => setMobileOpen(false);
   const productError = useProductStore((s) => s.error);
@@ -174,7 +158,7 @@ export function ProductShell({ children }: { children: React.ReactNode }) {
           borderRight: "1px solid var(--border)",
         }}
       >
-        <ProductSidebar pathname={pathname} onNavigate={() => {}} user={user} isAdmin={isAdmin} onSignOut={signOut} />
+        <ProductSidebar pathname={pathname} onNavigate={() => {}} user={user} onSignOut={signOut} />
       </aside>
 
       {mobileOpen ? (
@@ -198,7 +182,7 @@ export function ProductShell({ children }: { children: React.ReactNode }) {
           borderRight: "1px solid var(--border)",
         }}
       >
-        <ProductSidebar pathname={pathname} onNavigate={closeMobile} user={user} isAdmin={isAdmin} onSignOut={signOut} />
+        <ProductSidebar pathname={pathname} onNavigate={closeMobile} user={user} onSignOut={signOut} />
       </aside>
 
       <div className="flex flex-1 flex-col lg:ml-56">

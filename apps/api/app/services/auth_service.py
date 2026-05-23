@@ -81,11 +81,9 @@ def login(db: Session, payload: LoginRequest) -> tuple[User, str]:
 
 
 def complete_onboarding(db: Session, user: User, payload: OnboardingRequest) -> User:
-    if payload.full_name:
-        user.full_name = payload.full_name.strip()
-        user.name = user.full_name
-    if payload.niche:
-        user.niche = payload.niche.strip()
+    user.full_name = payload.full_name.strip()
+    user.name = user.full_name
+    user.niche = payload.niche.strip()
     user.goals = payload.goals.strip() if payload.goals else None
     user.primary_platform = payload.primary_platform
     user.storage_preference = payload.storage_preference

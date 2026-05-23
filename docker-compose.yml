@@ -7,8 +7,6 @@ services:
       dockerfile: infra/docker/Dockerfile.web
       args:
         API_PROXY_TARGET: http://api:8000
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://placeholder.supabase.co}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-placeholder-anon-key}
     ports:
       - "3000:3000"
     environment:
@@ -55,10 +53,10 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://iterra:iterra@db:5432/iterra
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=${DATABASE_URL:-postgresql://iterra:iterra@db:5432/iterra}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
       - ENABLE_PLACEHOLDER_TASKS=${ENABLE_PLACEHOLDER_TASKS:-false}
     restart: unless-stopped
 
@@ -75,10 +73,10 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://iterra:iterra@db:5432/iterra
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=${DATABASE_URL:-postgresql://iterra:iterra@db:5432/iterra}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
       - ENABLE_PLACEHOLDER_TASKS=${ENABLE_PLACEHOLDER_TASKS:-false}
     restart: unless-stopped
 

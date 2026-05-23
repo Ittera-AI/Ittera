@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { redirectAfterSignIn } from "@/lib/routes";
 import { useTheme } from "@/context/ThemeContext";
 
 function GoogleIcon() {
@@ -81,6 +81,7 @@ function InputField({
 }
 
 export default function AuthModal() {
+  const router = useRouter();
   const { authOpen, authMode, authSeedEmail, setAuthMode, closeAuth, signIn, signUp, signInWithGoogle, signInWithLinkedIn, resetPassword } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -142,16 +143,15 @@ export default function AuthModal() {
     try {
       if (authMode === "signin") {
         await signIn(email, password);
-        redirectAfterSignIn();
-        return;
-      }
-
-      const res = await signUp(email, password, name);
-      if (res.needsEmailConfirmation) {
-        setSuccessMsg("Account created! Check your inbox and confirm your email before signing in.");
-        setAuthMode("signin");
+        router.push("/dashboard");
       } else {
-        redirectAfterSignIn();
+        const res = await signUp(email, password, name);
+        if (res.needsEmailConfirmation) {
+          setSuccessMsg("Account created! Check your inbox and confirm your email before signing in.");
+          setAuthMode("signin"); // Switch to sign in for them after they confirm
+        } else {
+          router.push("/dashboard");
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");

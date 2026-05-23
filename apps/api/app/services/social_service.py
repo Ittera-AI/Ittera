@@ -10,13 +10,11 @@ Responsibilities:
 
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
 from fastapi import HTTPException, status
-from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -24,8 +22,6 @@ from app.core.security import decrypt_value, encrypt_value
 from app.models.social_connection import SocialConnection
 from app.schemas.social import PlatformStatus, SocialStatusResponse
 from app.services.storage_service import StorageService
-
-_ENCRYPTED_PREFIX = "fernet:"
 
 
 # ── LinkedIn OAuth URL (for publishing / posting) ───────────────────────────
@@ -35,14 +31,12 @@ def build_linkedin_oauth_url() -> str:
     Returns LinkedIn OAuth authorization URL.
     Scopes: openid profile email w_member_social r_basicprofile
     """
-    from app.services.auth_service import make_oauth_state
-
     query = urlencode({
         "response_type": "code",
         "client_id": settings.LINKEDIN_CLIENT_ID,
         "redirect_uri": settings.LINKEDIN_REDIRECT_URI,
         "scope": "openid profile email w_member_social r_basicprofile",
-        "state": make_oauth_state("linkedin_oauth"),
+        "state": _make_state(),
     })
     return f"https://www.linkedin.com/oauth/v2/authorization?{query}"
 
@@ -52,7 +46,7 @@ def build_linkedin_oauth_url() -> str:
 def build_google_drive_oauth_url(user_id: str) -> str:
     """
     Returns Google OAuth URL scoped to drive.file only (not the user's full Drive).
-    user_id is signed into state so the callback can identify the user safely.
+    user_id is passed as state so the callback can identify which user to associate.
     """
     query = urlencode({
         "client_id": settings.GOOGLE_CLIENT_ID,
@@ -61,7 +55,7 @@ def build_google_drive_oauth_url(user_id: str) -> str:
         "scope": "https://www.googleapis.com/auth/drive.file",
         "access_type": "offline",
         "prompt": "consent",
-        "state": _make_oauth_state("google_drive", user_id),
+        "state": user_id,
     })
     return f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
 
@@ -69,15 +63,13 @@ def build_google_drive_oauth_url(user_id: str) -> str:
 async def handle_google_drive_callback(
     db: Session,
     code: str,
-    state: str,
+    user_id: str,
 ) -> SocialConnection:
     """
     Exchanges the authorization code for Drive tokens.
     Creates Iterra/ folder structure in the user's Drive.
     Upserts a SocialConnection record with folder IDs stored in metadata.
     """
-    user_id = _verify_oauth_state(state, "google_drive")
-
     async with httpx.AsyncClient(timeout=15) as client:
         token_resp = await client.post(
             "https://oauth2.googleapis.com/token",
@@ -244,8 +236,8 @@ def _upsert_connection(
 
     conn.platform_user_id = platform_user_id
     conn.platform_username = platform_username or conn.platform_username
-    conn.access_token = encrypt_stored_secret(access_token) or ""
-    conn.refresh_token = encrypt_stored_secret(refresh_token) if refresh_token else conn.refresh_token
+    conn.access_token = access_token
+    conn.refresh_token = refresh_token or conn.refresh_token
     conn.scopes = scopes or conn.scopes or []
     conn.connection_metadata = metadata or conn.connection_metadata or {}
     conn.is_active = True
@@ -254,44 +246,5 @@ def _upsert_connection(
     return conn
 
 
-def _make_oauth_state(purpose: str, user_id: str) -> str:
-    payload = {
-        "purpose": purpose,
-        "user_id": user_id,
-        "nonce": secrets.token_urlsafe(16),
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=10),
-    }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-
-
-def _verify_oauth_state(state: str, purpose: str) -> str:
-    try:
-        payload = jwt.decode(state, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except JWTError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired OAuth state",
-        ) from exc
-
-    if payload.get("purpose") != purpose or not payload.get("user_id"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OAuth state",
-        )
-    return str(payload["user_id"])
-
-
-def encrypt_stored_secret(value: str | None) -> str | None:
-    if not value:
-        return value
-    if value.startswith(_ENCRYPTED_PREFIX):
-        return value
-    return f"{_ENCRYPTED_PREFIX}{encrypt_value(value)}"
-
-
-def decrypt_stored_secret(value: str | None) -> str | None:
-    if not value:
-        return value
-    if not value.startswith(_ENCRYPTED_PREFIX):
-        return value
-    return decrypt_value(value.removeprefix(_ENCRYPTED_PREFIX))
+def _make_state() -> str:
+    return secrets.token_urlsafe(16)

@@ -34,8 +34,6 @@ export class ApiError extends Error {
   }
 }
 
-const API_TIMEOUT_MS = 8_000;
-
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (!headers.has("Content-Type") && init.body) {
@@ -54,8 +52,6 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
 
   const url = `${API_BASE_URL}${path}`;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
   let response: Response;
   try {
@@ -63,22 +59,14 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       ...init,
       headers,
       credentials: "include",
-      signal: controller.signal,
     });
   } catch (err) {
     const hint =
       API_BASE_URL === ""
         ? "Same-origin proxy: ensure Next.js rewrites are configured and FastAPI is reachable from the dev server (see API_PROXY_TARGET / port 8000)."
         : `Tried ${API_BASE_URL}. Is the API running and is CORS (ALLOWED_ORIGINS) correct?`;
-    const cause =
-      err instanceof Error && err.name === "AbortError"
-        ? `timed out after ${API_TIMEOUT_MS / 1000}s`
-        : err instanceof Error
-          ? err.message
-          : String(err);
+    const cause = err instanceof Error ? err.message : String(err);
     throw new ApiError(`Failed to reach API (${cause}). ${hint}`, 0);
-  } finally {
-    clearTimeout(timeoutId);
   }
 
   if (!response.ok) {

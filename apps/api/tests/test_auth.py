@@ -1,12 +1,3 @@
-from app.models.waitlist import WaitlistEntry
-
-
-def _approve_access(db, email: str):
-    entry = WaitlistEntry(email=email, access_approved=True)
-    db.add(entry)
-    db.commit()
-
-
 def test_health_check(client):
     response = client.get("/health")
     assert response.status_code == 200
@@ -78,12 +69,11 @@ def test_me_requires_authentication(client):
     assert response.status_code == 401
 
 
-def test_complete_onboarding(client, db):
+def test_complete_onboarding(client):
     client.post(
         "/api/v1/auth/register",
         json={"email": "onboarding@example.com", "password": "secret", "name": "New User"},
     )
-    _approve_access(db, "onboarding@example.com")
     login = client.post(
         "/api/v1/auth/login",
         json={"email": "onboarding@example.com", "password": "secret"},

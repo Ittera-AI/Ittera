@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class TrendItem(BaseModel):
@@ -11,9 +11,9 @@ class TrendItem(BaseModel):
 
 
 class RadarInput(BaseModel):
-    niche: str = Field(min_length=1, max_length=160)
-    platforms: list[str] = Field(default_factory=list, max_length=5)
-    limit: int = Field(default=10, ge=1, le=25)
+    niche: str
+    platforms: list[str]
+    limit: int = 10
 
 
 class RadarOutput(BaseModel):

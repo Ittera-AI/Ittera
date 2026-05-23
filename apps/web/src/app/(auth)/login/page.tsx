@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
 
 import { useAuth } from "@/hooks/useAuth";
-import { redirectAfterSignIn } from "@/lib/routes";
 
 function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,7 +21,8 @@ function LoginForm() {
     setError(null);
     try {
       await signIn(email, password);
-      redirectAfterSignIn();
+      const next = searchParams.get("next");
+      router.push(next ?? "/dashboard");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "An error occurred");
     } finally {

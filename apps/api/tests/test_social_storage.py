@@ -3,32 +3,16 @@
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException
-
-from app.services import social_service
-from app.models.waitlist import WaitlistEntry
 
 
-def _approve_access(db, email: str):
-    entry = db.query(WaitlistEntry).filter(WaitlistEntry.email == email).first()
-    if entry is None:
-        entry = WaitlistEntry(email=email)
-        db.add(entry)
-    entry.access_approved = True
-    db.commit()
-
-
-def _register_and_token(client, db):
-    email = "social_storage@example.com"
+def _register_and_token(client):
     client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": "secret", "name": "SS User"},
+        json={"email": "social_storage@example.com", "password": "secret", "name": "SS User"},
     )
-    client.post("/api/v1/waitlist", json={"email": email})
-    _approve_access(db, email)
     r = client.post(
         "/api/v1/auth/login",
-        json={"email": email, "password": "secret"},
+        json={"email": "social_storage@example.com", "password": "secret"},
     )
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
@@ -55,8 +39,8 @@ def test_storage_status_unauthorized(client):
     assert client.get("/api/v1/storage/status").status_code == 401
 
 
-def test_social_status_ok(client, db):
-    headers = _register_and_token(client, db)
+def test_social_status_ok(client):
+    headers = _register_and_token(client)
     r = client.get("/api/v1/social/status", headers=headers)
     assert r.status_code == 200
     body = r.json()
@@ -68,48 +52,24 @@ def test_social_sync_unauthorized(client):
     assert client.post("/api/v1/social/sync").status_code == 401
 
 
-def test_social_sync_enqueues_task(client, db, mock_scrape_delay):
-    headers = _register_and_token(client, db)
+def test_social_sync_enqueues_task(client, mock_scrape_delay):
+    headers = _register_and_token(client)
     r = client.post("/api/v1/social/sync", headers=headers)
     assert r.status_code == 200
     assert r.json()["task_id"] == "test-celery-task-id"
 
 
-def test_storage_status_ok_not_connected(client, db):
-    headers = _register_and_token(client, db)
+def test_storage_status_ok_not_connected(client):
+    headers = _register_and_token(client)
     r = client.get("/api/v1/storage/status", headers=headers)
     assert r.status_code == 200
     assert r.json()["connected"] is False
 
 
-def test_storage_delete_data_ok_without_drive(client, db):
-    headers = _register_and_token(client, db)
+def test_storage_delete_data_ok_without_drive(client):
+    headers = _register_and_token(client)
     r = client.delete("/api/v1/storage/data", headers=headers)
     assert r.status_code == 200
     data = r.json()
     assert data["db_records_cleared"] is True
     assert data["deleted_files"] == 0
-
-
-def test_google_drive_oauth_state_is_signed_and_user_bound():
-    state = social_service._make_oauth_state("google_drive", "user-123")
-
-    assert state != "user-123"
-    assert social_service._verify_oauth_state(state, "google_drive") == "user-123"
-
-
-def test_google_drive_oauth_state_rejects_wrong_purpose():
-    state = social_service._make_oauth_state("google_drive", "user-123")
-
-    with pytest.raises(HTTPException):
-        social_service._verify_oauth_state(state, "linkedin_oauth")
-
-
-def test_stored_secret_encryption_round_trip():
-    encrypted = social_service.encrypt_stored_secret("access-token")
-
-    assert encrypted is not None
-    assert encrypted != "access-token"
-    assert encrypted.startswith("fernet:")
-    assert social_service.decrypt_stored_secret(encrypted) == "access-token"
-    assert social_service.decrypt_stored_secret("legacy-plaintext") == "legacy-plaintext"
