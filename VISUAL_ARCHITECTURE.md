@@ -44,7 +44,7 @@
 │  │                                                                        │  │
 │  │  ┌────────────┐    ┌────────────┐    ┌────────────┐                 │  │
 │  │  │  Routers   │───▶│  Services  │───▶│   Models   │                 │  │
-│  │  │  (15)      │    │  (15)      │    │   (9)      │                 │  │
+│  │  │  (14)      │    │  (14+2)    │    │   (9)      │                 │  │
 │  │  └────────────┘    └────────────┘    └────────────┘                 │  │
 │  │       │                  │                  │                         │  │
 │  │       │                  │                  │                         │  │
@@ -67,11 +67,11 @@
 │  Tables (9):     │    │  Engines (5):    │    │  Background:     │
 │  • users         │    │  • Calendar      │    │  • LinkedIn      │
 │  • brand_profiles│    │  • Coach         │    │    scraping      │
-│  • content_drafts│    │  • Radar         │    │  • Scheduled     │
-│  • content_plans │    │  • Repurpose     │    │    posts         │
-│  • social_conn   │    │  • BrandProfile  │    │                  │
+│  • content_drafts│    │  • Radar         │    │  • Radar scans   │
+│  • content_plans │    │  • Repurpose     │    │  • Perf sync     │
+│  • social_conn   │    │  • BrandProfile  │    │  • Weekly rpts   │
 │  • posts         │    │                  │    │                  │
-│  • post_analysis │    │  LLM Provider:   │    │                  │
+│  • post_analyses │    │  LLM Provider:   │    │                  │
 │  • trend_snap    │    │  Anthropic       │    │                  │
 │  • waitlist      │    │  Claude API      │    │                  │
 └──────────────────┘    └──────────────────┘    └──────────────────┘

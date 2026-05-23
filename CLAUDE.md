@@ -29,6 +29,18 @@ iterra/
 ├── .github/           CI workflows, CODEOWNERS, PR templates
 ├── apps/
 │   ├── api/           FastAPI, Python 3.11+, SQLAlchemy, Alembic
+│   │   ├── app/       Application package
+│   │   │   ├── core/          Security (JWT, encryption)
+│   │   │   ├── db/            Session, migrations, datetime helpers
+│   │   │   ├── dependencies/  Auth + DB FastAPI deps
+│   │   │   ├── middleware/    Auth, rate limit
+│   │   │   ├── models/        SQLAlchemy models (9)
+│   │   │   ├── modules/       Feature sub-packages (brand_profile/)
+│   │   │   ├── routers/       Route handlers (14)
+│   │   │   ├── schemas/       Pydantic schemas
+│   │   │   └── services/      Business logic (14 + email + mock_data)
+│   │   ├── config.py  Settings via pydantic-settings (at api/ root)
+│   │   └── main.py    FastAPI entry point
 │   └── web/           Next.js 14, TypeScript, Tailwind, Zustand
 ├── docs/              Documentation (ADRs, API, onboarding, research)
 ├── infra/             Docker, Nginx, k8s scaffolding
@@ -38,6 +50,13 @@ iterra/
 ├── scripts/           Setup and utility scripts
 ├── supabase/          Supabase configuration and edge functions
 ├── workers/celery/    Async background jobs (Celery + Redis)
+│   ├── tasks/
+│   │   ├── scraper.py          LinkedIn post scraping
+│   │   ├── radar_scan.py       Scheduled radar trend scans
+│   │   ├── performance_sync.py Performance data sync
+│   │   └── weekly_reports.py   Weekly report generation
+│   ├── app.py                  Celery app config
+│   └── beat_schedule.py        Celery Beat periodic schedule
 ├── .env.example       Environment template
 ├── .gitignore         Git ignore rules
 ├── CLAUDE.md          AI coding context
@@ -146,10 +165,12 @@ experience. You are pedantic about the data flow chain:
 **Architecture rules you enforce:**
 - **Components are dumb.** They receive props and call hooks. Zero direct API
   calls. Zero business logic.
-- **Hooks own local state.** `useCalendar.ts` manages calendar UI state,
-  loading states, and error states. It calls the Zustand store.
-- **Stores own shared state.** Zustand stores are the single source of truth
-  for cross-component data (calendar plan, radar trends, etc.)
+- **Hooks own local state.** `useAuth.ts` provides auth context; `useProduct.ts`
+  is a thin wrapper around `useProductStore`. All product-level state lives in
+  `stores/product.store.ts` — a single consolidated Zustand store.
+- **Stores own shared state.** `useProductStore` is the single source of truth
+  for all cross-component product data (linkedin, brandProfile, trends,
+  suggestions, drafts, analytics, calendar, coachResult, radarResult).
 - **Services own transport.** All `fetch()` calls live in `services/`. They
   use typed methods from `services/api.ts`. They import types from
   `packages/shared-types/`.

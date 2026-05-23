@@ -87,6 +87,7 @@ External Integrations:
 - **Containerization**: Docker + docker-compose
 - **Reverse Proxy**: Nginx
 - **CI/CD**: GitHub Actions (api.yml, web.yml, ai-engine.yml)
+- **Email**: SMTP (smtplib) for waitlist confirmation emails
 
 
 ## Project Structure
@@ -96,16 +97,19 @@ Ittera/
 ├── apps/
 │   ├── api/                    # FastAPI Backend
 │   │   ├── app/
-│   │   │   ├── core/          # Security, database config
-│   │   │   ├── db/            # Database session, migrations
-│   │   │   ├── dependencies/  # FastAPI dependencies (auth, db)
-│   │   │   ├── middleware/    # Auth, rate limiting
-│   │   │   ├── models/        # SQLAlchemy models
-│   │   │   ├── routers/       # API route handlers
+│   │   │   ├── core/          # Security (JWT, encryption), database config
+│   │   │   ├── db/            # Database session, migrations, datetime helpers
+│   │   │   ├── dependencies/  # FastAPI dependencies (auth.py, db.py)
+│   │   │   ├── middleware/    # Auth middleware, rate limiting
+│   │   │   ├── models/        # SQLAlchemy models (9 models)
+│   │   │   ├── modules/       # Feature modules (brand_profile/)
+│   │   │   ├── routers/       # API route handlers (14 routers)
 │   │   │   ├── schemas/       # Pydantic request/response schemas
-│   │   │   └── services/      # Business logic layer
+│   │   │   └── services/      # Business logic layer (14 services + email + mock_data)
+│   │   ├── config.py         # Settings via pydantic-settings (at api/ root)
 │   │   ├── main.py           # FastAPI app entry point
 │   │   ├── requirements.txt  # Python dependencies
+│   │   ├── requirements-dev.txt  # Dev/test dependencies
 │   │   └── alembic.ini       # Database migration config
 │   │
 │   └── web/                   # Next.js Frontend
@@ -113,15 +117,28 @@ Ittera/
 │       │   ├── app/          # Next.js 14 App Router
 │       │   │   ├── (auth)/   # Auth pages (login)
 │       │   │   ├── (product)/ # Protected product pages
+│       │   │   │   ├── analytics/
+│       │   │   │   ├── calendar/
+│       │   │   │   ├── coach/
+│       │   │   │   ├── create/
+│       │   │   │   ├── dashboard/
+│       │   │   │   ├── radar/
+│       │   │   │   └── settings/
 │       │   │   ├── auth/     # OAuth callbacks
 │       │   │   └── demo/     # Public demo
 │       │   ├── components/   # React components
-│       │   ├── context/      # React Context (Auth, Theme)
+│       │   │   ├── auth/     # Auth-related components
+│       │   │   ├── layout/   # Navbar, Footer
+│       │   │   ├── motion/   # Animation wrapper components
+│       │   │   ├── product/  # ProductShell, StatusPill
+│       │   │   ├── sections/ # Landing page sections (14 sections)
+│       │   │   └── ui/       # Reusable UI primitives (23 components)
+│       │   ├── context/      # React Context (AuthContext, ThemeContext)
 │       │   ├── features/     # Feature-specific components
-│       │   ├── hooks/        # Custom React hooks
-│       │   ├── lib/          # Utilities (api, supabase, utils)
-│       │   ├── services/     # API service layer
-│       │   └── stores/       # Zustand state stores
+│       │   ├── hooks/        # Custom React hooks (useAuth, useProduct)
+│       │   ├── lib/          # Utilities (api.ts, supabase.ts, utils.ts, animations.ts, constants.ts)
+│       │   ├── services/     # API service layer (api.ts fetch wrapper, product.service.ts)
+│       │   └── stores/       # Zustand state (product.store.ts — single consolidated store)
 │       └── package.json
 │
 ├── packages/
@@ -130,10 +147,10 @@ Ittera/
 │   │   │   ├── brand_profile/ # Brand voice analysis
 │   │   │   ├── calendar/      # Content calendar generation
 │   │   │   ├── coach/         # Post analysis & scoring
-│   │   │   ├── core/          # Base engine, client, cost tracking
+│   │   │   ├── core/          # Base engine, client, cost tracking, exceptions
 │   │   │   ├── evals/         # LLM evaluation framework
 │   │   │   ├── pipelines/     # Multi-step AI workflows
-│   │   │   ├── prompts/       # All LLM prompts
+│   │   │   ├── prompts/       # All LLM prompts (brand_profile, calendar, coach, radar, repurpose)
 │   │   │   ├── radar/         # Trend detection
 │   │   │   └── repurpose/     # Cross-platform content adaptation
 │   │   ├── tests/
@@ -144,8 +161,12 @@ Ittera/
 ├── workers/
 │   └── celery/               # Background job workers
 │       ├── tasks/
-│       │   └── scraper.py   # LinkedIn post scraping
-│       └── app.py           # Celery app configuration
+│       │   ├── scraper.py          # LinkedIn post scraping
+│       │   ├── radar_scan.py       # Scheduled radar trend scans
+│       │   ├── performance_sync.py # Performance data sync
+│       │   └── weekly_reports.py   # Weekly report generation
+│       ├── app.py           # Celery app configuration
+│       └── beat_schedule.py # Celery Beat periodic task schedule
 │
 ├── docker-compose.yml        # Local development infrastructure
 ├── CLAUDE.md                 # Agent personas & conventions
@@ -311,17 +332,15 @@ Ittera/
 |--------|----------|-------------|---------------|
 | POST | `/register` | Register new user with email/password | No |
 | POST | `/login` | Login with email/password | No |
-| POST | `/logout` | Logout current user | Yes |
+| POST | `/logout` | Logout current user (clears cookie) | No |
 | GET | `/me` | Get current user profile | Yes |
-| GET | `/google` | Initiate Google OAuth flow | No |
+| POST | `/onboarding` | Complete user onboarding (name, niche, goals, platform) | Yes |
+| GET | `/google/start` | Initiate Google OAuth flow | No |
 | GET | `/google/callback` | Handle Google OAuth callback | No |
-| GET | `/linkedin` | Initiate LinkedIn OAuth flow | No |
+| GET | `/linkedin/start` | Initiate LinkedIn OAuth flow (OpenID) | No |
 | GET | `/linkedin/callback` | Handle LinkedIn OAuth callback | No |
 
-### Onboarding (`/api/v1/onboarding`)
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| POST | `/` | Complete user onboarding (niche, goals, platform) | Yes |
+> **Note**: The `/onboarding` endpoint lives under `/api/v1/auth/onboarding`, not a separate router. There is no standalone `/api/v1/onboarding` router.
 
 ### Waitlist (`/api/v1/waitlist`)
 | Method | Endpoint | Description | Auth Required |
@@ -402,7 +421,8 @@ Ittera/
 ### Analytics (`/api/v1/analytics`)
 | Method | Endpoint | Description | Auth Required |
 |--------|----------|-------------|---------------|
-| GET | `/summary` | Get analytics summary | Yes |
+| GET | `/posts` | List posts with analysis (filter by platform, limit) | Yes |
+| POST | `/analyze/{post_id}` | Run/refresh analysis for a specific post | Yes |
 
 ### Storage (`/api/v1/storage`)
 | Method | Endpoint | Description | Auth Required |
@@ -500,24 +520,34 @@ updated_at           TIMESTAMP
 ```sql
 id                VARCHAR (UUID, PK)
 user_id           VARCHAR (FK → users.id, INDEXED)
-platform          VARCHAR (default: 'linkedin')
+platform          VARCHAR (NOT NULL)
+platform_post_id  VARCHAR (nullable, INDEXED)
 content           TEXT (NOT NULL)
-platform_post_id  VARCHAR (nullable)
+content_type      VARCHAR (NOT NULL)
 published_at      TIMESTAMP (nullable)
-engagement_score  FLOAT (nullable)
+impressions       INTEGER (default: 0)
+likes             INTEGER (default: 0)
+comments          INTEGER (default: 0)
+shares            INTEGER (default: 0)
+engagement_rate   FLOAT (default: 0.0)
+topics            JSON (list of topics)
+tone              VARCHAR (nullable)
+raw_api_response  JSON (nullable)
+synced_at         TIMESTAMP (nullable)
 created_at        TIMESTAMP
 ```
 
-#### `post_analysis`
+#### `post_analyses` (table name: `post_analyses`)
 ```sql
-id                VARCHAR (UUID, PK)
-post_id           VARCHAR (FK → posts.id, UNIQUE)
-hook_score        FLOAT
-tone_analysis     JSON
-cta_effectiveness FLOAT
-structure_score   FLOAT
-suggestions       JSON (list of improvement suggestions)
-analyzed_at       TIMESTAMP
+id                  VARCHAR (UUID, PK)
+post_id             VARCHAR (FK → posts.id, UNIQUE, CASCADE DELETE)
+hook_score          INTEGER (NOT NULL)
+tone_match_score    INTEGER (NOT NULL)
+structure_score     INTEGER (NOT NULL)
+cta_effectiveness   VARCHAR (NOT NULL, e.g. 'strong' | 'weak')
+coach_feedback      JSON (top_strength, top_improvement, predicted_engagement)
+rewrite_suggestion  TEXT (nullable)
+created_at          TIMESTAMP
 ```
 
 #### `trend_snapshots`
@@ -715,112 +745,149 @@ src/app/
 
 ### State Management (Zustand)
 
+The frontend uses a **single consolidated Zustand store** (`stores/product.store.ts`) that manages all product state:
+
 ```typescript
-// Example store structure
-stores/
-├── authStore.ts           # User authentication state
-├── contentStore.ts        # Content drafts, calendar
-├── brandProfileStore.ts   # Brand profile data
-└── trendsStore.ts         # Trend data cache
+// stores/product.store.ts — single store for all product state
+type ProductState = {
+  linkedin: LinkedInStatus | null;
+  brandProfile: BrandProfile | null;
+  trends: TrendResponse | null;
+  suggestions: Suggestion[];
+  drafts: Draft[];
+  analytics: AnalyticsPost[];
+  calendar: CalendarEvent[];
+  currentDraft: Draft | null;
+  coachResult: CoachResult | null;
+  radarResult: RadarResult | null;
+  isLoading: boolean;
+  error: string | null;
+  // Actions: loadDashboard, connectLinkedIn, syncLinkedIn,
+  //   generateBrandProfile, confirmBrandProfile, updateBrandProfile,
+  //   loadTrends, suggest, generate, repurpose, loadDrafts,
+  //   selectDraft, publish, schedule, cancelSchedule,
+  //   loadAnalytics, analyze, loadCalendar, coachAnalyze, scanRadar
+};
 ```
+
+Auth state is managed separately via `context/AuthContext.tsx` (React Context + Supabase).
 
 ### API Client Pattern
 
+The frontend uses a **dual-layer API client**:
+
 ```typescript
-// lib/api.ts - Typed API wrapper
+// services/api.ts — low-level apiFetch wrapper (used by product.service.ts)
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T>
+
+// lib/api.ts — fully typed namespace client (used for auth, waitlist, etc.)
 import { supabase } from "@/lib/supabase";
 
 async function request<T>(method, path, body?) {
-  const token = await getSupabaseToken();
-  const res = await fetch(`${API_URL}${path}`, {
+  const token = await getToken(); // from Supabase session
+  const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: {
       "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json"
     },
-    body: body ? JSON.stringify(body) : undefined
+    credentials: "include", // also sends legacy iterra_token cookie
+    body: body !== undefined ? JSON.stringify(body) : undefined
   });
-  return res.json() as T;
+  if (!res.ok) throw new ApiError(res.status, detail);
+  return res.json() as Promise<T>;
 }
 
 export const api = {
   auth: { me, logout, onboarding },
-  content: { suggest, generate, listDrafts, publish },
+  waitlist: { stats, myStatus, join },
+  content: { listDrafts, getDraft, suggest, generate, repurpose, publishNow, schedule, calendarEvents },
   calendar: { generate, list },
   coach: { analyze },
   radar: { scan },
-  brandProfile: { get, upsert }
+  repurpose: { generate },
+  brandProfile: { get, upsert },
+  analytics: { summary },
+  trends: { list, refresh },
 };
 ```
+
+Product-level API calls go through `services/product.service.ts` which imports types from `@iterra/shared-types` (auto-generated OpenAPI types).
 
 
 ### Component Architecture
 
 ```
 components/
-├── auth/
-│   ├── AuthModal.tsx      # Login/register modal
-│   └── ProtectedRoute.tsx # Route guard component
+├── auth/                  # Auth-related components
 │
 ├── layout/
-│   ├── Navbar.tsx         # Main navigation
-│   ├── Sidebar.tsx        # Product sidebar
+│   ├── Navbar.tsx         # Main navigation (with product links)
 │   └── Footer.tsx         # Footer
 │
-├── sections/              # Landing page sections
+├── motion/                # Animation wrapper components
+│
+├── product/               # Product shell components
+│   ├── ProductShell.tsx   # Main product layout wrapper
+│   └── StatusPill.tsx     # Status indicator pill
+│
+├── sections/              # Landing page sections (14 sections)
 │   ├── Hero.tsx
 │   ├── Features.tsx
 │   ├── Problem.tsx
+│   ├── Solution.tsx
 │   ├── Transformation.tsx
 │   ├── HowItWorks.tsx
+│   ├── ProductShowcase.tsx
+│   ├── Benefits.tsx
+│   ├── DemoStrip.tsx
+│   ├── SocialProof.tsx
+│   ├── Founders.tsx
 │   ├── Waitlist.tsx
 │   ├── FAQ.tsx
 │   └── FinalCTA.tsx
 │
-├── ui/                    # Reusable UI components
-│   ├── Button.tsx
-│   ├── Card.tsx
-│   ├── Input.tsx
-│   ├── Modal.tsx
+├── ui/                    # Reusable UI primitives (23 components)
+│   ├── Button.tsx         # Variant-aware button
+│   ├── GlassCard.tsx      # Glassmorphism card
+│   ├── GradientText.tsx   # Gradient text
+│   ├── Badge.tsx
+│   ├── Accordion.tsx
+│   ├── AnimatedCounter.tsx
 │   ├── CursorGlow.tsx
 │   ├── ScrollProgress.tsx
-│   └── GrainOverlay.tsx
+│   ├── GrainOverlay.tsx
+│   ├── SectionLabel.tsx
+│   ├── ThemeToggle.tsx
+│   ├── alert.tsx, card.tsx, dialog.tsx, field.tsx
+│   ├── input.tsx, label.tsx, separator.tsx
+│   ├── sheet.tsx, skeleton.tsx, table.tsx
+│   ├── tabs.tsx, textarea.tsx
 │
-└── features/              # Feature-specific components
-    ├── calendar/
-    ├── content/
-    ├── coach/
-    └── radar/
+└── features/              # Feature-specific components (populated per feature)
 ```
 
 ### Context Providers
 
 ```typescript
-// context/AuthContext.tsx
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  
-  useEffect(() => {
-    // Listen to Supabase auth changes
-    supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-    });
-  }, []);
-  
-  return (
-    <AuthContext.Provider value={{ user, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
+// context/AuthContext.tsx — wraps Supabase auth state
+export function AuthProvider({ children }) { ... }
 
-// context/ThemeContext.tsx
-export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState('light');
-  // Theme switching logic
-}
+// context/ThemeContext.tsx — light/dark theme toggle
+export function ThemeProvider({ children }) { ... }
 ```
+
+### Custom Hooks
+
+```typescript
+// hooks/useAuth.ts — reads from AuthContext
+export function useAuth() { return useContext(AuthContext); }
+
+// hooks/useProduct.ts — thin wrapper around useProductStore
+export function useProduct() { return useProductStore(); }
+```
+
+All product-level state and actions are accessed via `useProduct()`. Feature pages compose from this single hook rather than having per-feature hooks.
 
 
 ## Authentication Flow
@@ -1323,7 +1390,9 @@ function MyComponent() {
 
 ### Local Setup
 
-1. **Start Infrastructure**:
+> **Note**: The backend defaults to **SQLite** (`iterra.db`) locally for zero-setup development. Set `DATABASE_URL` to a PostgreSQL URL for production.
+
+1. **Start Infrastructure** (optional for local SQLite dev):
 ```bash
 docker-compose up -d
 # Starts: PostgreSQL, Redis, Nginx
@@ -1346,33 +1415,59 @@ npm run dev
 # Runs on http://localhost:3000
 ```
 
-4. **Celery Worker** (optional):
+4. **Celery Worker** (optional — for background tasks):
 ```bash
 cd workers/celery
 celery -A app worker --loglevel=info
+# For scheduled tasks (Beat):
+celery -A app beat --loglevel=info
 ```
 
 ### Environment Variables
 
-**Backend** (`.env`):
+**Backend** (`apps/api/.env` — loaded by `config.py` at api/ root):
 ```bash
-DATABASE_URL=postgresql://user:pass@localhost:5432/ittera
+# Database (defaults to SQLite locally)
+DATABASE_URL=postgresql://user:pass@localhost:5432/iterra
 REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
+
+# Auth
 SECRET_KEY=your-secret-key
-ANTHROPIC_API_KEY=sk-ant-...
+ACCESS_TOKEN_EXPIRE_MINUTES=1440  # 24 hours
+SUPABASE_JWT_SECRET=...           # From Supabase Dashboard → Project Settings → API → JWT Settings
 SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=eyJ...
+
+# AI
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-4-5
+USE_ITERRA_AI_CALENDAR=false      # Set true to enable real AI calendar generation
+
+# OAuth
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/v1/auth/google/callback
+GOOGLE_DRIVE_REDIRECT_URI=http://localhost:8000/api/v1/social/callback/google-drive
 LINKEDIN_CLIENT_ID=...
 LINKEDIN_CLIENT_SECRET=...
-```
+LINKEDIN_REDIRECT_URI=...
+LINKEDIN_SESSION_COOKIE=          # Alternative to username/password for scraper
 
-**Frontend** (`.env.local`):
-```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+# App
+FRONTEND_URL=http://localhost:3000
+ALLOWED_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000"]
+ENVIRONMENT=development
+WAITLIST_TOTAL_SEATS=100
+
+# Email (SMTP for waitlist confirmation)
+SMTP_HOST=...
+SMTP_PORT=587
+SMTP_USERNAME=...
+SMTP_PASSWORD=...
+SMTP_USE_TLS=true
+MAIL_FROM=...
+REPLY_TO_EMAIL=...
 ```
 
 ### Testing
@@ -1738,6 +1833,6 @@ For questions or contributions, refer to `CLAUDE.md` for conventions and agent p
 
 ---
 
-**Last Updated**: 2026-05-22
-**Version**: 1.0
-**Maintainer**: Ittera Team
+**Last Updated**: 2026-05-23
+**Version**: 1.1
+**Maintainer**: Iterra Team
