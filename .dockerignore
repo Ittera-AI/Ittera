@@ -1,0 +1,9 @@
+.git
+.pytest_cache
+**/.pytest_cache
+**/__pycache__
+**/*.pyc
+**/.next
+**/node_modules
+**/.turbo
+apps/api/test.db
