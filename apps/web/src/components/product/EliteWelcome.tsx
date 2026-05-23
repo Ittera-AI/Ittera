@@ -99,7 +99,7 @@ export function EliteWelcome({ user, brandProfile, onDismiss }: EliteWelcomeProp
         <div className="relative z-10 w-full max-w-3xl p-8 animate-in slide-in-from-bottom-8 fade-in duration-700">
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold tracking-tight text-foreground">
-              Here's how to dominate your niche
+              Here&apos;s how to dominate your niche
             </h1>
             <p className="mt-4 text-lg text-muted-foreground">
               Your workflow is optimized for impact.

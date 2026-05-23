@@ -10,7 +10,7 @@ import {
   fetchWaitlistMemberStatus,
 } from "@/services/waitlist-access";
 
-export type User = { email: string; name: string; initials: string; onboarding_complete?: boolean };
+export type User = { email: string; name: string; initials: string; onboarding_complete?: boolean; avatar_url?: string };
 export type AuthMode = "signin" | "signup";
 
 export type WorkspaceAccessState = {
@@ -70,6 +70,7 @@ function userFromSupabase(supabaseUser: SupabaseUser): User {
     name,
     initials: makeInitials(name),
     onboarding_complete: supabaseUser.user_metadata?.onboarding_complete,
+    avatar_url: supabaseUser.user_metadata?.avatar_url,
   };
 }
 

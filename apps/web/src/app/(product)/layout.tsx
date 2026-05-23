@@ -22,7 +22,7 @@ export default function ProductRoutesLayout({ children }: { children: React.Reac
       if (user) {
         const allowed = hasWorkspaceAccess || (await refreshWorkspaceAccess());
         if (allowed) {
-          if (!user.onboarding_complete) {
+          if (!user.onboarding_complete && (typeof sessionStorage === "undefined" || sessionStorage.getItem("skipped_onboarding") !== "true")) {
             if (!cancelled) router.replace("/onboarding/persona");
             return;
           }

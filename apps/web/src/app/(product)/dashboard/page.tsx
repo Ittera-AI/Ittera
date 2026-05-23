@@ -85,6 +85,7 @@ export default function DashboardPage() {
   // First-time welcome overlay
   useEffect(() => {
     const dismissed = localStorage.getItem("ittera_has_seen_welcome");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!dismissed) setShowWelcome(true);
   }, []);
 

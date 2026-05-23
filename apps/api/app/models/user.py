@@ -15,7 +15,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     name = Column(String, nullable=False)
     full_name = Column(String, nullable=True)
-    niche = Column(String, nullable=True)
+
     goals = Column(Text, nullable=True)
     primary_platform = Column(String, nullable=False, default="linkedin")
     onboarding_complete = Column(Boolean, nullable=False, default=False)

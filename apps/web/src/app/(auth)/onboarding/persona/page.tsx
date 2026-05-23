@@ -262,26 +262,47 @@ export default function PersonaOnboardingPage() {
   // ── Loading ──
   if (step === "loading") {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8"
-        style={{ background: "var(--background)" }}>
-        <div className="absolute inset-0 pointer-events-none"
-          style={{ background: "radial-gradient(ellipse 60% 50% at 50% 50%, rgba(163,138,112,0.1), transparent)" }} />
-        <div className="relative flex h-32 w-32 items-center justify-center">
-          <div className="absolute inset-0 rounded-full" style={{ border: "2px solid var(--border)" }} />
-          <div className="absolute inset-0 rounded-full animate-spin"
-            style={{ border: "2px solid transparent", borderTopColor: "var(--bronze)", borderRightColor: "var(--bronze)", animationDuration: "1.4s" }} />
-          <div className="absolute inset-4 rounded-full" style={{ border: "1px solid var(--border)" }} />
-          <Sparkles size={24} style={{ color: "var(--bronze)" }} />
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden"
+        style={{ background: "#050505" }}>
+        
+        {/* Dynamic ambient background */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-[150px] opacity-20 animate-pulse duration-3000"
+          style={{ background: "var(--bronze)" }} />
+        
+        <div className="relative z-10 flex flex-col items-center w-full max-w-2xl text-center px-6">
+          <div className="relative flex h-48 w-48 items-center justify-center mb-12">
+            {/* Expanding outer rings */}
+            <div className="absolute inset-0 rounded-full border border-white/5 animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite]" />
+            <div className="absolute inset-4 rounded-full border border-[var(--bronze)]/20 animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite_500ms]" />
+            
+            {/* Core spinner */}
+            <div className="absolute inset-8 rounded-full border-2 border-white/5" />
+            <div className="absolute inset-8 rounded-full animate-spin"
+              style={{ border: "2px solid transparent", borderTopColor: "var(--bronze)", borderRightColor: "var(--bronze)", animationDuration: "1s" }} />
+            
+            {/* Center icon */}
+            <div className="absolute inset-14 rounded-full bg-black/50 border border-white/10 backdrop-blur-xl flex items-center justify-center shadow-[0_0_30px_var(--bronze)]">
+              <Sparkles size={32} className="text-[var(--bronze)] animate-pulse" />
+            </div>
+          </div>
+
+          <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-white mb-6">
+            Synthesizing Intelligence
+          </h2>
+          
+          <div className="h-8 mb-12 w-full">
+            <p className="text-lg text-white/60 font-medium animate-in slide-in-from-bottom-2 fade-in duration-500" key={loadingPhrase}>
+              {loadingPhrase}
+            </p>
+          </div>
+
+          {/* Wide Progress Bar */}
+          <div className="w-full max-w-md bg-white/5 h-2 rounded-full overflow-hidden border border-white/10 backdrop-blur-sm relative mx-auto">
+            <div className="absolute top-0 bottom-0 left-0 transition-all duration-1000 ease-out rounded-full shadow-[0_0_20px_var(--bronze)]"
+              style={{ width: `${loadingProgress}%`, background: "linear-gradient(90deg, #8B6040, var(--bronze))" }} />
+          </div>
+          <p className="mt-4 text-sm font-bold tracking-widest text-[var(--bronze)]">{loadingProgress}% COMPLETE</p>
         </div>
-        <div className="text-center max-w-xs">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground mb-2">Building your persona</h2>
-          <p className="text-sm text-muted-foreground transition-all duration-500" key={loadingPhrase}>{loadingPhrase}</p>
-        </div>
-        <div className="w-72 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
-          <div className="h-full rounded-full transition-all duration-1000"
-            style={{ width: `${loadingProgress}%`, background: "linear-gradient(90deg, var(--bronze), var(--olive))" }} />
-        </div>
-        <p className="text-xs text-muted-foreground tabular-nums">{loadingProgress}%</p>
       </div>
     );
   }
@@ -289,51 +310,87 @@ export default function PersonaOnboardingPage() {
   // ── Welcome ──
   if (step === "welcome") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 py-16"
-        style={{ background: "var(--background)" }}>
-        <div className="absolute inset-0 pointer-events-none"
-          style={{ background: "radial-gradient(ellipse 80% 60% at 50% 40%, rgba(163,138,112,0.07), transparent)" }} />
-        <div className="relative z-10 max-w-md w-full text-center space-y-8">
-          <div className="flex justify-center">
-            <div className="h-16 w-16 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-xl"
-              style={{ background: "linear-gradient(135deg, var(--bronze), #7A6040)" }}>
-              It
+      <div className="relative min-h-screen flex items-center justify-center overflow-hidden" style={{ background: "var(--background)" }}>
+        {/* Ambient background */}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(circle at 70% 50%, rgba(163,138,112,0.15), transparent 60%)" }} />
+        <div className="absolute -top-[40%] -right-[20%] w-[80%] h-[80%] rounded-full blur-[120px] opacity-20" style={{ background: "var(--bronze)" }} />
+        
+        <div className="relative z-10 w-full max-w-[1400px] px-8 py-16 grid lg:grid-cols-2 gap-16 lg:gap-24 items-center">
+          
+          {/* Left Side: Typography */}
+          <div className="flex flex-col items-start space-y-8 max-w-xl mx-auto lg:mx-0 animate-in fade-in slide-in-from-left-8 duration-1000">
+            <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-md">
+              <Sparkles size={16} className="text-[var(--bronze)]" />
+              <span className="text-xs font-semibold text-foreground uppercase tracking-widest">Ittera Persona Engine</span>
+            </div>
+            
+            <h1 className="text-5xl lg:text-7xl font-bold tracking-tighter text-foreground leading-[1.1]">
+              Clone your <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--bronze)] to-[#C0A080]">Digital Voice</span>
+            </h1>
+            
+            <p className="text-lg lg:text-xl text-muted-foreground leading-relaxed">
+              Log in with the platforms where you create. Ittera&apos;s AI Engine analyzes your actual content to build a highly accurate persona that powers your entire content strategy.
+            </p>
+            
+            <button
+              onClick={() => setStep("connect")}
+              className="group relative overflow-hidden rounded-full px-10 py-5 text-lg font-semibold text-white shadow-[0_0_40px_-10px_var(--bronze)] hover:shadow-[0_0_60px_-15px_var(--bronze)] transition-all duration-500 hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: "linear-gradient(135deg, var(--bronze), #8B6040)" }}>
+              <span className="relative z-10 flex items-center gap-3">
+                Ignite the Engine
+                <ArrowRight size={20} className="transition-transform group-hover:translate-x-1" />
+              </span>
+              <div className="absolute inset-0 -translate-x-full animate-[shimmer_2.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+            </button>
+            
+          </div>
+
+          {/* Right Side: Visual Element */}
+          <div className="hidden lg:flex relative h-[600px] w-full items-center justify-center animate-in fade-in zoom-in duration-1000 delay-300">
+            <div className="absolute inset-0 rounded-[3rem] border border-white/5 bg-gradient-to-br from-white/5 to-transparent backdrop-blur-3xl shadow-2xl overflow-hidden flex items-center justify-center">
+              {/* Decorative nodes */}
+              <div className="relative w-full h-full flex items-center justify-center">
+                <div className="absolute w-[400px] h-[400px] rounded-full border border-white/10 animate-[spin_60s_linear_infinite]" />
+                <div className="absolute w-[300px] h-[300px] rounded-full border border-dashed border-white/10 animate-[spin_40s_linear_infinite_reverse]" />
+                
+                {/* Center Node */}
+                <div className="relative z-10 w-24 h-24 rounded-2xl bg-black/50 border border-white/10 backdrop-blur-xl flex items-center justify-center shadow-[0_0_50px_-10px_var(--bronze)]">
+                  <div className="text-[var(--bronze)] animate-pulse">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M12 2a10 10 0 100 20 10 10 0 000-20zM12 6v6l4 2" />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Floating Elements */}
+                {[
+                  { icon: MessageSquare, label: "Tone", angle: 0 },
+                  { icon: Target, label: "Pillars", angle: 120 },
+                  { icon: Users, label: "Audience", angle: 240 }
+                ].map((item, i) => {
+                  const rad = (item.angle * Math.PI) / 180;
+                  const x = Math.cos(rad) * 150;
+                  const y = Math.sin(rad) * 150;
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.label} className="absolute flex flex-col items-center gap-2 transition-transform duration-1000 hover:scale-110"
+                      style={{ transform: `translate(${x}px, ${y}px)` }}>
+                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md flex items-center justify-center">
+                        <Icon size={20} className="text-white/70" />
+                      </div>
+                      <span className="text-xs font-medium text-white/60 tracking-wider uppercase">{item.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
-          <div>
-            <p className="eyebrow mb-3">Persona Engine</p>
-            <h1 className="text-4xl font-bold tracking-tight text-foreground leading-tight">
-              Connect your accounts.<br />Build your persona.
-            </h1>
-            <p className="mt-4 text-base text-muted-foreground leading-relaxed">
-              Log in with the platforms you create on. Ittera analyzes your real content to build a
-              persona that powers your entire strategy.
-            </p>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { icon: MessageSquare, label: "Voice & Tone" },
-              { icon: Target, label: "Content Pillars" },
-              { icon: Users, label: "Audience Fit" },
-            ].map(({ icon: Icon, label }) => (
-              <div key={label} className="rounded-xl border p-3 flex flex-col items-center gap-1.5"
-                style={{ background: "var(--card)" }}>
-                <Icon size={15} style={{ color: "var(--bronze)" }} />
-                <p className="text-[11px] font-semibold text-foreground text-center">{label}</p>
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={() => setStep("connect")}
-            className="group w-full rounded-2xl py-4 text-base font-semibold text-white flex items-center justify-center gap-2 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shadow-lg"
-            style={{ background: "linear-gradient(135deg, var(--bronze), #7A6040)" }}>
-            Get started
-            <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
-          </button>
-          <p className="text-xs text-muted-foreground">
-            Only public data is read. We never post or modify anything on your behalf.
-          </p>
+          
         </div>
+        <style>{`
+          @keyframes shimmer { 100% { transform: translateX(100%); } }
+        `}</style>
       </div>
     );
   }
@@ -341,120 +398,114 @@ export default function PersonaOnboardingPage() {
   // ── Connect step ──
   if (step === "connect") {
     return (
-      <div className="min-h-screen px-4 py-12" style={{ background: "var(--background)" }}>
-        <div className="mx-auto max-w-lg">
-          {/* Progress */}
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-5">
-              {[0, 1].map((i) => (
-                <div key={i} className="h-1.5 rounded-full transition-all duration-500"
-                  style={{ width: i === 0 ? 28 : 8, background: i === 0 ? "var(--bronze)" : "var(--border)" }} />
-              ))}
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Log in to your accounts</h1>
-            <p className="mt-2 text-muted-foreground text-sm">
-              A secure popup will open for each platform. Connect at least one.
+      <div className="min-h-screen px-6 py-16 md:py-24 flex flex-col items-center justify-center" style={{ background: "var(--background)" }}>
+        {/* Ambient background */}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top, rgba(163,138,112,0.1), transparent 70%)" }} />
+        
+        <div className="relative z-10 w-full max-w-[1200px] animate-in slide-in-from-bottom-8 fade-in duration-700">
+          
+          <div className="text-center mb-16 space-y-4">
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">
+              Select your sources
+            </h1>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Connect the platforms where you&apos;re most active. Our engine will analyze your best-performing content to reverse-engineer your unique voice.
             </p>
           </div>
 
           {/* Error */}
           {connectError && (
-            <div className="mb-4 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm"
-              style={{ background: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.3)", color: "#ef4444" }}>
-              <AlertCircle size={15} className="flex-shrink-0" />
+            <div className="mb-8 max-w-xl mx-auto flex items-center justify-center gap-3 rounded-2xl border px-6 py-4 text-sm font-medium backdrop-blur-md"
+              style={{ background: "rgba(239,68,68,0.1)", borderColor: "rgba(239,68,68,0.2)", color: "#ef4444" }}>
+              <AlertCircle size={18} className="flex-shrink-0 animate-pulse" />
               {connectError}
             </div>
           )}
 
-          {/* Platform cards */}
-          <div className="space-y-4">
+          {/* Platform cards grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
             {PLATFORMS.map((platform) => {
               const Icon = platform.icon;
               const isConnected = !!connected[platform.id];
               const isConnecting = connecting === platform.id;
 
               return (
-                <div key={platform.id} className="rounded-2xl border overflow-hidden transition-all duration-300"
+                <div key={platform.id} className="group relative flex flex-col rounded-[2rem] border border-white/5 overflow-hidden transition-all duration-700 hover:-translate-y-2 hover:shadow-[0_20px_60px_-15px_rgba(163,138,112,0.2)]"
                   style={{
-                    background: "var(--card)",
-                    borderColor: isConnected ? "var(--bronze)" : "var(--border)",
-                    boxShadow: isConnected ? "0 0 0 1px var(--bronze), 0 8px 24px -8px rgba(163,138,112,0.2)" : "none",
+                    background: isConnected ? "rgba(163,138,112,0.05)" : "rgba(20,20,20,0.4)",
+                    backdropFilter: "blur(20px)",
+                    borderColor: isConnected ? "var(--bronze)" : "rgba(255,255,255,0.08)",
                   }}>
-                  {/* Top gradient strip */}
-                  <div className="h-1 w-full" style={{ background: platform.gradient }} />
+                  
+                  {/* Premium Hover Glow */}
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none bg-gradient-to-br from-white/5 to-transparent" />
+                  
+                  {/* Premium gradient header */}
+                  <div className="h-40 w-full relative overflow-hidden flex items-center justify-center transition-transform duration-700 group-hover:scale-105" style={{ background: platform.gradient }}>
+                    <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+                    {/* Glowing background behind icon */}
+                    <div className="absolute w-32 h-32 bg-white/20 blur-[40px] rounded-full" />
+                    
+                    <div className="relative z-10 h-20 w-20 rounded-3xl flex items-center justify-center shadow-2xl border border-white/20 backdrop-blur-xl transition-all duration-500 group-hover:scale-110 group-hover:rotate-3"
+                      style={{ background: platform.bg }}>
+                      <Icon size={36} />
+                    </div>
+                  </div>
 
-                  <div className="p-5">
-                    <div className="flex items-start gap-4">
-                      {/* Icon */}
-                      <div className="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md"
-                        style={{ background: platform.bg }}>
-                        <Icon size={22} />
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-bold text-foreground">{platform.name}</span>
-                          {platform.recommended && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                              style={{ background: "rgba(163,138,112,0.15)", color: "var(--bronze)" }}>
-                              Best signals
-                            </span>
-                          )}
-                          {isConnected && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1"
-                              style={{ background: "rgba(122,139,118,0.15)", color: "var(--olive)" }}>
-                              <CheckCircle2 size={10} />
-                              @{connected[platform.id]}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{platform.tagline}</p>
-                        {/* Perks */}
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {platform.perks.map((perk) => (
-                            <span key={perk} className="text-[10px] px-2 py-0.5 rounded-full border"
-                              style={{ background: "var(--muted)", color: "var(--muted-foreground)", borderColor: "var(--border)" }}>
-                              {perk}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
+                  <div className="relative flex-1 p-8 flex flex-col z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-2xl font-bold text-white tracking-tight">{platform.name}</h3>
+                      {platform.recommended && (
+                        <span className="text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full border border-[var(--bronze)]/30 shadow-[0_0_15px_rgba(163,138,112,0.15)]"
+                          style={{ background: "rgba(163,138,112,0.1)", color: "var(--bronze)" }}>
+                          Primary
+                        </span>
+                      )}
+                    </div>
+                    
+                    <p className="text-base text-white/60 mb-8 leading-relaxed font-medium">{platform.tagline}</p>
+                    
+                    <div className="flex flex-wrap gap-2 mb-10">
+                      {platform.perks.map((perk) => (
+                        <span key={perk} className="text-xs font-semibold px-3.5 py-1.5 rounded-full border border-white/10 bg-white/5 text-white/70 shadow-sm">
+                          {perk}
+                        </span>
+                      ))}
                     </div>
 
-                    {/* Action buttons */}
-                    <div className="mt-4 flex items-center gap-2">
+                    <div className="mt-auto pt-6 border-t border-white/10">
                       {isConnected ? (
-                        <>
-                          <div className="flex-1 flex items-center gap-2 rounded-xl px-3 py-2.5"
-                            style={{ background: "rgba(122,139,118,0.1)" }}>
-                            <CheckCircle2 size={15} style={{ color: "var(--olive)" }} />
-                            <span className="text-sm font-medium" style={{ color: "var(--olive)" }}>
-                              Connected as @{connected[platform.id]}
+                        <div className="flex items-center justify-between bg-black/40 rounded-2xl p-4 border border-[var(--olive)]/30 shadow-[0_0_20px_-5px_rgba(122,139,118,0.2)] animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-500">
+                          <div className="flex items-center gap-3">
+                            <div className="bg-[var(--olive)]/20 p-1.5 rounded-full shadow-[0_0_15px_var(--olive)]">
+                              <CheckCircle2 size={16} style={{ color: "var(--olive)" }} className="animate-[pulse_2s_ease-in-out_infinite]" />
+                            </div>
+                            <span className="text-sm font-bold text-white truncate max-w-[120px]">
+                              @{connected[platform.id]}
                             </span>
                           </div>
                           <button
                             onClick={() => handleDisconnect(platform.id)}
-                            className="px-3 py-2.5 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground transition-colors border"
-                            style={{ borderColor: "var(--border)", background: "var(--muted)" }}>
+                            className="text-[11px] font-bold text-white/40 hover:text-red-400 transition-colors uppercase tracking-wider bg-white/5 hover:bg-red-400/10 px-3 py-1.5 rounded-full">
                             Remove
                           </button>
-                        </>
+                        </div>
                       ) : (
                         <button
                           onClick={() => handleConnect(platform.id)}
                           disabled={isConnecting}
-                          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait shadow-sm"
+                          className="group/btn relative w-full flex items-center justify-center gap-3 rounded-2xl py-4 text-sm font-bold text-white overflow-hidden transition-all duration-300 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:scale-100 shadow-xl"
                           style={{ background: platform.gradient }}>
+                          <div className="absolute inset-0 bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
                           {isConnecting ? (
                             <>
-                              <Loader2 size={15} className="animate-spin" />
-                              Opening login window...
+                              <Loader2 size={18} className="animate-spin relative z-10" />
+                              <span className="relative z-10">Connecting...</span>
                             </>
                           ) : (
                             <>
-                              <ExternalLink size={15} />
-                              Log in with {platform.name}
+                              <ExternalLink size={18} className="relative z-10 transition-transform group-hover/btn:-translate-y-0.5 group-hover/btn:translate-x-0.5" />
+                              <span className="relative z-10 tracking-wide">Connect {platform.name}</span>
                             </>
                           )}
                         </button>
@@ -466,28 +517,36 @@ export default function PersonaOnboardingPage() {
             })}
           </div>
 
-          {/* Connected count */}
-          {connectedCount > 0 && (
-            <div className="mt-4 flex items-center gap-2 text-sm" style={{ color: "var(--olive)" }}>
-              <CheckCircle2 size={14} />
-              {connectedCount} account{connectedCount > 1 ? "s" : ""} connected
-            </div>
-          )}
-
-          <div className="mt-8 flex items-center justify-between">
+          <div className="mt-16 flex items-center justify-between border-t border-white/5 pt-8">
             <button onClick={() => setStep("welcome")}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-              <ChevronLeft size={16} />
+              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-all hover:-translate-x-1">
+              <ChevronLeft size={18} />
               Back
             </button>
-            <button
-              onClick={() => setStep("context")}
-              disabled={connectedCount === 0}
-              className="flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ background: "linear-gradient(135deg, var(--bronze), #7A6040)" }}>
-              Continue
-              <ArrowRight size={16} />
-            </button>
+            <div className="flex items-center gap-6">
+              {connectedCount > 0 ? (
+                <span className="text-sm font-semibold animate-in fade-in" style={{ color: "var(--olive)" }}>
+                  {connectedCount} source{connectedCount > 1 ? "s" : ""} secured
+                </span>
+              ) : (
+                <button
+                  onClick={() => {
+                    sessionStorage.setItem("skipped_onboarding", "true");
+                    router.push("/dashboard");
+                  }}
+                  className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">
+                  Skip for now
+                </button>
+              )}
+              <button
+                onClick={() => setStep("context")}
+                disabled={connectedCount === 0}
+                className="group flex items-center gap-2 rounded-full px-8 py-4 text-sm font-bold text-white transition-all hover:scale-105 active:scale-[0.98] disabled:opacity-30 disabled:scale-100 disabled:cursor-not-allowed shadow-[0_0_30px_-10px_var(--bronze)] hover:shadow-[0_0_40px_-10px_var(--bronze)]"
+                style={{ background: "linear-gradient(135deg, var(--bronze), #7A6040)" }}>
+                Continue to Analysis
+                <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -495,100 +554,108 @@ export default function PersonaOnboardingPage() {
   }
 
   // ── Context step ──
-  const inputStyle = { background: "var(--muted)", borderColor: "var(--border)", color: "var(--foreground)" };
-  const inputCls = "w-full rounded-xl border px-3.5 py-3 text-sm outline-none transition-all";
-  function onFocus(e: React.FocusEvent<HTMLInputElement>) {
-    e.target.style.borderColor = "var(--bronze)";
-    e.target.style.boxShadow = "0 0 0 3px rgba(163,138,112,0.12)";
-  }
-  function onBlur(e: React.FocusEvent<HTMLInputElement>) {
-    e.target.style.borderColor = "var(--border)";
-    e.target.style.boxShadow = "none";
-  }
-
-  return (
-    <div className="min-h-screen px-4 py-12" style={{ background: "var(--background)" }}>
-      <div className="mx-auto max-w-lg">
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-5">
-            {[0, 1].map((i) => (
-              <div key={i} className="h-1.5 rounded-full transition-all duration-500"
-                style={{ width: i === 1 ? 28 : 8, background: i <= 1 ? "var(--bronze)" : "var(--border)" }} />
-            ))}
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Authorize and build</h1>
-          <p className="mt-2 text-muted-foreground text-sm">
-            We will analyze your public content to build your custom persona.
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          {/* Connected accounts summary */}
-          <div className="rounded-2xl border p-4" style={{ background: "var(--card)" }}>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Connected accounts
+  if (step === "context") {
+    return (
+      <div className="min-h-screen px-6 py-16 flex flex-col items-center justify-center" style={{ background: "var(--background)" }}>
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(circle at bottom, rgba(163,138,112,0.15), transparent 60%)" }} />
+        
+        <div className="relative z-10 w-full max-w-[800px] animate-in slide-in-from-bottom-8 fade-in duration-700">
+          
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold tracking-tight text-foreground">
+              Ready for Engine Ignition
+            </h1>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Review your sources and authorize the final analysis.
             </p>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(connected).map(([id, username]) => {
-                const p = PLATFORMS.find((pl) => pl.id === id)!;
-                const Icon = p.icon;
-                return (
-                  <div key={id} className="flex items-center gap-2 rounded-full pl-1 pr-3 py-1 border text-sm font-medium"
-                    style={{ background: "var(--muted)", borderColor: "var(--border)" }}>
-                    <div className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ background: p.bg }}>
-                      <Icon size={12} />
+          </div>
+
+          <div className="rounded-[2.5rem] border border-white/10 bg-white/5 backdrop-blur-2xl p-8 md:p-12 shadow-2xl">
+            
+            {/* Sources Summary */}
+            <div className="mb-10">
+              <h3 className="text-sm font-bold tracking-widest text-muted-foreground uppercase mb-6 flex items-center gap-3">
+                <Target size={16} className="text-[var(--bronze)]" />
+                Data Sources
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {Object.entries(connected).map(([id, username]) => {
+                  const p = PLATFORMS.find((pl) => pl.id === id)!;
+                  const Icon = p.icon;
+                  return (
+                    <div key={id} className="flex items-center gap-4 rounded-2xl p-4 border border-white/5 bg-black/40 shadow-inner">
+                      <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
+                        style={{ background: p.gradient }}>
+                        <Icon size={18} className="text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-muted-foreground">{p.name}</p>
+                        <p className="text-sm font-bold text-foreground truncate">@{username}</p>
+                      </div>
                     </div>
-                    <span className="text-foreground">@{username}</span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          {/* Consent */}
-          <div
-            className="rounded-2xl border p-4 flex items-start gap-3 cursor-pointer transition-all"
-            onClick={() => setConsent((c) => !c)}
-            style={{
-              background: consent ? "rgba(163,138,112,0.06)" : "var(--card)",
-              borderColor: consent ? "var(--bronze)" : "var(--border)",
-              boxShadow: consent ? "0 0 0 1px var(--bronze)" : "none",
-            }}>
-            <div className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-md border-2 flex items-center justify-center transition-all"
-              style={{ borderColor: consent ? "var(--bronze)" : "var(--border)", background: consent ? "var(--bronze)" : "transparent" }}>
-              {consent && (
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
+            {/* Consent Toggle */}
+            <div
+              className="group relative overflow-hidden rounded-2xl border p-6 md:p-8 cursor-pointer transition-all duration-300"
+              onClick={() => setConsent((c) => !c)}
+              style={{
+                background: consent ? "rgba(163,138,112,0.08)" : "rgba(0,0,0,0.4)",
+                borderColor: consent ? "var(--bronze)" : "var(--border)",
+                boxShadow: consent ? "0 0 0 1px var(--bronze), inset 0 0 40px rgba(163,138,112,0.1)" : "none",
+              }}>
+              
+              {consent && <div className="absolute right-0 top-0 w-32 h-32 bg-[var(--bronze)]/20 blur-[50px] rounded-full" />}
+
+              <div className="relative z-10 flex items-start gap-6">
+                <div className="flex-shrink-0 mt-1 h-8 w-8 rounded-xl border-2 flex items-center justify-center transition-all duration-300 shadow-sm"
+                  style={{ 
+                    borderColor: consent ? "var(--bronze)" : "var(--muted-foreground)", 
+                    background: consent ? "var(--bronze)" : "transparent",
+                    transform: consent ? "scale(1.1)" : "scale(1)"
+                  }}>
+                  {consent && <CheckCircle2 size={20} className="text-white animate-in zoom-in" />}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-white transition-colors">Authorize AI Analysis</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    I grant Ittera permission to analyze the public content from my connected accounts. 
+                    This data will be used strictly to train my private voice model. Ittera will never post, share, or modify my content.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">Authorize persona analysis</p>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                I authorize Ittera to analyze my connected accounts' public content to build my creator persona. Ittera will never post, modify, or share my content.
-              </p>
+
+            <div className="mt-12 flex flex-col-reverse sm:flex-row items-center justify-between gap-6">
+              <button onClick={() => setStep("connect")}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-all hover:-translate-x-1 py-4">
+                <ChevronLeft size={18} />
+                Modify sources
+              </button>
+              
+              <button
+                onClick={handleBuild}
+                disabled={!consent}
+                className="relative w-full sm:w-auto overflow-hidden rounded-full px-10 py-5 text-lg font-bold text-white transition-all duration-500 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed shadow-[0_0_40px_-10px_var(--bronze)]"
+                style={{ background: "linear-gradient(135deg, var(--bronze), #8B6040)" }}>
+                <span className="relative z-10 flex items-center justify-center gap-3">
+                  <Zap size={20} className={consent ? "animate-pulse" : ""} />
+                  Extract Persona
+                </span>
+                {consent && <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent" />}
+              </button>
             </div>
           </div>
         </div>
-
-        <div className="mt-8 flex items-center justify-between">
-          <button onClick={() => setStep("connect")}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronLeft size={16} />
-            Back
-          </button>
-          <button
-            onClick={handleBuild}
-            disabled={!consent}
-            className="group flex items-center gap-2 rounded-xl px-8 py-3.5 text-sm font-semibold text-white transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
-            style={{ background: "linear-gradient(135deg, var(--bronze), #7A6040)" }}>
-            <Sparkles size={15} />
-            Build my persona
-            <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
-          </button>
-        </div>
+        <style>{`
+          @keyframes shimmer { 100% { transform: translateX(100%); } }
+        `}</style>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return null;
 }
