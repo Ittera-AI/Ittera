@@ -90,24 +90,36 @@ Ittera/
 ├── apps/
 │   ├── api/                    # FastAPI Backend (Python 3.11+)
 │   │   ├── app/
-│   │   │   ├── routers/       # API endpoints (15 routers)
-│   │   │   ├── services/      # Business logic (15 services)
+│   │   │   ├── routers/       # API endpoints (14 routers)
+│   │   │   ├── services/      # Business logic (14 + email + mock_data)
 │   │   │   ├── models/        # SQLAlchemy models (9 tables)
 │   │   │   ├── schemas/       # Pydantic request/response schemas
-│   │   │   ├── core/          # Security, database config
-│   │   │   ├── db/            # Migrations, session management
-│   │   │   └── dependencies/  # FastAPI dependencies (auth, db)
-│   │   └── main.py           # FastAPI app entry point
+│   │   │   ├── core/          # Security (JWT, encryption), database config
+│   │   │   ├── db/            # Migrations, session, datetime helpers
+│   │   │   ├── dependencies/  # FastAPI dependencies (auth.py, db.py)
+│   │   │   ├── middleware/    # Auth, rate limiting
+│   │   │   └── modules/       # Feature sub-packages (brand_profile/)
+│   │   ├── config.py          # Settings via pydantic-settings (at api/ root)
+│   │   ├── main.py            # FastAPI app entry point
+│   │   ├── requirements.txt   # Python dependencies
+│   │   └── requirements-dev.txt  # Dev/test dependencies
 │   │
 │   └── web/                   # Next.js 14 Frontend (TypeScript)
 │       ├── src/
 │       │   ├── app/          # App Router (auth, product pages)
 │       │   ├── components/   # React components
+│       │   │   ├── auth/     # Auth-related components
+│       │   │   ├── layout/   # Navbar, Footer
+│       │   │   ├── motion/   # Animation wrapper components
+│       │   │   ├── product/  # ProductShell, StatusPill
+│       │   │   ├── sections/ # Landing page sections (14)
+│       │   │   └── ui/       # Reusable UI primitives (23)
 │       │   ├── context/      # Auth & Theme providers
-│       │   ├── hooks/        # Custom React hooks
-│       │   ├── lib/          # API client, utilities
-│       │   ├── services/     # API service layer
-│       │   └── stores/       # Zustand state management
+│       │   ├── hooks/        # Custom React hooks (useAuth, useProduct)
+│       │   ├── lib/          # Typed API client, utilities, constants
+│       │   ├── services/     # apiFetch wrapper + product.service.ts
+│       │   └── stores/       # Zustand (single product.store.ts)
+│       ├── next.config.mjs   # Includes /api/v1/* → FastAPI proxy rewrites
 │       └── package.json
 │
 ├── packages/
@@ -118,7 +130,7 @@ Ittera/
 │   │       ├── radar/        # Trend detection engine
 │   │       ├── repurpose/    # Content repurposing engine
 │   │       ├── brand_profile/# Brand voice analysis
-│   │       ├── core/         # BaseEngine, client, cost tracking
+│   │       ├── core/         # BaseEngine, client, cost tracking, exceptions
 │   │       ├── prompts/      # All LLM prompts (versioned)
 │   │       └── evals/        # Evaluation framework
 │   │
@@ -126,11 +138,17 @@ Ittera/
 │
 ├── workers/
 │   └── celery/               # Background job workers
-│       └── tasks/
-│           └── scraper.py   # LinkedIn post scraping
+│       ├── tasks/
+│       │   ├── scraper.py          # LinkedIn post scraping
+│       │   ├── radar_scan.py       # Scheduled radar trend scans
+│       │   ├── performance_sync.py # Performance data sync
+│       │   └── weekly_reports.py   # Weekly report generation
+│       ├── app.py                  # Celery app configuration
+│       └── beat_schedule.py        # Celery Beat periodic schedule
 │
 ├── CLAUDE.md                 # ✅ Agent personas & conventions (UP TO DATE)
-├── ARCHITECTURE_OVERVIEW.md  # ✅ Complete architecture documentation (NEW)
+├── ARCHITECTURE_OVERVIEW.md  # ✅ Complete architecture documentation
+├── REPOSITORY_SUMMARY.md     # ✅ This file
 └── docker-compose.yml        # Local development infrastructure
 ```
 
@@ -142,13 +160,15 @@ Ittera/
 ### Authentication & Onboarding
 - `POST /api/v1/auth/register` - Register with email/password
 - `POST /api/v1/auth/login` - Login with email/password
-- `POST /api/v1/auth/logout` - Logout current user
+- `POST /api/v1/auth/logout` - Logout (clears cookie)
 - `GET /api/v1/auth/me` - Get current user profile
-- `GET /api/v1/auth/google` - Initiate Google OAuth
+- `POST /api/v1/auth/onboarding` - Complete user onboarding (name, niche, goals, platform)
+- `GET /api/v1/auth/google/start` - Initiate Google OAuth
 - `GET /api/v1/auth/google/callback` - Handle Google OAuth callback
-- `GET /api/v1/auth/linkedin` - Initiate LinkedIn OAuth
+- `GET /api/v1/auth/linkedin/start` - Initiate LinkedIn OAuth (OpenID)
 - `GET /api/v1/auth/linkedin/callback` - Handle LinkedIn OAuth callback
-- `POST /api/v1/onboarding` - Complete user onboarding
+
+> **Note**: There is no standalone `/api/v1/onboarding` router — onboarding lives under `/api/v1/auth/onboarding`.
 
 ### Brand Profile
 - `GET /api/v1/brand-profile` - Get user's brand profile
@@ -190,12 +210,13 @@ Ittera/
 - `GET /api/v1/social/sync/status/{task_id}` - Check scraping task status
 
 ### Analytics & Waitlist
-- `GET /api/v1/analytics/summary` - Get analytics summary
+- `GET /api/v1/analytics/posts` - List posts with analysis (filter by platform/limit)
+- `POST /api/v1/analytics/analyze/{post_id}` - Run/refresh analysis for a specific post
 - `GET /api/v1/waitlist` - Get waitlist stats
 - `POST /api/v1/waitlist` - Join waitlist
 - `GET /api/v1/waitlist/me` - Get my waitlist status
 
-**Total Endpoints**: 40+ API routes across 15 routers
+**Total Endpoints**: ~38 API routes across 14 routers
 
 
 ---
@@ -231,12 +252,15 @@ Ittera/
    - Metadata (folder IDs, sync status)
 
 6. **posts** - Scraped LinkedIn posts
-   - Content and metadata
-   - Engagement scores
+   - Content and rich metadata (content_type, topics, tone)
+   - Engagement metrics (impressions, likes, comments, shares, engagement_rate)
+   - Sync tracking (synced_at, raw_api_response)
 
-7. **post_analysis** - AI analysis of posts
-   - Hook, tone, CTA, structure scores
-   - Improvement suggestions
+7. **post_analyses** (table: `post_analyses`) - AI analysis of posts
+   - Integer scores: hook_score, tone_match_score, structure_score
+   - CTA effectiveness (string: 'strong' | 'weak')
+   - JSON coach_feedback (top_strength, top_improvement, predicted_engagement)
+   - Rewrite suggestion (text)
 
 8. **trend_snapshots** - Cached trend data
    - Niche-specific trends
@@ -357,59 +381,60 @@ src/app/
 Component → Hook → Store → Service → API
 ```
 
-**Example**:
+**Actual implementation** (single consolidated store pattern):
 ```typescript
 // Component (dumb, just renders)
-function CalendarPage() {
-  const { plan, loading } = useCalendar();
-  return <CalendarView plan={plan} loading={loading} />;
+function RadarPage() {
+  const { radarResult, isLoading, scanRadar } = useProduct();
+  return <RadarView result={radarResult} loading={isLoading} onScan={scanRadar} />;
 }
 
-// Hook (manages local state)
-function useCalendar() {
-  const store = useCalendarStore();
-  useEffect(() => { store.fetchPlan(); }, []);
-  return { plan: store.plan, loading: store.loading };
+// useProduct() — thin wrapper around single Zustand store
+export function useProduct() {
+  return useProductStore();
 }
 
-// Store (Zustand, shared state)
-const useCalendarStore = create((set) => ({
-  plan: null,
-  loading: false,
-  fetchPlan: async () => {
-    set({ loading: true });
-    const plan = await calendarService.generate(...);
-    set({ plan, loading: false });
-  }
+// product.store.ts — single store for ALL product state
+export const useProductStore = create<ProductState>((set, get) => ({
+  radarResult: null,
+  isLoading: false,
+  error: null,
+  scanRadar: (niche, platforms, limit) =>
+    run(set, async () => {
+      const result = await productService.radarScan(niche, platforms, limit);
+      set({ radarResult: result });
+    }),
+  // ... all other state & actions
 }));
 
-// Service (API transport)
-const calendarService = {
-  generate: (input) => api.calendar.generate(input)
+// product.service.ts — typed API calls via apiFetch
+export const productService = {
+  radarScan: (niche, platforms, limit) =>
+    apiFetch<RadarResult>("/api/v1/radar/scan", {
+      method: "POST",
+      body: JSON.stringify({ niche, platforms, limit }),
+    }),
 };
 
-// API Client (typed fetch wrapper)
-const api = {
-  calendar: {
-    generate: (input) => request('POST', '/api/v1/calendar/generate', input)
-  }
-};
+// services/api.ts — base fetch wrapper with Supabase auth
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T>
 ```
 
 ### State Management
 
-- **Zustand**: Global state (auth, content, brand profile, trends)
-- **React Context**: Auth provider, theme provider
+- **Zustand**: Single consolidated `product.store.ts` manages all product state
+  (linkedin, brandProfile, trends, suggestions, drafts, analytics, calendar, coachResult, radarResult)
+- **React Context**: `AuthContext` (Supabase auth), `ThemeContext` (light/dark toggle)
 - **Local State**: Component-specific UI state
 
 ### API Client
 
-- **Location**: `apps/web/src/lib/api.ts`
-- **Features**:
-  - Typed request/response
-  - Automatic Supabase token injection
-  - Error handling with `ApiError` class
-  - Namespaced API methods
+Two-layer client pattern:
+- **`services/api.ts`** — `apiFetch<T>()` wrapper with Supabase JWT injection and same-origin proxy support
+- **`lib/api.ts`** — Fully typed namespace client (`api.auth`, `api.waitlist`, `api.content`, etc.) used directly for auth/waitlist flows
+- **`services/product.service.ts`** — Product-level calls via `apiFetch`, types imported from `@iterra/shared-types`
+
+**Proxy**: `next.config.mjs` rewrites `/api/v1/*` → FastAPI (`http://127.0.0.1:8000` in dev), so `NEXT_PUBLIC_API_URL` can be left unset during local development.
 
 
 ---
@@ -592,7 +617,7 @@ Route handler receives current_user
 ### Local Development Setup
 
 ```bash
-# 1. Start infrastructure
+# 1. Start infrastructure (optional — backend uses SQLite by default)
 docker-compose up -d  # PostgreSQL, Redis, Nginx
 
 # 2. Backend
@@ -606,32 +631,54 @@ uvicorn main:app --reload --port 8000
 cd apps/web
 npm install
 npm run dev  # http://localhost:3000
+# Note: /api/v1/* requests are proxied to FastAPI via next.config.mjs rewrites
 
-# 4. Celery Worker (optional)
+# 4. Celery Worker (optional — needed for background tasks)
 cd workers/celery
 celery -A app worker --loglevel=info
+# For scheduled/periodic tasks:
+celery -A app beat --loglevel=info
 ```
 
 ### Environment Variables
 
 **Backend** (`.env`):
 ```bash
-DATABASE_URL=postgresql://user:pass@localhost:5432/ittera
+# Default locally (SQLite, no external DB needed)
+# DATABASE_URL=sqlite:///./iterra.db  ← this is the default
+DATABASE_URL=postgresql://user:pass@localhost:5432/iterra
 REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
 SECRET_KEY=your-secret-key
+ACCESS_TOKEN_EXPIRE_MINUTES=1440    # 24 hours default
 ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-4-5
 SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=eyJ...
+SUPABASE_JWT_SECRET=...             # Supabase Dashboard → Project Settings → API → JWT Settings
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/v1/auth/google/callback
+GOOGLE_DRIVE_REDIRECT_URI=http://localhost:8000/api/v1/social/callback/google-drive
 LINKEDIN_CLIENT_ID=...
 LINKEDIN_CLIENT_SECRET=...
-USE_ITERRA_AI_CALENDAR=true
+LINKEDIN_REDIRECT_URI=...
+LINKEDIN_SESSION_COOKIE=            # Alternative to username/password for scraper
+FRONTEND_URL=http://localhost:3000
+WAITLIST_TOTAL_SEATS=100
+SMTP_HOST=...
+SMTP_PORT=587
+SMTP_USERNAME=...
+SMTP_PASSWORD=...
+MAIL_FROM=...
+USE_ITERRA_AI_CALENDAR=false        # Set true to use real Claude AI for calendar
 ```
 
-**Frontend** (`.env.local`):
+**Frontend** (`apps/web/.env.local`):
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000
+# Leave NEXT_PUBLIC_API_URL unset in dev — next.config.mjs proxies /api/v1/* to FastAPI
+# NEXT_PUBLIC_API_URL=          ← unset = same-origin proxy mode (recommended for local dev)
+NEXT_PUBLIC_API_URL=http://localhost:8000  # Set for production or cross-host dev
 NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 ```
@@ -818,9 +865,10 @@ pip install -e .
 ```
 
 ### Supabase Auth Not Working
-1. Check `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env`
-2. Verify token in browser localStorage
-3. Check token expiry (default: 60 minutes)
+1. Check `SUPABASE_URL` and `SUPABASE_JWT_SECRET` in `.env` (backend uses JWT secret, not anon key)
+2. Check `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local`
+3. Verify token in browser localStorage / Supabase session
+4. Check token expiry (default: **24 hours** — `ACCESS_TOKEN_EXPIRE_MINUTES=1440`)
 
 ### Celery Tasks Not Running
 1. Check Redis: `redis-cli ping`
@@ -903,10 +951,12 @@ make lint         # Run linters
 ### Key Files to Know
 
 **Backend**:
+- `apps/api/config.py` - Settings (at `apps/api/` root, NOT inside `app/`)
 - `apps/api/main.py` - FastAPI app entry point
-- `apps/api/app/routers/` - API endpoints (15 routers)
-- `apps/api/app/services/` - Business logic (15 services)
+- `apps/api/app/routers/` - API endpoints (14 routers)
+- `apps/api/app/services/` - Business logic (14 domain + email + mock_data)
 - `apps/api/app/models/` - Database models (9 tables)
+- `apps/api/app/modules/` - Feature sub-packages (e.g. brand_profile/)
 
 **Frontend**:
 - `apps/web/src/app/` - Next.js App Router
@@ -929,12 +979,14 @@ make lint         # Run linters
 
 ## Statistics
 
-- **Total API Endpoints**: 40+
+- **Total API Endpoints**: ~38
 - **Database Tables**: 9
 - **AI Engines**: 5 (Calendar, Coach, Radar, Repurpose, Brand Profile)
-- **Routers**: 15
-- **Services**: 15
+- **Routers**: 14
+- **Services**: 14 domain + email + mock_data = 16 files
+- **Celery Tasks**: 4 (scraper, radar_scan, performance_sync, weekly_reports)
 - **Frontend Pages**: 10+ (auth, product, landing)
+- **Frontend Components**: 23 UI primitives + 14 landing sections + layout + product + motion
 - **Lines of Code**: ~15,000+ (estimated)
 
 ---
@@ -967,8 +1019,8 @@ The codebase is **well-organized**, **documented**, and **ready for growth**.
 
 ---
 
-**Last Updated**: 2025-01-22
-**Version**: 1.0
+**Last Updated**: 2026-05-23
+**Version**: 1.1
 **Maintainer**: Iterra Team
 
 For questions or contributions, refer to:

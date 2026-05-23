@@ -27,10 +27,12 @@
 │  │  • Product Pages (/dashboard, /calendar, /create, /coach, /radar)     │  │
 │  │                                                                        │  │
 │  │  State Management:                                                     │  │
-│  │  • Zustand Stores (auth, content, brand profile, trends)              │  │
-│  │  • React Context (AuthProvider, ThemeProvider)                        │  │
+│  │  • Zustand (single product.store.ts — all product state)               │  │
+│  │  • React Context (AuthContext, ThemeContext)                            │  │
 │  │                                                                        │  │
-│  │  API Client: lib/api.ts (Typed fetch wrapper)                         │  │
+│  │  API Client:                                                           │  │
+│  │  • services/api.ts — apiFetch<T> wrapper (Supabase JWT, proxy-aware)  │  │
+│  │  • lib/api.ts — typed namespace client (api.auth, api.content, etc.)  │  │
 │  └──────────────────────────────────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────────────────────────┘
                                      │
