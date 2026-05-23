@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PenLine, CalendarDays, BarChart2, Radar, ArrowRight, CheckCircle2, Circle, Loader2 } from "lucide-react";
 
 import { ProductShell } from "@/components/product/ProductShell";
 import { useAuth } from "@/context/AuthContext";
 import { useProduct } from "@/hooks/useProduct";
+import { EliteWelcome } from "@/components/product/EliteWelcome";
 
 function StatCard({
   label,
@@ -71,15 +72,26 @@ const STEPS = [
 export default function DashboardPage() {
   const { user } = useAuth();
   const product = useProduct();
-  const loadDashboard = product.loadDashboard;
-  const loadDrafts = product.loadDrafts;
-  const loadCalendar = product.loadCalendar;
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  const { loadDashboard, loadDrafts, loadCalendar } = product;
 
   useEffect(() => {
     void loadDashboard();
     void loadDrafts();
     void loadCalendar();
   }, [loadDashboard, loadDrafts, loadCalendar]);
+
+  // First-time welcome overlay
+  useEffect(() => {
+    const dismissed = localStorage.getItem("ittera_has_seen_welcome");
+    if (!dismissed) setShowWelcome(true);
+  }, []);
+
+  const handleDismissWelcome = () => {
+    localStorage.setItem("ittera_has_seen_welcome", "true");
+    setShowWelcome(false);
+  };
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
@@ -88,30 +100,43 @@ export default function DashboardPage() {
     return "Good evening";
   }, []);
 
+  // Safe null guards — store initialises async so these can be null on first render
+  const linkedin = product.linkedin ?? null;
+  const brandProfile = product.brandProfile ?? null;
+  const calendar = product.calendar ?? [];
+  const drafts = product.drafts ?? [];
+
   const stepStatus = {
-    source: !!product.linkedin?.connected,
-    sync: !!product.linkedin?.synced_posts,
-    profile: !!product.brandProfile?.profile,
-    confirm: !!product.brandProfile?.is_confirmed,
+    source: !!linkedin?.connected,
+    sync: !!linkedin?.synced_posts,
+    profile: !!brandProfile?.profile,
+    confirm: !!brandProfile?.is_confirmed,
   };
 
   const doneCount = Object.values(stepStatus).filter(Boolean).length;
   const progress = doneCount / STEPS.length;
 
-  const scheduled = product.calendar.filter((e) => e.status === "scheduled").length;
-  const published = product.calendar.filter((e) => e.status === "published").length;
+  const scheduled = calendar.filter((e) => e.status === "scheduled").length;
+  const published = calendar.filter((e) => e.status === "published").length;
 
-  const recentDrafts = product.drafts.slice(0, 3);
+  const recentDrafts = drafts.slice(0, 3);
 
   return (
     <ProductShell>
+      {showWelcome && (
+        <EliteWelcome
+          user={user}
+          brandProfile={brandProfile}
+          onDismiss={handleDismissWelcome}
+        />
+      )}
       <div className="flex flex-col gap-8">
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="eyebrow">{greeting}</p>
             <h1 className="mt-1.5 text-3xl font-semibold tracking-[-0.04em]">
-              {user ? `${user.name.split(" ")[0]}'s workspace` : "Your content cockpit"}
+              {user ? `${user.name.split(" ")[0]}'s dashboard` : "Your content cockpit"}
             </h1>
             <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
               Build the strategy loop: signal → voice → draft → publish → learn.
@@ -136,12 +161,12 @@ export default function DashboardPage() {
 
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Drafts" value={product.drafts.length} sub="total created" />
+          <StatCard label="Drafts" value={drafts.length} sub="total created" />
           <StatCard label="Scheduled" value={scheduled} sub="upcoming posts" accent={scheduled > 0} />
           <StatCard label="Published" value={published} sub="posts live" />
           <StatCard
             label="LinkedIn posts"
-            value={product.linkedin?.synced_posts ?? 0}
+            value={linkedin?.synced_posts ?? 0}
             sub="synced"
           />
         </div>

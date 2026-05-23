@@ -5,10 +5,17 @@ from sqlalchemy.orm import Session
 from starlette.responses import RedirectResponse
 
 from app.config import settings
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_current_user, get_current_workspace_user, get_waitlist_access
 from app.dependencies.db import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, LoginResponse, OnboardingRequest, RegisterRequest, UserResponse
+from app.schemas.auth import (
+    LoginRequest,
+    LoginResponse,
+    OnboardingRequest,
+    RegisterRequest,
+    UserResponse,
+    WorkspaceAccessResponse,
+)
 from app.services import auth_service
 
 router = APIRouter()
@@ -45,10 +52,18 @@ async def me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.get("/workspace-access", response_model=WorkspaceAccessResponse)
+async def workspace_access(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return get_waitlist_access(db, current_user)
+
+
 @router.post("/onboarding", response_model=UserResponse)
 async def complete_onboarding(
     payload: OnboardingRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_workspace_user),
     db: Session = Depends(get_db),
 ):
     return auth_service.complete_onboarding(db, current_user, payload)

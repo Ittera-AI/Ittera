@@ -7,6 +7,8 @@ import { ProductShell } from "@/components/product/ProductShell";
 import { useAuth } from "@/context/AuthContext";
 import { useProduct } from "@/hooks/useProduct";
 import type { BrandProfileData } from "@/services/product.service";
+import { api } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -149,6 +151,82 @@ export default function SettingsPage() {
   const product = useProduct();
   const loadDashboard = product.loadDashboard;
 
+  type PlatformId = "twitter" | "linkedin" | "instagram";
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [connected, setConnected] = useState<Partial<Record<PlatformId, string>>>({});
+  const [connecting, setConnecting] = useState<PlatformId | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.access_token) setAuthToken(session.access_token);
+    });
+  }, []);
+
+  useEffect(() => {
+    api.connect.status().then((list) => {
+      const map: Partial<Record<PlatformId, string>> = {};
+      list.forEach((c) => {
+        if (["twitter", "linkedin", "instagram"].includes(c.platform)) {
+          map[c.platform as PlatformId] = c.username;
+        }
+      });
+      if (Object.keys(map).length) setConnected(map);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    function handleMessage(e: MessageEvent) {
+      if (e.data?.type !== "ittera_oauth") return;
+      const { platform, status: s, username, error } = e.data;
+      setConnecting(null);
+      if (s === "connected") {
+        setConnected((prev) => ({ ...prev, [platform]: username }));
+        setConnectError(null);
+      } else {
+        setConnectError(error || "Connection failed. Please try again.");
+      }
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  function handleConnect(platformId: PlatformId) {
+    if (!authToken) {
+      setConnectError("Please wait — fetching your session...");
+      return;
+    }
+    setConnectError(null);
+    setConnecting(platformId);
+    const url = api.connect.startUrl(platformId, authToken);
+    
+    const w = 520, h = 680;
+    const left = window.screenX + (window.outerWidth - w) / 2;
+    const top = window.screenY + (window.outerHeight - h) / 2;
+    const popup = window.open(url, "ittera_oauth", `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0`);
+    
+    if (!popup) {
+      setConnecting(null);
+      setConnectError("Popup was blocked. Please allow popups for this site.");
+    } else {
+      const timer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(timer);
+          setConnecting((prev) => (prev === platformId ? null : prev));
+        }
+      }, 500);
+    }
+  }
+
+  async function handleDisconnect(platformId: PlatformId) {
+    await api.connect.disconnect(platformId).catch(() => {});
+    setConnected((prev) => {
+      const next = { ...prev };
+      delete next[platformId];
+      return next;
+    });
+  }
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
@@ -189,45 +267,51 @@ export default function SettingsPage() {
           </div>
         </Section>
 
-        <Section title="LinkedIn source">
+        <Section title="Connected Accounts">
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">{product.linkedin?.platform_username ?? "Not connected"}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {product.linkedin?.synced_posts
-                    ? `${product.linkedin.synced_posts} posts synced`
-                    : "No posts synced yet"}
-                </p>
+            {connectError && (
+              <div className="flex items-center gap-2 rounded-xl border px-4 py-3 text-sm text-red-600 bg-red-50 border-red-200">
+                {connectError}
               </div>
-              <span
-                className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-                style={{
-                  background: product.linkedin?.connected ? "rgba(150,165,145,0.15)" : "var(--muted)",
-                  color: product.linkedin?.connected ? "var(--olive)" : "var(--text-muted)",
-                }}
-              >
-                {product.linkedin?.connected ? "Connected" : "Offline"}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => void product.connectLinkedIn()}
-                disabled={product.isLoading || !!product.linkedin?.connected}
-                className="rounded-lg border px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-[0.97] disabled:opacity-40"
-              >
-                Connect mock LinkedIn
-              </button>
-              <button
-                type="button"
-                onClick={() => void product.syncLinkedIn()}
-                disabled={product.isLoading || !product.linkedin?.connected}
-                className="rounded-lg border px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-[0.97] disabled:opacity-40"
-              >
-                Sync posts
-              </button>
-            </div>
+            )}
+            {["twitter", "linkedin", "instagram"].map((platformId) => {
+              const isConnected = !!connected[platformId as PlatformId];
+              const isConnecting = connecting === platformId;
+              const names: Record<string, string> = { twitter: "X / Twitter", linkedin: "LinkedIn", instagram: "Instagram" };
+
+              return (
+                <div key={platformId} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{names[platformId]}</p>
+                    {isConnected ? (
+                      <p className="mt-0.5 text-xs text-muted-foreground">Connected as @{connected[platformId as PlatformId]}</p>
+                    ) : (
+                      <p className="mt-0.5 text-xs text-muted-foreground">Not connected</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    {isConnected ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDisconnect(platformId as PlatformId)}
+                        className="rounded-lg border px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-[0.97]"
+                      >
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleConnect(platformId as PlatformId)}
+                        disabled={isConnecting}
+                        className="rounded-lg border px-3 py-2 text-xs font-medium text-foreground transition-all hover:bg-muted active:scale-[0.97] disabled:opacity-40"
+                      >
+                        {isConnecting ? "Connecting..." : "Connect"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Section>
 

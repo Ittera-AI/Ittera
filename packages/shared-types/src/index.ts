@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/workspace-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workspace Access */
+        get: operations["workspace_access_api_v1_auth_workspace_access_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/onboarding": {
         parameters: {
             query?: never;
@@ -181,8 +198,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Status */
-        get: operations["status_api_v1_linkedin_status_get"];
+        /** Get Linkedin Status */
+        get: operations["get_linkedin_status_api_v1_linkedin_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -528,6 +545,40 @@ export interface paths {
         get: operations["get_my_waitlist_status_api_v1_waitlist_me_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waitlist/admin/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Waitlist Access */
+        post: operations["approve_waitlist_access_api_v1_waitlist_admin_approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waitlist/admin/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Waitlist Access */
+        post: operations["revoke_waitlist_access_api_v1_waitlist_admin_revoke_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -953,14 +1004,11 @@ export interface components {
             /** Niche */
             niche: string;
             /** Platforms */
-            platforms: string[];
+            platforms?: string[];
             /** Posting Frequency */
             posting_frequency: number;
-            /**
-             * Historical Posts
-             * @default []
-             */
-            historical_posts: string[];
+            /** Historical Posts */
+            historical_posts?: string[];
         };
         /** CalendarOutput */
         CalendarOutput: {
@@ -1056,7 +1104,7 @@ export interface components {
             /** Content */
             content?: string | null;
             /** Status */
-            status?: string | null;
+            status?: ("draft" | "scheduled" | "published" | "failed") | null;
             /** Scheduled For */
             scheduled_for?: string | null;
         };
@@ -1171,13 +1219,15 @@ export interface components {
             /**
              * Primary Platform
              * @default linkedin
+             * @enum {string}
              */
-            primary_platform: string;
+            primary_platform: "linkedin" | "instagram" | "twitter";
             /**
              * Storage Preference
              * @default google_drive
+             * @enum {string}
              */
-            storage_preference: string;
+            storage_preference: "google_drive" | "local" | "iterra";
         };
         /** PlatformStatus */
         PlatformStatus: {
@@ -1253,7 +1303,7 @@ export interface components {
             /** Niche */
             niche: string;
             /** Platforms */
-            platforms: string[];
+            platforms?: string[];
             /**
              * Limit
              * @default 10
@@ -1506,12 +1556,37 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** WaitlistApprovalRequest */
+        WaitlistApprovalRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+        };
+        /** WaitlistApprovalResponse */
+        WaitlistApprovalResponse: {
+            /** Email */
+            email: string;
+            /** Access Approved */
+            access_approved: boolean;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Approved By */
+            approved_by?: string | null;
+            /** Message */
+            message: string;
+        };
         /** WaitlistMemberStatusResponse */
         WaitlistMemberStatusResponse: {
             /** Email */
             email: string;
             /** Joined */
             joined: boolean;
+            /** Access Approved */
+            access_approved: boolean;
+            /** Approved At */
+            approved_at?: string | null;
             /** Position */
             position: number | null;
             /** Total Joined */
@@ -1541,6 +1616,8 @@ export interface components {
             position: number;
             /** Already Joined */
             already_joined: boolean;
+            /** Access Approved */
+            access_approved: boolean;
             /** Total Joined */
             total_joined: number;
             /** Total Seats */
@@ -1560,6 +1637,23 @@ export interface components {
             remaining_seats: number;
             /** Recent Joiners */
             recent_joiners: string[];
+        };
+        /** WorkspaceAccessResponse */
+        WorkspaceAccessResponse: {
+            /** Email */
+            email: string;
+            /** Has Access */
+            has_access: boolean;
+            /** Waitlisted */
+            waitlisted: boolean;
+            /** Access Approved */
+            access_approved: boolean;
+            /** Is Admin */
+            is_admin: boolean;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Reason */
+            reason?: string | null;
         };
     };
     responses: never;
@@ -1654,6 +1748,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workspace_access_api_v1_auth_workspace_access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceAccessResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1861,7 +1986,7 @@ export interface operations {
             };
         };
     };
-    status_api_v1_linkedin_status_get: {
+    get_linkedin_status_api_v1_linkedin_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2624,6 +2749,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WaitlistMemberStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_waitlist_access_api_v1_waitlist_admin_approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitlistApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistApprovalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_waitlist_access_api_v1_waitlist_admin_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitlistApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistApprovalResponse"];
                 };
             };
             /** @description Validation Error */

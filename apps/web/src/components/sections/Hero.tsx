@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion, AnimatePresence, useMotionValue, useSpring } from "framer-motion";
 import { ArrowRight } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { ROUTES } from "@/lib/routes";
 
 const WORDS = ["content strategy", "every post", "your audience", "your growth"];
 const EASE  = [0.16, 1, 0.3, 1] as const;
@@ -678,6 +680,7 @@ function DashboardMockup({ isDark }: { isDark: boolean }) {
 export default function Hero() {
   const shouldReduceMotion = useReducedMotion();
   const { theme } = useTheme();
+  const { hasWorkspaceAccess, isWaitlistedUser } = useAuth();
   const isDark = theme === "dark";
   const typed  = useTypewriter(WORDS);
 
@@ -767,13 +770,15 @@ export default function Hero() {
               transition={{ duration: 0.55, delay: 0.3, ease: EASE }}
               className="flex flex-col sm:flex-row gap-3 mb-10"
             >
-              <motion.a href="#waitlist"
+              <motion.a
+                href={hasWorkspaceAccess ? ROUTES.dashboard : isWaitlistedUser ? ROUTES.waitlistStatus : "#waitlist"}
                 className="btn-glow inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-lg text-[14.5px] font-semibold"
                 style={{ background: ctaBg, color: ctaColor }}
-                whileHover={{ y: -2, scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                whileHover={{ y: -2, scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
                 transition={{ duration: 0.18 }}
               >
-                Join the Waitlist
+                {hasWorkspaceAccess ? "Go to dashboard" : isWaitlistedUser ? "View waitlist status" : "Join the Waitlist"}
                 <motion.span animate={{ x: [0, 3, 0] }} transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}>
                   <ArrowRight className="w-4 h-4" />
                 </motion.span>

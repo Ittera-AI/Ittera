@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ContentSlot(BaseModel):
@@ -10,10 +10,10 @@ class ContentSlot(BaseModel):
 
 
 class CalendarInput(BaseModel):
-    niche: str
-    platforms: list[str]
-    posting_frequency: int
-    historical_posts: list[str] = []
+    niche: str = Field(min_length=1, max_length=160)
+    platforms: list[str] = Field(default_factory=list, max_length=5)
+    posting_frequency: int = Field(ge=1, le=31)
+    historical_posts: list[str] = Field(default_factory=list, max_length=100)
 
 
 class CalendarOutput(BaseModel):

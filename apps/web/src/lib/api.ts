@@ -133,8 +133,8 @@ const auth = {
   me: ()                                      => get<ApiUser>("/api/v1/auth/me"),
   logout: ()                                  => post("/api/v1/auth/logout", {}),
   onboarding: (payload: {
-    full_name: string;
-    niche: string;
+    full_name?: string;
+    niche?: string;
     goals?: string;
     primary_platform: string;
   })                                          => post<ApiUser>("/api/v1/auth/onboarding", payload),
@@ -190,6 +190,58 @@ const trends = {
   refresh: ()                                => post("/api/v1/trends/refresh", {}),
 };
 
+export interface PersonaProfile {
+  id: string;
+  status: string;
+  niche: string | null;
+  target_audience: string | null;
+  goals: string[];
+  persona_summary: string | null;
+  voice_tone: string | null;
+  positioning: string | null;
+  content_pillars: string[];
+  audience_pain_points: string[];
+  credibility_signals: string[];
+  content_opportunities: string[];
+  avoid_topics: string[];
+  sources?: PersonaSource[];
+}
+
+export interface PersonaSource {
+  id: string;
+  source_type: string;
+  url: string | null;
+  manual_text: string | null;
+  status: string;
+  error_message: string | null;
+}
+
+const persona = {
+  startOnboarding: () => post<PersonaProfile>("/api/v1/persona/onboarding/start", {}),
+  addSource: (payload: { source_type: string; url?: string; manual_text?: string }) => post<PersonaSource>("/api/v1/persona/sources", payload),
+  listSources: () => get<PersonaSource[]>("/api/v1/persona/sources"),
+  scrape: () => post<{status: string, results: any[]}>("/api/v1/persona/scrape", {}),
+  analyze: () => post<PersonaProfile>("/api/v1/persona/analyze", {}),
+  get: () => get<PersonaProfile>("/api/v1/persona"),
+  update: (payload: Partial<PersonaProfile>) => request<PersonaProfile>("PATCH", "/api/v1/persona", payload),
+  confirm: () => post<PersonaProfile>("/api/v1/persona/confirm", {}),
+};
+
+export interface SocialConnectionStatus {
+  platform: string;
+  username: string;
+  connected_at: string;
+  last_synced: string | null;
+}
+
+const connect = {
+  status: () => get<SocialConnectionStatus[]>("/api/v1/connect/status"),
+  disconnect: (platform: string) => request<{ disconnected: string }>("DELETE", `/api/v1/connect/${platform}`),
+  // Returns the URL to open in a popup — the popup handles the OAuth redirect
+  startUrl: (platform: "twitter" | "linkedin" | "instagram", token: string) =>
+    `${BASE_URL}/api/v1/connect/${platform}/start?token=${encodeURIComponent(token)}`,
+};
+
 export const api = {
   auth,
   waitlist,
@@ -201,6 +253,8 @@ export const api = {
   brandProfile,
   analytics,
   trends,
+  persona,
+  connect,
 };
 
 export { ApiError };

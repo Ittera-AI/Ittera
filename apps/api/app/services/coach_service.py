@@ -61,7 +61,7 @@ class CoachService:
             word_score = 0.02
 
         # Structure: paragraphs, line breaks
-        line_count = len([l for l in content.splitlines() if l.strip()])
+        line_count = len([line for line in content.splitlines() if line.strip()])
         structure_score = 0.10 if line_count >= 3 else 0.04
 
         # Hook quality heuristic: first sentence < 80 chars

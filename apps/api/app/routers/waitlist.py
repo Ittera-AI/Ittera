@@ -1,16 +1,21 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.dependencies.auth import get_current_user
+from app.db.datetime_helpers import utc_now
+from app.dependencies.auth import get_current_admin_user, get_current_user
 from app.dependencies.db import get_db
 from app.models.user import User
 from app.models.waitlist import WaitlistEntry
 from app.schemas.waitlist import (
     WaitlistMemberStatusResponse,
+    WaitlistApprovalRequest,
+    WaitlistApprovalResponse,
     WaitlistRequest,
     WaitlistResponse,
     WaitlistStatsResponse,
+    WaitlistEntryResponse,
+    WaitlistAdminListResponse,
 )
 from app.services.email import send_waitlist_confirmation_email
 
@@ -59,14 +64,22 @@ async def get_my_waitlist_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    entry = db.query(WaitlistEntry).filter(WaitlistEntry.email == current_user.email.lower()).first()
-    position = None
-    if entry is not None:
-        position = db.query(WaitlistEntry).filter(WaitlistEntry.created_at <= entry.created_at).count()
+    email = current_user.email.strip().lower()
+    entry = db.query(WaitlistEntry).filter(WaitlistEntry.email == email).first()
+    if entry is None:
+        display_name = (current_user.full_name or current_user.name or "").strip() or None
+        entry = WaitlistEntry(email=email, name=display_name)
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+
+    position = db.query(WaitlistEntry).filter(WaitlistEntry.created_at <= entry.created_at).count()
 
     return {
-        "email": current_user.email,
-        "joined": entry is not None,
+        "email": email,
+        "joined": True,
+        "access_approved": bool(entry.access_approved),
+        "approved_at": entry.approved_at,
         "position": position,
         **_stats_payload(db),
     }
@@ -89,6 +102,7 @@ async def join_waitlist(
             "message": "You're already on the waitlist!",
             "position": position,
             "already_joined": True,
+            "access_approved": existing.access_approved,
             **_stats_payload(db),
         }
 
@@ -107,5 +121,67 @@ async def join_waitlist(
         "message": "You're on the list!",
         "position": position,
         "already_joined": False,
+        "access_approved": entry.access_approved,
         **_stats_payload(db),
     }
+
+
+@router.post("/admin/approve", response_model=WaitlistApprovalResponse)
+async def approve_waitlist_access(
+    payload: WaitlistApprovalRequest,
+    current_admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    email = payload.email.strip().lower()
+    entry = db.query(WaitlistEntry).filter(WaitlistEntry.email == email).first()
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Waitlist entry not found")
+
+    entry.access_approved = True
+    entry.approved_at = utc_now()
+    entry.approved_by = current_admin.email
+    db.commit()
+    db.refresh(entry)
+
+    return {
+        "email": entry.email,
+        "access_approved": entry.access_approved,
+        "approved_at": entry.approved_at,
+        "approved_by": entry.approved_by,
+        "message": "Workspace access approved.",
+    }
+
+
+@router.post("/admin/revoke", response_model=WaitlistApprovalResponse)
+async def revoke_waitlist_access(
+    payload: WaitlistApprovalRequest,
+    current_admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    email = payload.email.strip().lower()
+    entry = db.query(WaitlistEntry).filter(WaitlistEntry.email == email).first()
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Waitlist entry not found")
+
+    entry.access_approved = False
+    entry.approved_at = None
+    entry.approved_by = current_admin.email
+    db.commit()
+    db.refresh(entry)
+
+    return {
+        "email": entry.email,
+        "access_approved": entry.access_approved,
+        "approved_at": entry.approved_at,
+        "approved_by": entry.approved_by,
+        "message": "Workspace access revoked.",
+    }
+
+
+@router.get("/admin/entries", response_model=WaitlistAdminListResponse)
+async def get_all_waitlist_entries(
+    current_admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    entries = db.query(WaitlistEntry).order_by(WaitlistEntry.created_at.desc()).all()
+    return {"entries": entries}

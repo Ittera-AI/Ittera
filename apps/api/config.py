@@ -1,8 +1,11 @@
+from pathlib import Path
 from typing import List
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _INSECURE_SECRET = "change-me-in-production"
+_API_ROOT = Path(__file__).resolve().parent
+_REPO_ROOT = _API_ROOT.parents[1] if len(_API_ROOT.parents) > 1 else _API_ROOT
 
 
 class Settings(BaseSettings):
@@ -28,20 +31,36 @@ class Settings(BaseSettings):
                 "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
             )
         return v
+
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     ALGORITHM: str = "HS256"
+
+    # Google OAuth (login + YouTube)
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
+    GOOGLE_DRIVE_REDIRECT_URI: str = "http://localhost:8000/api/v1/social/callback/google-drive"
+
+    # LinkedIn OAuth
     LINKEDIN_CLIENT_ID: str = ""
     LINKEDIN_CLIENT_SECRET: str = ""
     LINKEDIN_REDIRECT_URI: str = ""
-    # Google Drive OAuth (separate redirect from Google auth login)
-    GOOGLE_DRIVE_REDIRECT_URI: str = "http://localhost:8000/api/v1/social/callback/google-drive"
-    # LinkedIn scraper session cookie (alternative to username/password)
     LINKEDIN_SESSION_COOKIE: str = ""
+
+    # Twitter / X OAuth 2.0 (PKCE)
+    TWITTER_CLIENT_ID: str = ""
+    TWITTER_CLIENT_SECRET: str = ""
+    TWITTER_REDIRECT_URI: str = "http://localhost:8000/api/v1/connect/twitter/callback"
+
+    # Instagram (Meta) OAuth
+    INSTAGRAM_APP_ID: str = ""
+    INSTAGRAM_APP_SECRET: str = ""
+    INSTAGRAM_REDIRECT_URI: str = "http://localhost:8000/api/v1/connect/instagram/callback"
+
     FRONTEND_URL: str = "http://localhost:3000"
     WAITLIST_TOTAL_SEATS: int = 100
+    ADMIN_EMAILS: List[str] = []
+
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
@@ -50,28 +69,26 @@ class Settings(BaseSettings):
     MAIL_FROM: str = ""
     REPLY_TO_EMAIL: str = ""
 
-    # Supabase — used by the backend to verify Supabase-issued JWTs
-    # Find this in: Supabase Dashboard → Project Settings → API → JWT Settings → JWT Secret
+    # Supabase
     SUPABASE_JWT_SECRET: str = ""
     SUPABASE_URL: str = ""
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: str = ""
 
     # AI
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-5"
-    # When true and Anthropic credentials are configured, calendar generation uses CalendarEngine (LLM).
-    # Otherwise the API returns a deterministic mock plan for demos and offline tests.
     USE_ITERRA_AI_CALENDAR: bool = False
 
     # App
     ENVIRONMENT: str = "development"
-    # Include 127.0.0.1 — browsers treat it as a different origin than localhost.
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(_REPO_ROOT / ".env", _API_ROOT / ".env", ".env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="ignore",
     )
 
 

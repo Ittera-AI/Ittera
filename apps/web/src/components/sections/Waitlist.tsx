@@ -6,7 +6,7 @@ import { ArrowRight, Zap, Star, Shield, Users, ChevronRight, TrendingUp } from "
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
-import { supabase } from "@/lib/supabase";
+import { ApiError, apiFetch } from "@/services/api";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 const DEFAULT_TOTAL_SEATS = 100;
@@ -21,10 +21,19 @@ type WaitlistStats = {
 type WaitlistMemberStatus = {
   email: string;
   joined: boolean;
+  access_approved: boolean;
+  approved_at: string | null;
   position: number | null;
   total_joined: number;
   total_seats: number;
   remaining_seats: number;
+};
+
+type WaitlistResponse = WaitlistStats & {
+  message: string;
+  position: number;
+  already_joined: boolean;
+  access_approved: boolean;
 };
 
 function useCounter(target: number, duration = 1800) {
@@ -90,7 +99,7 @@ function buildFallbackStats(): WaitlistStats {
 export default function Waitlist() {
   const shouldReduceMotion = useReducedMotion();
   const { theme } = useTheme();
-  const { user, openAuth } = useAuth();
+  const { user, hasWorkspaceAccess, isWaitlistedUser, waitlistPosition, openAuth } = useAuth();
   const isDark = theme === "dark";
 
   const [name, setName] = useState("");
@@ -105,26 +114,18 @@ export default function Waitlist() {
   const [memberStatus, setMemberStatus] = useState<WaitlistMemberStatus | null>(null);
   const { count, ref } = useCounter(stats.total_joined);
 
-  // Load total waitlist count from Supabase
+  // Load total waitlist count from the same API source admins approve from.
   useEffect(() => {
     let cancelled = false;
 
     const loadStats = async () => {
       try {
-        const { count: total } = await supabase
-          .from("waitlist")
-          .select("*", { count: "exact", head: true });
-
-        if (!cancelled && total !== null) {
-          setStats({
-            total_joined: total,
-            total_seats: DEFAULT_TOTAL_SEATS,
-            remaining_seats: Math.max(DEFAULT_TOTAL_SEATS - total, 0),
-            recent_joiners: [],
-          });
+        const nextStats = await apiFetch<WaitlistStats>("/api/v1/waitlist");
+        if (!cancelled) {
+          setStats(nextStats);
         }
       } catch {
-        // Keep local fallback values when Supabase is unavailable.
+        // Keep local fallback values when the API is unavailable.
       }
     };
 
@@ -145,27 +146,14 @@ export default function Waitlist() {
 
     const loadMemberStatus = async () => {
       try {
-        const { data: row } = await supabase
-          .from("waitlist")
-          .select("created_at")
-          .eq("email", user.email)
-          .single();
-
-        if (!row || cancelled) return;
-
-        const { count: pos } = await supabase
-          .from("waitlist")
-          .select("*", { count: "exact", head: true })
-          .lte("created_at", row.created_at);
-
+        const status = await apiFetch<WaitlistMemberStatus>("/api/v1/waitlist/me");
         if (!cancelled) {
-          setMemberStatus({
-            email: user.email,
-            joined: true,
-            position: pos ?? null,
-            total_joined: stats.total_joined,
-            total_seats: stats.total_seats,
-            remaining_seats: stats.remaining_seats,
+          setMemberStatus(status);
+          setStats({
+            total_joined: status.total_joined,
+            total_seats: status.total_seats,
+            remaining_seats: status.remaining_seats,
+            recent_joiners: [],
           });
         }
       } catch {
@@ -177,8 +165,7 @@ export default function Waitlist() {
     return () => {
       cancelled = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, isWaitlistedUser]);
 
   useEffect(() => {
     if (memberStatus?.joined && memberStatus.position) {
@@ -206,60 +193,26 @@ export default function Waitlist() {
     setLoading(true);
 
     try {
-      // Attempt insert — unique constraint on email catches duplicates
-      const { data: inserted, error: insertError } = await supabase
-        .from("waitlist")
-        .insert({ email: normalizedEmail, name: name.trim() || null, profession: profession || null })
-        .select("created_at")
-        .single();
+      const response = await apiFetch<WaitlistResponse>("/api/v1/waitlist", {
+        method: "POST",
+        body: JSON.stringify({
+          email: normalizedEmail,
+          name: name.trim() || null,
+          profession: profession || null,
+        }),
+      });
 
-      let pos: number | null = null;
-      let isAlreadyJoined = false;
-
-      if (insertError) {
-        // PostgreSQL unique violation code
-        if (insertError.code === "23505") {
-          isAlreadyJoined = true;
-          const { data: existing } = await supabase
-            .from("waitlist")
-            .select("created_at")
-            .eq("email", normalizedEmail)
-            .single();
-
-          if (existing) {
-            const { count } = await supabase
-              .from("waitlist")
-              .select("*", { count: "exact", head: true })
-              .lte("created_at", existing.created_at);
-            pos = count ?? null;
-          }
-        } else {
-          setError(insertError.message || "Something went wrong. Try again.");
-          return;
-        }
-      } else if (inserted) {
-        const { count } = await supabase
-          .from("waitlist")
-          .select("*", { count: "exact", head: true })
-          .lte("created_at", inserted.created_at);
-        pos = count ?? null;
-      }
-
-      const { count: newTotal } = await supabase
-        .from("waitlist")
-        .select("*", { count: "exact", head: true });
-
-      setPosition(pos ?? 0);
-      setAlreadyJoined(isAlreadyJoined);
+      setPosition(response.position);
+      setAlreadyJoined(response.already_joined);
       setSubmitted(true);
       setStats({
-        total_joined: newTotal ?? stats.total_joined,
-        total_seats: DEFAULT_TOTAL_SEATS,
-        remaining_seats: Math.max(DEFAULT_TOTAL_SEATS - (newTotal ?? stats.total_joined), 0),
-        recent_joiners: [],
+        total_joined: response.total_joined,
+        total_seats: response.total_seats,
+        remaining_seats: response.remaining_seats,
+        recent_joiners: response.recent_joiners,
       });
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Network error. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -267,9 +220,10 @@ export default function Waitlist() {
 
   const progressPct =
     stats.total_seats > 0 ? Math.min((stats.total_joined / stats.total_seats) * 100, 100) : 0;
-  const signedInWaitlisted = Boolean(user && memberStatus?.joined);
-  const showSuccessState = submitted || signedInWaitlisted;
-  const effectivePosition = memberStatus?.position ?? position;
+  const signedInApproved = Boolean(user && hasWorkspaceAccess);
+  const signedInWaitlisted = Boolean(user && !hasWorkspaceAccess);
+  const showSuccessState = submitted || signedInWaitlisted || signedInApproved;
+  const effectivePosition = waitlistPosition ?? memberStatus?.position ?? position;
 
   const inputBg = isDark ? "#1C1916" : "white";
   const inputBorder = isDark ? "#2E2922" : "#EAEAEC";
@@ -423,26 +377,41 @@ export default function Waitlist() {
                 </motion.div>
                 <div>
                   <p className="mb-1 text-[20px] font-bold text-neutral-900">
-                    {signedInWaitlisted && !submitted
-                      ? `You're already #${effectivePosition} on the list.`
-                      : alreadyJoined
+                    {signedInApproved
+                      ? "You're approved."
+                      : signedInWaitlisted
+                        ? "You're waitlisted."
+                        : alreadyJoined
                         ? `You're already #${effectivePosition} on the list.`
                         : `You're #${effectivePosition} on the list.`}
                   </p>
                   <p className="mx-auto max-w-sm text-[14px] leading-6 text-neutral-500">
-                    {signedInWaitlisted && !submitted
-                      ? "Your account is already linked to a waitlist spot. We'll keep you updated here and by email."
+                    {signedInApproved
+                      ? "Your account has dashboard access. You can continue straight into Ittera."
+                      : signedInWaitlisted
+                        ? effectivePosition
+                        ? `You're #${effectivePosition} on the list. We'll email you when your spot is approved.`
+                        : "You're on the waitlist. We'll email you when your spot is approved."
                       : alreadyJoined
-                      ? "That email is already locked in. Sign in or create your Ittera account with the same email to keep an eye on your beta status."
-                      : "Check your inbox for a confirmation email. If you don't see it in a minute, check your spam folder — it sometimes lands there."}
+                        ? "That email is already locked in. Sign in or create your Ittera account with the same email to keep an eye on your beta status."
+                        : "Check your inbox for a confirmation email. If you don't see it in a minute, check your spam folder — it sometimes lands there."}
                   </p>
                 </div>
-                {signedInWaitlisted ? (
+                {signedInApproved ? (
+                  <a
+                    href="/dashboard"
+                    className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[12.5px] font-medium transition-all duration-200"
+                    style={{ background: ctaBg, color: ctaColor }}
+                  >
+                    Go to dashboard
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </a>
+                ) : signedInWaitlisted ? (
                   <div
-                    className="rounded-2xl px-4 py-3 text-[12px]"
+                    className="rounded-2xl px-4 py-2.5 text-[12px] font-semibold uppercase tracking-wide"
                     style={{ background: shareBg, border: `1px solid ${shareBorder}`, color: shareColor }}
                   >
-                    Signed in as {memberStatus?.email}. Current beta status: #{effectivePosition}.
+                    Waitlisted{effectivePosition ? ` · #${effectivePosition}` : ""}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 sm:flex-row">
@@ -465,19 +434,25 @@ export default function Waitlist() {
                     </button>
                   </div>
                 )}
-                <a
-                  href={`https://twitter.com/intent/tweet?text=Just%20joined%20the%20%40itteraai%20waitlist%20-%20an%20AI%20content%20strategy%20engine%20for%20creators.%20Spot%20%23${effectivePosition}.`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 rounded-xl px-4 py-2 text-[12.5px] font-medium transition-all duration-200"
-                  style={{ background: shareBg, border: `1px solid ${shareBorder}`, color: shareColor }}
-                >
-                  Share on X <ChevronRight className="h-3.5 w-3.5" />
-                </a>
-                <p className="text-[11px] text-neutral-400">
-                  Confirmation email sent. Don&apos;t see it?{" "}
-                  <span className="font-medium text-neutral-500">Check your spam folder.</span>
-                </p>
+                {!signedInApproved ? (
+                  <>
+                    <a
+                      href={`https://twitter.com/intent/tweet?text=Just%20joined%20the%20%40itteraai%20waitlist%20-%20an%20AI%20content%20strategy%20engine%20for%20creators.%20Spot%20%23${effectivePosition}.`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 rounded-xl px-4 py-2 text-[12.5px] font-medium transition-all duration-200"
+                      style={{ background: shareBg, border: `1px solid ${shareBorder}`, color: shareColor }}
+                    >
+                      Share on X <ChevronRight className="h-3.5 w-3.5" />
+                    </a>
+                    {!user ? (
+                      <p className="text-[11px] text-neutral-400">
+                        Confirmation email sent. Don&apos;t see it?{" "}
+                        <span className="font-medium text-neutral-500">Check your spam folder.</span>
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
               </motion.div>
             ) : (
               <motion.form key="form" onSubmit={handleSubmit} className="mx-auto flex max-w-md flex-col gap-2.5">

@@ -26,7 +26,7 @@ class SuggestResponse(BaseModel):
 
 class GenerateRequest(BaseModel):
     platform: Platform = "linkedin"
-    prompt: str
+    prompt: str = Field(min_length=1, max_length=5000)
     trend_used: str | None = None
     suggestion: ContentSuggestion | None = None
 
@@ -51,8 +51,8 @@ class RepurposeResponse(BaseModel):
 
 
 class DraftUpdateRequest(BaseModel):
-    content: str | None = None
-    status: str | None = None
+    content: str | None = Field(default=None, max_length=10000)
+    status: Literal["draft", "scheduled", "published", "failed"] | None = None
     scheduled_for: datetime | None = None
 
 
