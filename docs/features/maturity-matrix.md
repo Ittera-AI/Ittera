@@ -2,6 +2,8 @@
 
 Snapshot of what is **stable enough for demo**, **in progress**, or **scaffolding only**. Refresh when shipping major slices.
 
+**VC demo scope and roadmap:** [VC Demo MVP Plan](../vc-demo-mvp-plan.md)
+
 | Area | Status | Notes |
 |------|--------|--------|
 | Auth (Supabase web + API JWT) | Demo-ready | Client session drives dashboard; API uses bearer tokens. |

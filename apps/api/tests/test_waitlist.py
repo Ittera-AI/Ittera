@@ -66,6 +66,61 @@ def test_waitlist_me_returns_signed_in_member_status(client):
     body = response.json()
     assert body["email"] == "member@example.com"
     assert body["joined"] is True
+    assert body["access_approved"] is False
+    assert body["approved_at"] is None
     assert body["position"] == body["total_joined"]
     assert body["total_seats"] == 100
     assert body["remaining_seats"] == 100 - body["total_joined"]
+
+
+def test_waitlist_admin_approve_and_revoke(client, monkeypatch):
+    monkeypatch.setattr("app.routers.waitlist.settings.ADMIN_EMAILS", "admin@example.com")
+
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "admin@example.com", "password": "secret", "name": "Admin User"},
+    )
+    admin_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@example.com", "password": "secret"},
+    )
+    admin_headers = {"Authorization": f"Bearer {admin_login.json()['access_token']}"}
+
+    client.post("/api/v1/waitlist", json={"email": "member@example.com"})
+
+    entries = client.get("/api/v1/waitlist/admin/entries", headers=admin_headers)
+    assert entries.status_code == 200
+    member_entries = [e for e in entries.json()["entries"] if e["email"] == "member@example.com"]
+    assert len(member_entries) == 1
+
+    approve = client.post(
+        "/api/v1/waitlist/admin/approve",
+        json={"email": "member@example.com"},
+        headers=admin_headers,
+    )
+    assert approve.status_code == 200
+
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "member@example.com", "password": "secret", "name": "Member User"},
+    )
+    member_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "member@example.com", "password": "secret"},
+    )
+    member_headers = {"Authorization": f"Bearer {member_login.json()['access_token']}"}
+
+    me = client.get("/api/v1/waitlist/me", headers=member_headers)
+    assert me.status_code == 200
+    assert me.json()["access_approved"] is True
+    assert me.json()["approved_at"] is not None
+
+    revoke = client.post(
+        "/api/v1/waitlist/admin/revoke",
+        json={"email": "member@example.com"},
+        headers=admin_headers,
+    )
+    assert revoke.status_code == 200
+
+    me_after = client.get("/api/v1/waitlist/me", headers=member_headers)
+    assert me_after.json()["access_approved"] is False

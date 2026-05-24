@@ -7,6 +7,8 @@ from app.models.content_draft import ContentDraft
 from app.models.trend_snapshot import TrendSnapshot
 from app.models.post_analysis import PostAnalysis
 from app.models.waitlist import WaitlistEntry
+from app.models.user_context import UserContext
+from app.models.persona import PersonaProfile, PersonaSource, PersonaDocument, PersonaInsight
 
 __all__ = [
     "User",
@@ -18,4 +20,9 @@ __all__ = [
     "TrendSnapshot",
     "PostAnalysis",
     "WaitlistEntry",
+    "UserContext",
+    "PersonaProfile",
+    "PersonaSource",
+    "PersonaDocument",
+    "PersonaInsight",
 ]

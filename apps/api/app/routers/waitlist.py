@@ -1,12 +1,16 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.db.datetime_helpers import utc_now
 from app.dependencies.auth import get_current_user
 from app.dependencies.db import get_db
 from app.models.user import User
 from app.models.waitlist import WaitlistEntry
 from app.schemas.waitlist import (
+    WaitlistAdminActionRequest,
+    WaitlistAdminEntriesResponse,
+    WaitlistAdminEntryResponse,
     WaitlistMemberStatusResponse,
     WaitlistRequest,
     WaitlistResponse,
@@ -15,6 +19,16 @@ from app.schemas.waitlist import (
 from app.services.email import send_waitlist_confirmation_email
 
 router = APIRouter()
+
+
+def _admin_emails() -> set[str]:
+    return {email.strip().lower() for email in settings.ADMIN_EMAILS.split(",") if email.strip()}
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.email.lower() not in _admin_emails():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
 
 
 def _initials_from_email(email: str) -> str:
@@ -67,6 +81,8 @@ async def get_my_waitlist_status(
     return {
         "email": current_user.email,
         "joined": entry is not None,
+        "access_approved": bool(entry.access_approved) if entry is not None else False,
+        "approved_at": entry.approved_at if entry is not None else None,
         "position": position,
         **_stats_payload(db),
     }
@@ -109,3 +125,53 @@ async def join_waitlist(
         "already_joined": False,
         **_stats_payload(db),
     }
+
+
+@router.get("/admin/entries", response_model=WaitlistAdminEntriesResponse)
+async def list_waitlist_entries(
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    entries = db.query(WaitlistEntry).order_by(WaitlistEntry.created_at.desc()).all()
+    return {
+        "entries": [
+            WaitlistAdminEntryResponse.model_validate(entry)
+            for entry in entries
+        ]
+    }
+
+
+@router.post("/admin/approve")
+async def approve_waitlist_user(
+    payload: WaitlistAdminActionRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    normalized_email = payload.email.strip().lower()
+    entry = db.query(WaitlistEntry).filter(WaitlistEntry.email == normalized_email).first()
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Waitlist entry not found")
+
+    entry.access_approved = True
+    entry.approved_at = utc_now()
+    entry.approved_by = admin.email.lower()
+    db.commit()
+    return {"message": "Access approved", "email": normalized_email}
+
+
+@router.post("/admin/revoke")
+async def revoke_waitlist_user(
+    payload: WaitlistAdminActionRequest,
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    normalized_email = payload.email.strip().lower()
+    entry = db.query(WaitlistEntry).filter(WaitlistEntry.email == normalized_email).first()
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Waitlist entry not found")
+
+    entry.access_approved = False
+    entry.approved_at = None
+    entry.approved_by = None
+    db.commit()
+    return {"message": "Access revoked", "email": normalized_email}

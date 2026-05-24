@@ -245,7 +245,23 @@ export default function PersonaOnboardingPage() {
       }
       await api.persona.scrape();
       const result = await api.persona.analyze();
-      await api.auth.onboarding({ primary_platform: "linkedin" });
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const fullName =
+        (session?.user?.user_metadata?.full_name as string | undefined) ||
+        (session?.user?.user_metadata?.name as string | undefined) ||
+        session?.user?.email?.split("@")[0] ||
+        "User";
+      const primaryPlatform: PlatformId =
+        "twitter" in connected ? "twitter" :
+        "linkedin" in connected ? "linkedin" :
+        "instagram" in connected ? "instagram" : "linkedin";
+
+      await api.auth.onboarding({
+        full_name: fullName,
+        niche: result.niche || result.target_audience || "Content strategy",
+        primary_platform: primaryPlatform,
+      });
       setPersona(result);
       setStep("results");
     } catch (err: any) {

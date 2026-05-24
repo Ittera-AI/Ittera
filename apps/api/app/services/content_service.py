@@ -6,43 +6,64 @@ from sqlalchemy.orm import Session
 from app.models.content_draft import ContentDraft
 from app.models.user import User
 from app.schemas.content import GenerateRequest, RepurposeRequest, ScheduleRequest, SuggestRequest
-from app.services import brand_profile_service, trend_service
+from app.services import brand_profile_service, context_service, trend_service
 
 LIMITS = {"linkedin": 3000, "instagram": 2200, "twitter": 280}
 
 
 def suggest(db: Session, user: User, payload: SuggestRequest) -> dict:
+    ctx = context_service.assemble(db, user, platform=payload.platform or user.primary_platform)
     trends = trend_service.get_trends_for_user(db, user)["trends"]
-    base_topic = payload.topic or (trends[0]["topic"] if trends else user.niche or "content strategy")
+
+    # Prefer the report's top topics, fall back to trend feed, then niche
+    if ctx.report.top_performing_topics:
+        base_topic = payload.topic or ctx.report.top_performing_topics[0]
+    else:
+        base_topic = payload.topic or (trends[0]["topic"] if trends else user.niche or "content strategy")
+
+    # Use persona pillars as format hints when available
+    pillar_hint = f" (aligns with your pillar: {ctx.persona.content_pillars[0]})" if ctx.persona.content_pillars else ""
+
     suggestions = [
         {
             "hook": f"Most teams misunderstand {base_topic}.",
             "angle": f"Explain the practical shift behind {base_topic}.",
             "format": "hot-take",
             "trend_tie": base_topic,
-            "why_it_works": "It starts with tension and resolves into a useful operating principle.",
+            "why_it_works": f"Starts with tension and resolves into a useful principle{pillar_hint}.",
         },
         {
             "hook": f"A simple {base_topic} checklist:",
             "angle": "Turn the topic into a practical framework readers can save.",
             "format": "listicle",
             "trend_tie": base_topic,
-            "why_it_works": "It is concrete, skimmable, and aligned with your analytical voice.",
+            "why_it_works": f"Concrete, skimmable, and aligned with your analytical voice{pillar_hint}.",
         },
         {
             "hook": f"The quiet advantage of {base_topic} is not speed.",
             "angle": "Connect the trend to trust, review loops, and better decisions.",
             "format": "story",
             "trend_tie": base_topic,
-            "why_it_works": "It gives your audience a more thoughtful take than the obvious trend post.",
+            "why_it_works": f"Gives your audience a more thoughtful take than the obvious trend post{pillar_hint}.",
         },
     ]
-    return {"suggestions": suggestions}
+    return {
+        "suggestions": suggestions,
+        "context_warnings": ctx.missing_layers,
+    }
 
 
 def generate(db: Session, user: User, payload: GenerateRequest) -> dict:
     _require_brand_profile(db, user)
+
+    # Assemble the 3-layer context for this generation call
+    ctx = context_service.assemble(db, user, platform=payload.platform)
+
     seed = payload.suggestion.hook if payload.suggestion else payload.prompt
+
+    # The system_prompt from the context assembler will be injected into the
+    # real LLM call. For now the content is still a template, but the context
+    # is fully assembled and logged so the wiring is ready for the LLM swap.
     content = (
         f"{seed}\n\n"
         f"Here is the practical version: {payload.prompt.strip()}\n\n"
@@ -68,6 +89,14 @@ def generate(db: Session, user: User, payload: GenerateRequest) -> dict:
         "content": draft.content,
         "word_count": len(draft.content.split()),
         "within_platform_limit": len(draft.content) <= LIMITS[payload.platform],
+        "context_warnings": ctx.missing_layers,
+        # system_prompt exposed for debugging (strip in production if sensitive)
+        "_context_summary": {
+            "permanent_complete": ctx.permanent.is_complete(),
+            "persona_confidence": ctx.persona.confidence_score,
+            "report_posts": ctx.report.posts_analysed,
+            "context_version": ctx.permanent.context_version,
+        },
     }
 
 
@@ -158,8 +187,28 @@ def calendar_events(db: Session, user: User) -> list[dict]:
     return events
 
 
-def suggested_times() -> list[datetime]:
+def suggested_times(db: Session | None = None, user: User | None = None, platform: str = "linkedin") -> list[datetime]:
+    """
+    Returns suggested posting times. When context is available, uses the user's
+    platform-specific best_post_times fact (if approved). Falls back to generic slots.
+    """
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+
+    # Try to use the user's platform-specific approved best time
+    if db is not None and user is not None:
+        ctx = context_service.assemble(db, user, platform=platform)
+        facts = ctx.permanent.platform_facts.get(platform)
+        if facts and facts.best_post_times:
+            try:
+                hour = int(facts.best_post_times[0].split(":")[0])
+                return [
+                    (now + timedelta(days=1)).replace(hour=hour),
+                    (now + timedelta(days=2)).replace(hour=hour),
+                    (now + timedelta(days=3)).replace(hour=hour),
+                ]
+            except (ValueError, IndexError):
+                pass
+
     return [now + timedelta(days=1, hours=9), now + timedelta(days=2, hours=12), now + timedelta(days=3, hours=9)]
 
 
