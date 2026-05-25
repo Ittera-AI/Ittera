@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -17,6 +18,17 @@ class LinkedInConnectResponse(BaseModel):
 
 
 class LinkedInSyncResponse(BaseModel):
+    """Legacy mock sync response — used by POST /sync."""
     synced_posts: int
     last_synced_at: datetime
     message: str
+
+
+class LinkedInRealSyncResponse(BaseModel):
+    """Response from POST /sync/real — includes path info and analysis readiness."""
+    synced_posts: int
+    total_posts: int
+    last_synced_at: datetime
+    message: str
+    sync_path: str  # "oauth_api" | "cookie_auth" | "mock"
+    ready_for_analysis: bool

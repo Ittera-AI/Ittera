@@ -13,6 +13,7 @@ celery_app = Celery(
         "workers.celery.tasks.performance_sync",
         "workers.celery.tasks.weekly_reports",
         "workers.celery.tasks.scraper",
+        "workers.celery.tasks.brand_profile",
     ],
 )
 

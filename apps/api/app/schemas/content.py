@@ -22,6 +22,7 @@ class SuggestRequest(BaseModel):
 
 class SuggestResponse(BaseModel):
     suggestions: list[ContentSuggestion]
+    context_warnings: list[str] = Field(default_factory=list)
 
 
 class GenerateRequest(BaseModel):
@@ -37,6 +38,9 @@ class GenerateResponse(BaseModel):
     drive_file_id: str | None = None  # set when content is written to Google Drive
     word_count: int
     within_platform_limit: bool
+    context_warnings: list[str] = Field(default_factory=list)
+    context_summary: dict = Field(default_factory=dict)
+    generation_mode: str = "live"
 
 
 class RepurposeRequest(BaseModel):

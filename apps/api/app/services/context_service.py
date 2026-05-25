@@ -111,8 +111,8 @@ def _get_persona_context(db: Session, user: User) -> PersonaContext:
         hook_patterns=p.get("writing_patterns", []),
         content_pillars=p.get("content_pillars", []),
         hashtag_style=p.get("hashtag_strategy"),
-        emoji_usage=None,
-        avg_post_length=None,
+        emoji_usage=p.get("emoji_usage"),
+        avg_post_length=p.get("avg_post_length"),
         analysis_based_on_posts=profile.analysis_based_on_posts,
         confidence_score=profile.ai_confidence_score,
     )

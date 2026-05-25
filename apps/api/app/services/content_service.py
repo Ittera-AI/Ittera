@@ -59,50 +59,67 @@ def generate(db: Session, user: User, payload: GenerateRequest) -> dict:
     # Assemble the 3-layer context for this generation call
     ctx = context_service.assemble(db, user, platform=payload.platform)
 
-    seed = payload.suggestion.hook if payload.suggestion else payload.prompt
+    from iterra_ai.content.engine import ContentGenerationEngine
+    from iterra_ai.content.schemas import ContentGenerationInput
+    from iterra_ai.content.platform_rules import get_rules
 
-    # The system_prompt from the context assembler will be injected into the
-    # real LLM call. For now the content is still a template, but the context
-    # is fully assembled and logged so the wiring is ready for the LLM swap.
-    content = (
-        f"{seed}\n\n"
-        f"Here is the practical version: {payload.prompt.strip()}\n\n"
-        "The best content systems do three things well:\n"
-        "1. Notice the signal before it becomes noisy.\n"
-        "2. Shape the idea through a clear point of view.\n"
-        "3. Review performance without losing the voice that made it work.\n\n"
-        "That is how a content loop compounds."
+    engine_input = ContentGenerationInput(
+        platform=payload.platform,
+        prompt=payload.prompt,
+        hook=payload.suggestion.hook if payload.suggestion else None,
+        system_prompt=ctx.system_prompt,
+        platform_rules=get_rules(payload.platform),
     )
+    
+    engine = ContentGenerationEngine()
+    output = engine.generate(engine_input)
+
     draft = ContentDraft(
         user_id=user.id,
         platform=payload.platform,
-        content=content,
+        content=output.content,
         prompt_used=payload.prompt,
         trend_used=payload.trend_used,
-        generation_model="mock-local",
+        generation_model=output.model,
     )
     db.add(draft)
     db.commit()
     db.refresh(draft)
+    
     return {
         "draft_id": draft.id,
         "content": draft.content,
-        "word_count": len(draft.content.split()),
-        "within_platform_limit": len(draft.content) <= LIMITS[payload.platform],
+        "word_count": output.word_count,
+        "within_platform_limit": output.char_count <= get_rules(payload.platform)["max_chars"],
         "context_warnings": ctx.missing_layers,
-        # system_prompt exposed for debugging (strip in production if sensitive)
-        "_context_summary": {
+        "context_summary": {
             "permanent_complete": ctx.permanent.is_complete(),
             "persona_confidence": ctx.persona.confidence_score,
             "report_posts": ctx.report.posts_analysed,
             "context_version": ctx.permanent.context_version,
         },
+        "generation_mode": "mock" if output.is_mock else "live",
     }
 
 
 def repurpose(db: Session, user: User, payload: RepurposeRequest) -> dict:
     draft = _draft(db, user, payload.draft_id)
-    content = _repurposed_content(draft.content, payload.target_platform)
+    
+    from iterra_ai.repurpose.engine import RepurposeEngine
+    from iterra_ai.repurpose.schemas import RepurposeInput
+    
+    engine_input = RepurposeInput(
+        source_platform=draft.platform,
+        target_platforms=[payload.target_platform],
+        original_content=draft.content
+    )
+    
+    engine = RepurposeEngine()
+    output = engine.generate(engine_input)
+    
+    # We should have one repurposed item for the requested platform
+    content = output.repurposed[0].content if output.repurposed else _repurposed_content(draft.content, payload.target_platform)
+
     versions = dict(draft.repurposed_versions or {})
     versions[payload.target_platform] = content
     draft.repurposed_versions = versions
