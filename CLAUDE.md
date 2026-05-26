@@ -34,11 +34,11 @@ iterra/
 │   │   │   ├── db/            Session, migrations, datetime helpers
 │   │   │   ├── dependencies/  Auth + DB FastAPI deps
 │   │   │   ├── middleware/    Auth, rate limit
-│   │   │   ├── models/        SQLAlchemy models (9)
+│   │   │   ├── models/        SQLAlchemy models (10)
 │   │   │   ├── modules/       Feature sub-packages (brand_profile/)
-│   │   │   ├── routers/       Route handlers (14)
+│   │   │   ├── routers/       Route handlers (15)
 │   │   │   ├── schemas/       Pydantic schemas
-│   │   │   └── services/      Business logic (14 + email + mock_data)
+│   │   │   └── services/      Business logic (15 + email + mock_data)
 │   │   ├── config.py  Settings via pydantic-settings (at api/ root)
 │   │   └── main.py    FastAPI entry point
 │   └── web/           Next.js 14, TypeScript, Tailwind, Zustand
@@ -52,6 +52,7 @@ iterra/
 ├── workers/celery/    Async background jobs (Celery + Redis)
 │   ├── tasks/
 │   │   ├── scraper.py          LinkedIn post scraping
+│   │   ├── brand_profile.py    Brand profile generation
 │   │   ├── radar_scan.py       Scheduled radar trend scans
 │   │   ├── performance_sync.py Performance data sync
 │   │   └── weekly_reports.py   Weekly report generation
