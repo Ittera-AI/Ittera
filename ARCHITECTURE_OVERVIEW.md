@@ -956,7 +956,7 @@ Ittera supports two authentication methods:
 ┌─────────────────────────────────────────┐
 │  Backend: Dual JWT Middleware           │
 │  - Check Authorization header           │
-│  - Verify Supabase JWT OR custom JWT   │
+│  - Verify Supabase JWT OR custom JWT    │
 │  - Extract user_id from token           │
 └──────┬──────────────────────────────────┘
        │ 4. Fetch user from database
@@ -1259,12 +1259,12 @@ Return profile with confidence score
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Enqueue Celery task: scrape_linkedin_posts.delay(user_id) │
+│  Enqueue Celery task: scrape_linkedin_posts.delay(user_id)  │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Celery Worker (workers/celery/tasks/scraper.py)           │
+│  Celery Worker (workers/celery/tasks/scraper.py)            │
 │  1. Decrypt credentials                                     │
 │  2. Login to LinkedIn via linkedin-api                      │
 │  3. Scrape user's posts                                     │
@@ -1277,8 +1277,8 @@ Return profile with confidence score
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  User polls: GET /api/v1/social/sync/status/{task_id}      │
-│  Returns: { status: "SUCCESS", result: {...} }             │
+│  User polls: GET /api/v1/social/sync/status/{task_id}       │
+│  Returns: { status: "SUCCESS", result: {...} }              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -1534,8 +1534,8 @@ npm run test
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Load Balancer / CDN                     │
-│                      (Cloudflare / AWS)                      │
+│                      Load Balancer / CDN                    │
+│                      (Cloudflare / AWS)                     │
 └──────────────────────┬──────────────────────────────────────┘
                        │
         ┌──────────────┴──────────────┐
@@ -1552,7 +1552,7 @@ npm run test
                     ▼                 ▼                 ▼
            ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
            │  PostgreSQL  │  │    Redis     │  │    Celery    │
-           │  (RDS)       │  │  (ElastiCache│  │   Workers    │
+           │  (RDS)       │  │ (ElastiCache)│  │   Workers    │
            │              │  │              │  │   (ECS)      │
            └──────────────┘  └──────────────┘  └──────────────┘
 ```
