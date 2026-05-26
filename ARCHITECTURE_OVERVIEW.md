@@ -101,11 +101,11 @@ Ittera/
 │   │   │   ├── db/            # Database session, migrations, datetime helpers
 │   │   │   ├── dependencies/  # FastAPI dependencies (auth.py, db.py)
 │   │   │   ├── middleware/    # Auth middleware, rate limiting
-│   │   │   ├── models/        # SQLAlchemy models (9 models)
+│   │   │   ├── models/        # SQLAlchemy models (10 models)
 │   │   │   ├── modules/       # Feature modules (brand_profile/)
-│   │   │   ├── routers/       # API route handlers (14 routers)
+│   │   │   ├── routers/       # API route handlers (15 routers)
 │   │   │   ├── schemas/       # Pydantic request/response schemas
-│   │   │   └── services/      # Business logic layer (14 services + email + mock_data)
+│   │   │   └── services/      # Business logic layer (15 services + email + mock_data)
 │   │   ├── config.py         # Settings via pydantic-settings (at api/ root)
 │   │   ├── main.py           # FastAPI app entry point
 │   │   ├── requirements.txt  # Python dependencies
@@ -115,7 +115,11 @@ Ittera/
 │   └── web/                   # Next.js Frontend
 │       ├── src/
 │       │   ├── app/          # Next.js 14 App Router
-│       │   │   ├── (auth)/   # Auth pages (login)
+│       │   │   ├── (auth)/   # Auth pages (login, onboarding)
+│       │   │   │   ├── login/
+│       │   │   │   └── onboarding/
+│       │   │   │       ├── context/
+│       │   │   │       └── persona/
 │       │   │   ├── (product)/ # Protected product pages
 │       │   │   │   ├── analytics/
 │       │   │   │   ├── calendar/
@@ -147,6 +151,7 @@ Ittera/
 │   │   │   ├── brand_profile/ # Brand voice analysis
 │   │   │   ├── calendar/      # Content calendar generation
 │   │   │   ├── coach/         # Post analysis & scoring
+│   │   │   ├── content/       # Content platform rules and generation
 │   │   │   ├── core/          # Base engine, client, cost tracking, exceptions
 │   │   │   ├── evals/         # LLM evaluation framework
 │   │   │   ├── pipelines/     # Multi-step AI workflows
@@ -162,6 +167,7 @@ Ittera/
 │   └── celery/               # Background job workers
 │       ├── tasks/
 │       │   ├── scraper.py          # LinkedIn post scraping
+│       │   ├── brand_profile.py    # Brand profile generation
 │       │   ├── radar_scan.py       # Scheduled radar trend scans
 │       │   ├── performance_sync.py # Performance data sync
 │       │   └── weekly_reports.py   # Weekly report generation
@@ -349,6 +355,13 @@ Ittera/
 | POST | `/` | Join waitlist | No |
 | GET | `/me` | Get my waitlist status | Yes |
 
+### Context (`/api/v1/context`)
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/` | Get assembled context (Permanent + Persona + Report) | Yes |
+| GET | `/prompt` | Get raw system prompt string (debugging) | Yes |
+| PATCH | `/` | Update permanent context identity fields | Yes |
+
 ### Brand Profile (`/api/v1/brand-profile`)
 | Method | Endpoint | Description | Auth Required |
 |--------|----------|-------------|---------------|
@@ -449,6 +462,22 @@ storage_preference    VARCHAR (default: 'database')
 onboarding_complete   BOOLEAN (default: false)
 created_at            TIMESTAMP
 updated_at            TIMESTAMP
+```
+
+#### `user_contexts`
+```sql
+id                VARCHAR (UUID, PK)
+user_id           VARCHAR (FK -> users.id, INDEXED)
+brand_name        VARCHAR (nullable)
+bio               TEXT (nullable)
+target_audience   TEXT (nullable)
+content_mission   TEXT (nullable)
+platform_facts    JSON (default: dict)
+version           INTEGER (default: 1)
+change_source     VARCHAR (default: 'onboarding')
+change_summary    TEXT (nullable)
+is_active         BOOLEAN (default: true)
+created_at        TIMESTAMP
 ```
 
 #### `brand_profiles`
@@ -576,6 +605,9 @@ joined_at   TIMESTAMP
 ```
 users (1) ──────────────────────────────────────────────────────────┐
   │                                                                  │
+  │ (1:N)                                                            │
+  ├──▶ user_contexts                                                 │
+  │                                                                  │
   │ (1:1)                                                            │
   ├──▶ brand_profiles                                                │
   │                                                                  │
@@ -628,6 +660,11 @@ iterra_ai/
 ├── brand_profile/
 │   ├── engine.py           # BrandProfileEngine
 │   └── schemas.py          # BrandProfileInput, BrandProfileOutput
+│
+├── content/
+│   ├── engine.py           # Content generation engine
+│   ├── platform_rules.py   # Platform-specific prompt rules
+│   └── schemas.py          # Content generation schemas
 │
 ├── pipelines/
 │   └── base.py             # Multi-step AI workflows
