@@ -351,6 +351,20 @@ async def linkedin_callback(
         scopes=LINKEDIN_CONNECT_SCOPES.split(),
         metadata={"name": profile.get("name", ""), "picture": profile.get("picture", "")},
     )
+
+    # ── Auto-trigger post sync immediately after OAuth completes ─────────────
+    # This fires in the background (Celery) — the user sees "Connected" right away.
+    try:
+        from workers.celery.tasks.scraper import scrape_linkedin_posts
+        scrape_linkedin_posts.delay(user_id)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "linkedin_callback: could not enqueue scrape task for user_id=%s — "
+            "Celery may not be running. User can trigger sync manually.",
+            user_id,
+        )
+
     return _popup_response("linkedin", "connected", username=username)
 
 

@@ -28,7 +28,7 @@ import { ROUTES } from "@/lib/routes";
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { isAdmin, sessionLoading } = useAuth() as any;
+  const { isAdmin, sessionLoading } = useAuth();
   const [entries, setEntries] = useState<AdminWaitlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");

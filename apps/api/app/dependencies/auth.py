@@ -94,6 +94,37 @@ def _get_or_create_user_from_supabase(db: Session, payload: dict) -> User:
     return user
 
 
+async def _fetch_supabase_user(token: str) -> dict | None:
+    """
+    Fallback: call the Supabase REST API to validate an opaque or mismatched token.
+    Returns a dict with at least {'sub': <uuid>} on success, or None on failure.
+    Requires SUPABASE_URL and the token to be a valid Supabase access token.
+    """
+    import httpx
+
+    url = settings.SUPABASE_URL
+    if not url or not token:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(
+                f"{url}/auth/v1/user",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "apikey": settings.SUPABASE_JWT_SECRET,  # anon key not needed here; JWT validates
+                },
+            )
+            if resp.is_error:
+                return None
+            data = resp.json()
+            # Supabase returns { id, email, ... } — normalise to { sub, email }
+            if "id" in data:
+                data["sub"] = data["id"]
+            return data
+    except Exception:
+        return None
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     cookie_token: str | None = Cookie(default=None, alias="ittera_token"),

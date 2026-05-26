@@ -10,11 +10,14 @@ from app.routers import (
     calendar,
     coach,
     content,
+    context,
     linkedin,
     onboarding,
+    persona,
     radar,
     repurpose,
     social,
+    social_oauth,
     storage,
     trends,
 )
@@ -37,6 +40,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(onboarding.router, prefix="/api/v1/onboarding", tags=["onboarding"])
+app.include_router(context.router, prefix="/api/v1/context", tags=["context"])
 app.include_router(linkedin.router, prefix="/api/v1/linkedin", tags=["linkedin"])
 app.include_router(brand_profile.router, prefix="/api/v1/brand-profile", tags=["brand-profile"])
 app.include_router(trends.router, prefix="/api/v1/trends", tags=["trends"])
@@ -48,6 +52,8 @@ app.include_router(repurpose.router, prefix="/api/v1/repurpose", tags=["repurpos
 app.include_router(coach.router, prefix="/api/v1/coach", tags=["coach"])
 app.include_router(radar.router, prefix="/api/v1/radar", tags=["radar"])
 app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
+app.include_router(social_oauth.router, prefix="/api/v1/connect", tags=["connect"])
+app.include_router(persona.router, prefix="/api/v1/persona", tags=["persona"])
 app.include_router(storage.router, prefix="/api/v1/storage", tags=["storage"])
 
 

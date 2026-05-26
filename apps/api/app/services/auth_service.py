@@ -88,9 +88,64 @@ def complete_onboarding(db: Session, user: User, payload: OnboardingRequest) -> 
     user.primary_platform = payload.primary_platform
     user.storage_preference = payload.storage_preference
     user.onboarding_complete = True
+
+    # Permanent context identity fields
+    user.brand_name = payload.brand_name.strip() if payload.brand_name else None
+    user.bio = payload.bio.strip() if payload.bio else None
+    user.target_audience = payload.target_audience.strip() if payload.target_audience else None
+    user.content_mission = payload.content_mission.strip() if payload.content_mission else None
+
     db.commit()
     db.refresh(user)
+
+    # Create the first versioned UserContext snapshot
+    _snapshot_user_context(db, user, change_source="onboarding", change_summary="Initial onboarding context captured.")
+
     return user
+
+
+def _snapshot_user_context(
+    db: Session,
+    user: User,
+    change_source: str = "manual_edit",
+    change_summary: str | None = None,
+) -> None:
+    """
+    Deactivates all prior UserContext rows for this user and inserts a new
+    active snapshot. Called after any change to the user's permanent context.
+    """
+    from app.models.user_context import UserContext  # local import to avoid circular
+
+    # Deactivate all existing active contexts for this user
+    db.query(UserContext).filter(
+        UserContext.user_id == user.id,
+        UserContext.is_active == True,  # noqa: E712
+    ).update({"is_active": False})
+
+    # Find the current highest version
+    latest = (
+        db.query(UserContext)
+        .filter(UserContext.user_id == user.id)
+        .order_by(UserContext.version.desc())
+        .first()
+    )
+    next_version = (latest.version + 1) if latest else 1
+
+    snapshot = UserContext(
+        user_id=user.id,
+        brand_name=user.brand_name,
+        bio=user.bio,
+        target_audience=user.target_audience,
+        content_mission=user.content_mission,
+        platform_facts={},
+        version=next_version,
+        change_source=change_source,
+        change_summary=change_summary,
+        is_active=True,
+    )
+    db.add(snapshot)
+    db.commit()
+
 
 
 async def exchange_google_code(db: Session, code: str, state: str) -> RedirectResponse:

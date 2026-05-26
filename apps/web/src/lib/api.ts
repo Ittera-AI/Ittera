@@ -11,7 +11,21 @@
 
 import { supabase } from "@/lib/supabase";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+function resolveApiBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL;
+  if (raw === "" || raw === "same-origin") {
+    return "";
+  }
+  if (raw !== undefined && raw.trim() !== "") {
+    return raw.replace(/\/$/, "");
+  }
+  if (process.env.NODE_ENV === "development") {
+    return "";
+  }
+  return "http://localhost:8000";
+}
+
+const BASE_URL = resolveApiBaseUrl();
 
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 
@@ -46,7 +60,7 @@ async function request<T>(
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers,
-    credentials: "include", // also sends the legacy ittera_token cookie if present
+    credentials: "include",
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
@@ -61,14 +75,15 @@ async function request<T>(
     throw new ApiError(res.status, detail);
   }
 
-  // 204 No Content
   if (res.status === 204) return undefined as T;
 
   return res.json() as Promise<T>;
 }
 
-const get  = <T>(path: string)              => request<T>("GET",    path);
-const post = <T>(path: string, body: unknown) => request<T>("POST",   path, body);
+const get    = <T>(path: string)               => request<T>("GET",    path);
+const post   = <T>(path: string, body: unknown) => request<T>("POST",   path, body);
+const patch  = <T>(path: string, body: unknown) => request<T>("PATCH",  path, body);
+const del    = <T>(path: string)               => request<T>("DELETE", path);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -94,7 +109,49 @@ export interface WaitlistStats {
 export interface WaitlistMemberStatus extends WaitlistStats {
   email: string;
   joined: boolean;
+  access_approved: boolean;
+  approved_at: string | null;
   position: number | null;
+}
+
+export interface SocialConnectionStatus {
+  platform: string;
+  username: string;
+  connected_at: string;
+  last_synced: string | null;
+}
+
+export interface PersonaSource {
+  id: string;
+  persona_profile_id: string;
+  source_type: string;
+  url: string | null;
+  manual_text: string | null;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonaProfile {
+  id: string;
+  user_id: string;
+  status: string;
+  niche: string | null;
+  target_audience: string | null;
+  goals: string[];
+  persona_summary: string | null;
+  voice_tone: string | null;
+  positioning: string | null;
+  content_pillars: string[];
+  audience_pain_points: string[];
+  credibility_signals: string[];
+  content_opportunities: string[];
+  avoid_topics: string[];
+  raw_ai_output: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  sources: PersonaSource[];
 }
 
 export interface ContentDraft {
@@ -147,11 +204,31 @@ const waitlist = {
     post("/api/v1/waitlist", payload),
 };
 
+const connect = {
+  status: ()                                  => get<SocialConnectionStatus[]>("/api/v1/connect/status"),
+  startUrl: (platform: string, token: string) =>
+    `${BASE_URL}/api/v1/connect/${platform}/start?token=${encodeURIComponent(token)}`,
+  disconnect: (platform: string)              => del<{ disconnected: string }>(`/api/v1/connect/${platform}`),
+};
+
+const persona = {
+  startOnboarding: ()                         => post<PersonaProfile>("/api/v1/persona/onboarding/start", {}),
+  addSource: (payload: { source_type: string; url?: string; manual_text?: string }) =>
+    post<PersonaSource>("/api/v1/persona/sources", payload),
+  listSources: ()                             => get<PersonaSource[]>("/api/v1/persona/sources"),
+  scrape: ()                                  => post<{ status: string; results: unknown[] }>("/api/v1/persona/scrape", {}),
+  analyze: ()                                 => post<PersonaProfile>("/api/v1/persona/analyze", {}),
+  get: ()                                     => get<PersonaProfile>("/api/v1/persona"),
+  update: (payload: Partial<PersonaProfile>)  => patch<PersonaProfile>("/api/v1/persona", payload),
+  confirm: ()                                 => post<PersonaProfile>("/api/v1/persona/confirm", {}),
+};
+
 const content = {
   listDrafts: (status?: string) =>
     get<ContentDraft[]>("/api/v1/content/drafts" + (status ? `?status=${status}` : "")),
   getDraft: (id: string)                      => get<ContentDraft>(`/api/v1/content/drafts/${id}`),
-  suggest: (payload: { topic?: string })      => post("/api/v1/content/suggest", payload),
+  suggest: (payload: { topic?: string; platform?: string }) =>
+    post("/api/v1/content/suggest", payload),
   generate: (payload: unknown)                => post("/api/v1/content/generate", payload),
   repurpose: (payload: unknown)               => post("/api/v1/content/repurpose", payload),
   publishNow: (draftId: string)               => post(`/api/v1/content/drafts/${draftId}/publish`, {}),
@@ -193,6 +270,8 @@ const trends = {
 export const api = {
   auth,
   waitlist,
+  connect,
+  persona,
   content,
   calendar,
   coach,

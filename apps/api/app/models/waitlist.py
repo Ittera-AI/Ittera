@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Boolean, Column, DateTime, String
 
 from app.db.base import Base
 from app.db.datetime_helpers import utc_now
@@ -14,3 +14,8 @@ class WaitlistEntry(Base):
     name = Column(String, nullable=True)
     profession = Column(String, nullable=True)
     created_at = Column(DateTime, default=utc_now)
+
+    # Access approval — added by migration 003_add_waitlist_access_approval
+    access_approved = Column(Boolean, nullable=False, default=False)
+    approved_at = Column(DateTime, nullable=True)
+    approved_by = Column(String, nullable=True)   # admin email that approved

@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     GOOGLE_DRIVE_REDIRECT_URI: str = "http://localhost:8000/api/v1/social/callback/google-drive"
     # LinkedIn scraper session cookie (alternative to username/password)
     LINKEDIN_SESSION_COOKIE: str = ""
+    # Twitter / X OAuth 2.0 (PKCE)
+    TWITTER_CLIENT_ID: str = ""
+    TWITTER_CLIENT_SECRET: str = ""
+    TWITTER_REDIRECT_URI: str = "http://localhost:8000/api/v1/connect/twitter/callback"
+    # Instagram (Meta) OAuth
+    INSTAGRAM_APP_ID: str = ""
+    INSTAGRAM_APP_SECRET: str = ""
+    INSTAGRAM_REDIRECT_URI: str = "http://localhost:8000/api/v1/connect/instagram/callback"
+    # Admin access — comma-separated list of emails that can use /admin/ endpoints
+    ADMIN_EMAILS: str = ""
     FRONTEND_URL: str = "http://localhost:3000"
     WAITLIST_TOTAL_SEATS: int = 100
     SMTP_HOST: str = ""

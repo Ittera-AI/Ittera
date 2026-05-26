@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { api } from "@/lib/api";
 
 export type User = { email: string; name: string; initials: string };
 export type AuthMode = "signin" | "signup";
@@ -10,6 +11,11 @@ export type AuthMode = "signin" | "signup";
 interface AuthContextType {
   user: User | null;
   sessionLoading: boolean;
+  hasWorkspaceAccess: boolean;
+  workspaceAccessLoading: boolean;
+  workspaceAccessChecked: boolean;
+  waitlistPosition: number | null;
+  isAdmin: boolean;
   authOpen: boolean;
   authMode: AuthMode;
   authSeedEmail: string;
@@ -21,12 +27,22 @@ interface AuthContextType {
   signInWithGoogle: () => void;
   signInWithLinkedIn: () => void;
   resetPassword: (email: string) => Promise<void>;
-  // Kept for interface compatibility — no longer used directly
   completeOAuthSignIn: (token: string) => Promise<void>;
+  refreshWorkspaceAccess: () => Promise<boolean>;
   signOut: () => void;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
+
+function parseAdminEmails(): Set<string> {
+  const raw = process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
 
 function makeInitials(name: string) {
   return name
@@ -53,18 +69,40 @@ function userFromSupabase(supabaseUser: SupabaseUser): User {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
+  const [hasWorkspaceAccess, setHasWorkspaceAccess] = useState(false);
+  const [workspaceAccessLoading, setWorkspaceAccessLoading] = useState(false);
+  const [workspaceAccessChecked, setWorkspaceAccessChecked] = useState(false);
+  const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [authSeedEmail, setAuthSeedEmail] = useState("");
 
+  const isAdmin = user ? parseAdminEmails().has(user.email.toLowerCase()) : false;
+
+  const refreshWorkspaceAccess = useCallback(async (): Promise<boolean> => {
+    setWorkspaceAccessLoading(true);
+    try {
+      const status = await api.waitlist.myStatus();
+      setHasWorkspaceAccess(status.access_approved);
+      setWaitlistPosition(status.position);
+      setWorkspaceAccessChecked(true);
+      return status.access_approved;
+    } catch {
+      setHasWorkspaceAccess(false);
+      setWaitlistPosition(null);
+      setWorkspaceAccessChecked(true);
+      return false;
+    } finally {
+      setWorkspaceAccessLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    // Restore session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ? userFromSupabase(session.user) : null);
       setSessionLoading(false);
     });
 
-    // Listen for sign-in / sign-out / token refresh
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -72,11 +110,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session) {
         setAuthOpen(false);
         setAuthSeedEmail("");
+      } else {
+        setHasWorkspaceAccess(false);
+        setWaitlistPosition(null);
+        setWorkspaceAccessChecked(false);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    void refreshWorkspaceAccess();
+  }, [user, refreshWorkspaceAccess]);
 
   const openAuth = useCallback((mode: AuthMode = "signup", seedEmail = "") => {
     setAuthMode(mode);
@@ -112,7 +159,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.session?.user) {
       setUser(userFromSupabase(data.session.user));
     }
-    // If no session was returned, Supabase requires email confirmation first
     return { needsEmailConfirmation: !data.session };
   }, []);
 
@@ -138,13 +184,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message);
   }, []);
 
-  // No-op kept for backwards interface compatibility
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const completeOAuthSignIn = useCallback(async (_token: string) => {}, []);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
+    setHasWorkspaceAccess(false);
+    setWaitlistPosition(null);
+    setWorkspaceAccessChecked(false);
     setAuthOpen(false);
   }, []);
 
@@ -153,6 +201,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         sessionLoading,
+        hasWorkspaceAccess,
+        workspaceAccessLoading,
+        workspaceAccessChecked,
+        waitlistPosition,
+        isAdmin,
         authOpen,
         authMode,
         authSeedEmail,
@@ -165,6 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithLinkedIn,
         resetPassword,
         completeOAuthSignIn,
+        refreshWorkspaceAccess,
         signOut,
       }}
     >

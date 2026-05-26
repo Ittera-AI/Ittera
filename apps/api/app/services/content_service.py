@@ -6,74 +6,120 @@ from sqlalchemy.orm import Session
 from app.models.content_draft import ContentDraft
 from app.models.user import User
 from app.schemas.content import GenerateRequest, RepurposeRequest, ScheduleRequest, SuggestRequest
-from app.services import brand_profile_service, trend_service
+from app.services import brand_profile_service, context_service, trend_service
 
 LIMITS = {"linkedin": 3000, "instagram": 2200, "twitter": 280}
 
 
 def suggest(db: Session, user: User, payload: SuggestRequest) -> dict:
+    ctx = context_service.assemble(db, user, platform=payload.platform or user.primary_platform)
     trends = trend_service.get_trends_for_user(db, user)["trends"]
-    base_topic = payload.topic or (trends[0]["topic"] if trends else user.niche or "content strategy")
+
+    # Prefer the report's top topics, fall back to trend feed, then niche
+    if ctx.report.top_performing_topics:
+        base_topic = payload.topic or ctx.report.top_performing_topics[0]
+    else:
+        base_topic = payload.topic or (trends[0]["topic"] if trends else user.niche or "content strategy")
+
+    # Use persona pillars as format hints when available
+    pillar_hint = f" (aligns with your pillar: {ctx.persona.content_pillars[0]})" if ctx.persona.content_pillars else ""
+
     suggestions = [
         {
             "hook": f"Most teams misunderstand {base_topic}.",
             "angle": f"Explain the practical shift behind {base_topic}.",
             "format": "hot-take",
             "trend_tie": base_topic,
-            "why_it_works": "It starts with tension and resolves into a useful operating principle.",
+            "why_it_works": f"Starts with tension and resolves into a useful principle{pillar_hint}.",
         },
         {
             "hook": f"A simple {base_topic} checklist:",
             "angle": "Turn the topic into a practical framework readers can save.",
             "format": "listicle",
             "trend_tie": base_topic,
-            "why_it_works": "It is concrete, skimmable, and aligned with your analytical voice.",
+            "why_it_works": f"Concrete, skimmable, and aligned with your analytical voice{pillar_hint}.",
         },
         {
             "hook": f"The quiet advantage of {base_topic} is not speed.",
             "angle": "Connect the trend to trust, review loops, and better decisions.",
             "format": "story",
             "trend_tie": base_topic,
-            "why_it_works": "It gives your audience a more thoughtful take than the obvious trend post.",
+            "why_it_works": f"Gives your audience a more thoughtful take than the obvious trend post{pillar_hint}.",
         },
     ]
-    return {"suggestions": suggestions}
+    return {
+        "suggestions": suggestions,
+        "context_warnings": ctx.missing_layers,
+    }
 
 
 def generate(db: Session, user: User, payload: GenerateRequest) -> dict:
     _require_brand_profile(db, user)
-    seed = payload.suggestion.hook if payload.suggestion else payload.prompt
-    content = (
-        f"{seed}\n\n"
-        f"Here is the practical version: {payload.prompt.strip()}\n\n"
-        "The best content systems do three things well:\n"
-        "1. Notice the signal before it becomes noisy.\n"
-        "2. Shape the idea through a clear point of view.\n"
-        "3. Review performance without losing the voice that made it work.\n\n"
-        "That is how a content loop compounds."
+
+    # Assemble the 3-layer context for this generation call
+    ctx = context_service.assemble(db, user, platform=payload.platform)
+
+    from iterra_ai.content.engine import ContentGenerationEngine
+    from iterra_ai.content.schemas import ContentGenerationInput
+    from iterra_ai.content.platform_rules import get_rules
+
+    engine_input = ContentGenerationInput(
+        platform=payload.platform,
+        prompt=payload.prompt,
+        hook=payload.suggestion.hook if payload.suggestion else None,
+        system_prompt=ctx.system_prompt,
+        platform_rules=get_rules(payload.platform),
     )
+    
+    engine = ContentGenerationEngine()
+    output = engine.generate(engine_input)
+
     draft = ContentDraft(
         user_id=user.id,
         platform=payload.platform,
-        content=content,
+        content=output.content,
         prompt_used=payload.prompt,
         trend_used=payload.trend_used,
-        generation_model="mock-local",
+        generation_model=output.model,
     )
     db.add(draft)
     db.commit()
     db.refresh(draft)
+    
     return {
         "draft_id": draft.id,
         "content": draft.content,
-        "word_count": len(draft.content.split()),
-        "within_platform_limit": len(draft.content) <= LIMITS[payload.platform],
+        "word_count": output.word_count,
+        "within_platform_limit": output.char_count <= get_rules(payload.platform)["max_chars"],
+        "context_warnings": ctx.missing_layers,
+        "context_summary": {
+            "permanent_complete": ctx.permanent.is_complete(),
+            "persona_confidence": ctx.persona.confidence_score,
+            "report_posts": ctx.report.posts_analysed,
+            "context_version": ctx.permanent.context_version,
+        },
+        "generation_mode": "mock" if output.is_mock else "live",
     }
 
 
 def repurpose(db: Session, user: User, payload: RepurposeRequest) -> dict:
     draft = _draft(db, user, payload.draft_id)
-    content = _repurposed_content(draft.content, payload.target_platform)
+    
+    from iterra_ai.repurpose.engine import RepurposeEngine
+    from iterra_ai.repurpose.schemas import RepurposeInput
+    
+    engine_input = RepurposeInput(
+        source_platform=draft.platform,
+        target_platforms=[payload.target_platform],
+        original_content=draft.content
+    )
+    
+    engine = RepurposeEngine()
+    output = engine.generate(engine_input)
+    
+    # We should have one repurposed item for the requested platform
+    content = output.repurposed[0].content if output.repurposed else _repurposed_content(draft.content, payload.target_platform)
+
     versions = dict(draft.repurposed_versions or {})
     versions[payload.target_platform] = content
     draft.repurposed_versions = versions
@@ -158,8 +204,28 @@ def calendar_events(db: Session, user: User) -> list[dict]:
     return events
 
 
-def suggested_times() -> list[datetime]:
+def suggested_times(db: Session | None = None, user: User | None = None, platform: str = "linkedin") -> list[datetime]:
+    """
+    Returns suggested posting times. When context is available, uses the user's
+    platform-specific best_post_times fact (if approved). Falls back to generic slots.
+    """
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+
+    # Try to use the user's platform-specific approved best time
+    if db is not None and user is not None:
+        ctx = context_service.assemble(db, user, platform=platform)
+        facts = ctx.permanent.platform_facts.get(platform)
+        if facts and facts.best_post_times:
+            try:
+                hour = int(facts.best_post_times[0].split(":")[0])
+                return [
+                    (now + timedelta(days=1)).replace(hour=hour),
+                    (now + timedelta(days=2)).replace(hour=hour),
+                    (now + timedelta(days=3)).replace(hour=hour),
+                ]
+            except (ValueError, IndexError):
+                pass
+
     return [now + timedelta(days=1, hours=9), now + timedelta(days=2, hours=12), now + timedelta(days=3, hours=9)]
 
 

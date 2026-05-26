@@ -10,7 +10,7 @@ from app.dependencies.auth import get_current_user
 from app.services.scraper import ScraperService
 from app.services.persona_ai import PersonaAIService
 
-router = APIRouter(prefix="/v1/persona", tags=["persona"])
+router = APIRouter(tags=["persona"])
 
 @router.post("/onboarding/start", response_model=PersonaProfileResponse)
 async def start_onboarding(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -72,7 +72,12 @@ async def scrape_sources(db: Session = Depends(get_db), current_user: User = Dep
             source.status = "processing"
             db.commit()
 
-            scraped_data = await ScraperService.scrape_url(source.url, source.source_type)
+            # Normalise: frontend may send "twitter" but scraper expects "x"
+            effective_type = source.source_type.lower()
+            if effective_type == "twitter":
+                effective_type = "x"
+
+            scraped_data = await ScraperService.scrape_url(source.url, effective_type)
             
             doc = PersonaDocument(
                 persona_source_id=source.id,
@@ -146,7 +151,7 @@ async def analyze_persona(db: Session = Depends(get_db), current_user: User = De
         profile.avoid_topics = extraction.avoid_topics
         profile.raw_ai_output = extraction.model_dump()
         
-        # We can also save niche and target_audience if they were empty
+        # Update profile niche / target_audience if not set
         if not profile.niche:
             profile.niche = extraction.niche
         if not profile.target_audience:
@@ -154,6 +159,15 @@ async def analyze_persona(db: Session = Depends(get_db), current_user: User = De
 
         db.commit()
         db.refresh(profile)
+
+        # Populate user fields so they're considered onboarded after persona flow
+        if extraction.niche and not current_user.niche:
+            current_user.niche = extraction.niche
+        if not current_user.onboarding_complete:
+            # Mark onboarding complete — persona flow IS the onboarding
+            current_user.onboarding_complete = True
+        db.commit()
+
         return profile
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
