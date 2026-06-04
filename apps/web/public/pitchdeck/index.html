@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Iterra — AI Content Strategy Engine · Seed 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400;1,700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+/* ── RESET & ROOT ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --cream: #F7F3ED;
+  --cream2: #EDE8E0;
+  --paper: #FAF7F2;
+  --ink: #0D1321;
+  --ink2: #2A3347;
+  --ink3: #4A5568;
+  --ink4: #8A96A8;
+  --blue: #1E3FD8;
+  --blue-lt: #EEF2FF;
+  --blue-mid: rgba(30,63,216,.12);
+  --orange: #C94E1A;
+  --orange-lt: #FEF1EB;
+  --orange-mid: rgba(201,78,26,.1);
+  --green: #1A6B42;
+  --green-lt: #EDFAF3;
+  --green-mid: rgba(26,107,66,.1);
+  --teal: #0D7490;
+  --teal-lt: #EEF9FC;
+  --purple: #5B2FBE;
+  --purple-lt: #F3EFFE;
+  --rule: rgba(13,19,33,.1);
+  --rule2: rgba(13,19,33,.06);
+  --serif: 'Playfair Display', Georgia, serif;
+  --sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --shadow: 0 2px 12px rgba(13,19,33,.08);
+  --shadow2: 0 4px 24px rgba(13,19,33,.12);
+}
+
+html,body {
+  width:100%;height:100%;
+  background: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ── OUTER FRAME ── */
+#frame {
+  position: fixed; inset: 8px;
+  border-radius: 14px;
+  background: var(--paper);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  border: 1px solid rgba(255,255,255,.06);
+  box-shadow: 0 0 0 1px rgba(13,19,33,.3), 0 32px 80px rgba(0,0,0,.6);
+}
+
+/* Grain texture overlay */
+#frame::before {
+  content:'';
+  position:absolute;inset:0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 1000; opacity: .4;
+}
+
+/* Progress bar */
+#progress {
+  position: absolute; top: 0; left: 0; height: 2.5px;
+  background: linear-gradient(90deg, var(--blue), var(--orange));
+  transition: width .5s cubic-bezier(.4,0,.2,1);
+  z-index: 50; border-radius: 0 2px 0 0;
+}
+
+/* ── TOPBAR ── */
+#topbar {
+  position: relative; height: 46px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; z-index: 40;
+  border-bottom: 1px solid var(--rule2);
+  background: rgba(247,243,237,.85);
+  backdrop-filter: blur(8px);
+}
+.tb-logo {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: .01em;
+}
+.tb-center { display: flex; gap: 5px; align-items: center; }
+.nav-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--rule); cursor: pointer;
+  transition: all .25s;
+  border: 1px solid transparent;
+}
+.nav-dot:hover { background: var(--ink4); }
+.nav-dot.active {
+  background: var(--blue);
+  border-color: rgba(30,63,216,.3);
+  box-shadow: 0 0 0 2px rgba(30,63,216,.15);
+}
+.tb-right { display: flex; align-items: center; gap: 12px; }
+.slide-num { font-size: 10px; color: var(--ink4); letter-spacing: .1em; font-weight: 500; }
+.notes-btn {
+  font-size: 9px; padding: 3px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 4px; color: var(--ink4);
+  cursor: pointer; background: none;
+  transition: all .2s; letter-spacing: .05em;
+}
+.notes-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+/* ── DECK ── */
+.deck { position: relative; flex: 1; overflow: hidden; z-index: 2; }
+.slide {
+  position: absolute; inset: 0;
+  padding: 24px 40px 20px;
+  display: flex; flex-direction: column;
+  opacity: 0;
+  transform: translateX(24px);
+  transition: opacity .38s ease, transform .38s ease;
+  pointer-events: none; overflow: hidden;
+}
+.slide.active { opacity: 1; transform: none; pointer-events: all; }
+.slide.exit { opacity: 0; transform: translateX(-24px); }
+
+/* ── BOTTOMBAR ── */
+#bottombar {
+  position: relative; height: 46px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  border-top: 1px solid var(--rule2);
+  background: rgba(247,243,237,.85);
+  backdrop-filter: blur(8px);
+}
+.nav-btn {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 1px solid var(--rule);
+  background: transparent; cursor: pointer;
+  color: var(--ink3); font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+}
+.nav-btn:hover:not(:disabled) {
+  background: var(--blue-lt); border-color: var(--blue);
+  color: var(--blue);
+}
+.nav-btn:disabled { opacity: .25; cursor: default; }
+
+/* ── NOTES OVERLAY ── */
+#notes-panel {
+  position: absolute; inset: 0;
+  background: rgba(247,243,237,.97);
+  backdrop-filter: blur(12px);
+  z-index: 90;
+  display: flex; flex-direction: column;
+  opacity: 0; pointer-events: none;
+  transition: opacity .3s;
+  border-radius: 14px;
+}
+#notes-panel.open { opacity: 1; pointer-events: all; }
+.notes-content { padding: 36px 48px; flex: 1; overflow-y: auto; }
+.notes-eyebrow { font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--blue); font-weight: 600; margin-bottom: 10px; }
+.notes-title { font-family: var(--serif); font-size: 22px; font-weight: 700; color: var(--ink); margin-bottom: 16px; line-height: 1.2; }
+.notes-text { font-size: 14px; color: var(--ink3); line-height: 1.8; max-width: 680px; }
+.notes-close {
+  position: absolute; top: 16px; right: 20px;
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid var(--rule); background: none;
+  cursor: pointer; color: var(--ink3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; transition: all .2s;
+}
+.notes-close:hover { border-color: var(--orange); color: var(--orange); }
+
+/* ── TYPOGRAPHY ── */
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: var(--blue); margin-bottom: 10px;
+}
+.eyebrow::before {
+  content:''; width: 18px; height: 1.5px;
+  background: var(--blue); border-radius: 1px;
+}
+.eyebrow.orange { color: var(--orange); }
+.eyebrow.orange::before { background: var(--orange); }
+.eyebrow.green { color: var(--green); }
+.eyebrow.green::before { background: var(--green); }
+
+.h-hero {
+  font-family: var(--serif);
+  font-size: clamp(42px, 5vw, 68px);
+  font-weight: 800;
+  line-height: 1.03;
+  color: var(--ink);
+  letter-spacing: -.01em;
+}
+.h-lg {
+  font-family: var(--serif);
+  font-size: clamp(24px, 2.8vw, 38px);
+  font-weight: 700;
+  line-height: 1.12;
+  color: var(--ink);
+  letter-spacing: -.01em;
+}
+.h-md {
+  font-family: var(--sans);
+  font-size: clamp(15px, 1.6vw, 20px);
+  font-weight: 600;
+  color: var(--ink2);
+  line-height: 1.3;
+}
+
+.em { color: var(--blue); font-style: italic; }
+.em-o { color: var(--orange); font-style: italic; }
+.em-g { color: var(--green); }
+
+.body-lg { font-size: 14px; line-height: 1.75; color: var(--ink3); }
+.body { font-size: 12.5px; line-height: 1.7; color: var(--ink3); }
+.body-sm { font-size: 11.5px; line-height: 1.65; color: var(--ink4); }
+
+/* ── LAYOUT ── */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; flex: 1; min-height: 0; }
+.two32 { display: grid; grid-template-columns: 3fr 2fr; gap: 32px; flex: 1; min-height: 0; }
+.two23 { display: grid; grid-template-columns: 2fr 3fr; gap: 32px; flex: 1; min-height: 0; }
+.col { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.row { display: flex; align-items: center; }
+.center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.g4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+.divider { width: 40px; height: 2px; background: linear-gradient(90deg, var(--blue), transparent); border-radius: 1px; margin: 12px 0; flex-shrink: 0; }
+.divider.orange { background: linear-gradient(90deg, var(--orange), transparent); }
+
+/* ── BADGES & TAGS ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 100px; padding: 3px 9px;
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: .05em;
+}
+.badge-blue { background: var(--blue-lt); color: var(--blue); }
+.badge-orange { background: var(--orange-lt); color: var(--orange); }
+.badge-green { background: var(--green-lt); color: var(--green); }
+.badge-neutral { background: var(--cream2); color: var(--ink3); }
+
+.tag {
+  display: inline-block;
+  border: 1px solid var(--rule);
+  border-radius: 5px; padding: 3px 10px;
+  font-size: 10px; color: var(--ink3);
+  font-weight: 500;
+}
+
+/* Pill / status */
+.status-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid rgba(30,63,216,.2);
+  background: var(--blue-lt);
+  border-radius: 100px; padding: 5px 14px;
+  font-size: 10.5px; font-weight: 600;
+  color: var(--blue); letter-spacing: .06em;
+}
+.pulse {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--blue);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.3;transform:scale(.5)} }
+
+/* ── CARDS ── */
+.card {
+  background: white;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 16px 18px;
+  transition: border-color .25s, box-shadow .25s;
+}
+.card:hover { border-color: rgba(30,63,216,.2); box-shadow: var(--shadow); }
+
+.card-blue { border-color: rgba(30,63,216,.15); background: var(--blue-lt); }
+.card-orange { border-color: rgba(201,78,26,.15); background: var(--orange-lt); }
+.card-green { border-color: rgba(26,107,66,.15); background: var(--green-lt); }
+.card-dark { background: var(--ink); color: white; border-color: transparent; }
+
+.card-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-bottom: 10px;
+}
+.card-title { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+.card-body { font-size: 11px; color: var(--ink3); line-height: 1.55; }
+
+/* Pain row */
+.pain-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 9px 13px;
+  background: white; border: 1px solid var(--rule);
+  border-radius: 10px; flex-shrink: 0;
+  transition: border-color .2s;
+}
+.pain-row:hover { border-color: rgba(30,63,216,.2); }
+.pain-icon {
+  width: 32px; height: 32px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.pain-title { font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 2px; }
+.pain-body { font-size: 10.5px; color: var(--ink3); line-height: 1.5; }
+
+/* Check item */
+.check-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 12px;
+  background: white; border: 1px solid var(--rule);
+  border-radius: 8px; flex-shrink: 0;
+  font-size: 12px; color: var(--ink2); line-height: 1.45;
+  transition: border-color .2s;
+}
+.check-item:hover { border-color: rgba(26,107,66,.25); }
+.ci { color: var(--green); font-size: 13px; flex-shrink: 0; margin-top: 1px; font-weight: 700; }
+
+/* Module card */
+.module-card {
+  background: white;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 15px;
+  display: flex; flex-direction: column; gap: 7px;
+  transition: all .25s;
+  overflow: hidden; position: relative;
+}
+.module-card::before {
+  content:''; position:absolute;
+  top:0;left:0;right:0;height:2px;
+  background: var(--accent-color, var(--blue));
+  border-radius: 14px 14px 0 0;
+}
+.module-card:hover { box-shadow: var(--shadow2); border-color: rgba(30,63,216,.15); transform: translateY(-1px); }
+
+/* Stats */
+.stat-num {
+  font-family: var(--serif);
+  font-size: clamp(26px, 3vw, 42px);
+  font-weight: 700;
+  line-height: 1;
+}
+.stat-label { font-size: 10px; color: var(--ink4); margin-top: 3px; line-height: 1.35; }
+
+/* Road row */
+.road-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 12px;
+  background: white; border: 1px solid var(--rule);
+  border-radius: 9px; flex-shrink: 0;
+  transition: border-color .2s;
+}
+.road-row:hover { border-color: rgba(30,63,216,.2); }
+
+/* Price card */
+.price-card {
+  background: white; border: 1px solid var(--rule);
+  border-radius: 14px; padding: 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  position: relative; transition: all .25s;
+}
+.price-card:hover { box-shadow: var(--shadow2); transform: translateY(-2px); }
+.price-card.featured {
+  border-color: var(--blue);
+  background: linear-gradient(160deg, rgba(30,63,216,.03) 0%, white 60%);
+}
+.price-badge {
+  position: absolute; top: -10px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--blue); color: white;
+  font-size: 8px; font-weight: 700; letter-spacing: .08em;
+  padding: 3px 10px; border-radius: 100px; white-space: nowrap;
+}
+.price-amt {
+  font-family: var(--serif);
+  font-size: clamp(20px, 2vw, 30px);
+  font-weight: 700; color: var(--ink); line-height: 1;
+}
+.pf {
+  font-size: 11px; color: var(--ink3);
+  display: flex; align-items: flex-start; gap: 7px; flex-shrink: 0;
+}
+.pf::before {
+  content:''; width: 3px; height: 3px; border-radius: 50%;
+  background: var(--green); flex-shrink: 0; margin-top: 5px;
+}
+
+/* Fund item */
+.fund-item {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 11px 14px;
+  background: white; border: 1px solid var(--rule);
+  border-radius: 10px; flex-shrink: 0;
+}
+
+/* Milestone */
+.ms-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 12px; color: var(--ink3); line-height: 1.45;
+  flex-shrink: 0;
+}
+.ms-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+
+/* Quote box */
+.quote-box {
+  background: var(--blue-lt);
+  border-left: 3px solid var(--blue);
+  border-radius: 0 10px 10px 0;
+  padding: 12px 16px;
+}
+.quote-text { font-family: var(--serif); font-size: 14px; font-style: italic; color: var(--ink); line-height: 1.55; }
+.quote-attr { font-size: 9.5px; color: var(--ink4); margin-top: 6px; }
+
+/* Toggle */
+.toggle { position:relative; width:36px; height:19px; cursor:pointer; }
+.toggle input { opacity:0; width:0; height:0; }
+.toggle-track { position:absolute; inset:0; background:var(--cream2); border-radius:100px; transition:background .25s; border:1px solid var(--rule); }
+.toggle input:checked~.toggle-track { background:var(--blue-mid); border-color:rgba(30,63,216,.3); }
+.toggle-thumb { position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%; background:var(--ink4); transition:all .25s; }
+.toggle input:checked~.toggle-thumb { transform:translateX(17px); background:var(--blue); }
+
+/* ── SCROLL AREAS ── */
+.scroll-area {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(13,19,33,.12) transparent;
+}
+.scroll-area::-webkit-scrollbar { width: 3px; }
+.scroll-area::-webkit-scrollbar-track { background: transparent; }
+.scroll-area::-webkit-scrollbar-thumb { background: rgba(13,19,33,.12); border-radius: 2px; }
+.scroll-area::-webkit-scrollbar-thumb:hover { background: rgba(13,19,33,.25); }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+.slide.active .fi { animation: fadeUp .42s ease both; }
+.fi:nth-child(1){animation-delay:.04s}
+.fi:nth-child(2){animation-delay:.1s}
+.fi:nth-child(3){animation-delay:.16s}
+.fi:nth-child(4){animation-delay:.22s}
+.fi:nth-child(5){animation-delay:.28s}
+.fi:nth-child(6){animation-delay:.34s}
+.fi:nth-child(7){animation-delay:.39s}
+.fi:nth-child(8){animation-delay:.44s}
+
+/* Loop diagram animations */
+@keyframes arcSpin { from{stroke-dashoffset:0} to{stroke-dashoffset:-816} }
+.arc-spin { animation: arcSpin 5s linear infinite; }
+@keyframes nodeGlow0{0%,100%{filter:drop-shadow(0 0 6px rgba(30,63,216,.8))}50%{filter:none}}
+@keyframes nodeGlow1{0%,100%{filter:drop-shadow(0 0 6px rgba(26,107,66,.8))}50%{filter:none}}
+@keyframes nodeGlow2{0%,100%{filter:drop-shadow(0 0 6px rgba(201,78,26,.8))}50%{filter:none}}
+@keyframes nodeGlow3{0%,100%{filter:drop-shadow(0 0 6px rgba(91,47,190,.8))}50%{filter:none}}
+@keyframes nodeGlow4{0%,100%{filter:drop-shadow(0 0 6px rgba(13,116,144,.8))}50%{filter:none}}
+.ng0{animation:nodeGlow0 4s 0s ease-in-out infinite}
+.ng1{animation:nodeGlow1 4s 1s ease-in-out infinite}
+.ng2{animation:nodeGlow2 4s 2s ease-in-out infinite}
+.ng3{animation:nodeGlow3 4s 3s ease-in-out infinite}
+.ng4{animation:nodeGlow4 4s 4s ease-in-out infinite}
+@keyframes particle { from{fill:#1E3FD8} 20%{fill:#1A6B42} 40%{fill:#C94E1A} 60%{fill:#5B2FBE} 80%{fill:#0D7490} to{fill:#1E3FD8} }
+#loopparticle { animation: particle 5s linear infinite; }
+
+/* ===== GLOBAL LAYOUT OPTIMIZATION ===== */
+
+.slide {
+  padding: 18px 34px 14px !important;
+}
+
+.h-lg {
+  font-size: clamp(22px, 2.5vw, 34px) !important;
+}
+
+.body {
+  font-size: 11.5px !important;
+}
+
+.body-lg {
+  font-size: 13px !important;
+}
+
+.two,
+.two32,
+.two23 {
+  gap: 22px !important;
+}
+
+.scroll-area {
+  overflow: hidden !important;
+}
+
+.module-card,
+.price-card,
+.fund-item,
+.quote-box {
+  padding: 12px !important;
+}
+
+</style>
+</head>
+<body>
+<div id="frame">
+  <div id="progress"></div>
+
+  <!-- TOPBAR — "Iterra" with no dot or span -->
+  <div id="topbar">
+    <div class="tb-logo">Iterra</div>
+    <div class="tb-center" id="dots"></div>
+    <div class="tb-right">
+      <span class="slide-num" id="counter">01 / 12</span>
+      <button class="notes-btn" onclick="toggleNotes()">Slide notes</button>
+    </div>
+  </div>
+
+  <!-- SLIDES -->
+  <div class="deck" id="deck">
+
+<!-- ══════════════ S1: COVER ══════════════ -->
+<div class="slide active" data-s="1">
+  <div class="two fi" style="gap:48px;align-items:center;flex:1">
+    <div class="col" style="justify-content:center;gap:0">
+      <div class="status-pill fi" style="width:fit-content;margin-bottom:20px">
+        <span class="pulse"></span>SEED ROUND · 2026
+      </div>
+      <div class="h-hero fi">The AI that<br><span class="em">strategizes</span><br>your content.</div>
+      <div class="divider fi" style="margin-top:18px"></div>
+      <p class="body-lg fi" style="max-width:380px;margin-top:4px">
+        Iterra is the first AI platform that doesn't just write content — it builds strategy, detects trends, coaches performance, and learns from every post.
+      </p>
+      <div class="row fi" style="gap:6px;flex-wrap:wrap;margin-top:18px">
+        <span class="tag">5 AI Modules</span>
+        <span class="tag">Private Alpha Live</span>
+        <span class="tag">Privacy-First Infrastructure</span>
+        <span class="tag">Next.js · FastAPI · Claude AI</span>
+      </div>
+    </div>
+    <!-- Right: Visual summary card -->
+    <div class="col fi" style="gap:10px;justify-content:center">
+      <div style="background:white;border:1px solid var(--rule);border-radius:16px;padding:22px 20px;box-shadow:var(--shadow2)">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink4);margin-bottom:16px">The platform in five steps</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;background:var(--blue-lt);border-radius:9px;border:1px solid rgba(30,63,216,.15)">
+            <div style="width:28px;height:28px;border-radius:8px;background:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+            </div>
+            <div><div style="font-size:11.5px;font-weight:700;color:var(--blue)">Trend Radar</div><div style="font-size:10px;color:var(--ink3)">Detect signals before they saturate</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;background:var(--green-lt);border-radius:9px;border:1px solid rgba(26,107,66,.15)">
+            <div style="width:28px;height:28px;border-radius:8px;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <div><div style="font-size:11.5px;font-weight:700;color:var(--green)">Smart Calendar</div><div style="font-size:10px;color:var(--ink3)">Data-informed weekly content plans</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;background:var(--orange-lt);border-radius:9px;border:1px solid rgba(201,78,26,.15)">
+            <div style="width:28px;height:28px;border-radius:8px;background:var(--orange);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            </div>
+            <div><div style="font-size:11.5px;font-weight:700;color:var(--orange)">Repurposing Engine</div><div style="font-size:10px;color:var(--ink3)">One idea → 5 platform-native posts</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;background:var(--purple-lt);border-radius:9px;border:1px solid rgba(91,47,190,.15)">
+            <div style="width:28px;height:28px;border-radius:8px;background:var(--purple);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <div><div style="font-size:11.5px;font-weight:700;color:var(--purple)">Engagement Coach</div><div style="font-size:10px;color:var(--ink3)">AI that explains why posts succeed</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;background:var(--teal-lt);border-radius:9px;border:1px solid rgba(13,116,144,.15)">
+            <div style="width:28px;height:28px;border-radius:8px;background:var(--teal);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </div>
+            <div><div style="font-size:11.5px;font-weight:700;color:var(--teal)">Continuous Refinement</div><div style="font-size:10px;color:var(--ink3)">Automated strategy updates</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ S2: PROBLEM ══════════════ -->
+<div class="slide" data-s="2">
+  <div class="eyebrow fi">The Problem</div>
+  <div class="h-lg fi" style="margin-bottom:4px">Writing is solved. <span class="em">Strategy is broken.</span></div>
+  <div class="divider fi"></div>
+  <div class="two fi" style="gap:28px">
+    <!-- LEFT -->
+    <div class="col scroll-area" style="gap:10px;justify-content:flex-start;padding-right:4px">
+      <p class="body fi">There are hundreds of AI writing tools. Every creator has tried at least three. The problem was never generating words — it was knowing <strong style="color:var(--ink)">which words, for whom, on which platform, and why the last post flopped.</strong></p>
+
+      <div class="fi" style="padding:14px 16px;background:var(--orange-lt);border:1px solid rgba(201,78,26,.18);border-radius:12px;flex-shrink:0">
+        <div class="stat-num" style="color:var(--orange)">73%</div>
+        <div style="font-size:11px;color:var(--ink3);margin-top:4px;line-height:1.6">of creators report burnout within 18 months — not from writing, but from zero strategic clarity and no signal on what actually works.</div>
+      </div>
+
+      <!-- Comparison -->
+      <div class="fi" style="flex:1;background:white;border:1px solid var(--rule);border-radius:12px;padding:14px;min-height:120px">
+        <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink4);font-weight:700;margin-bottom:10px">What tools offer vs. what creators need</div>
+        <div style="display:grid;grid-template-columns:1fr 1px 1fr;gap:0">
+          <div style="display:flex;flex-direction:column;gap:5px;padding-right:12px">
+            <div style="font-size:9px;color:var(--orange);font-weight:700;letter-spacing:.08em;margin-bottom:3px">TODAY'S TOOLS</div>
+            <div style="font-size:11px;color:var(--ink3);padding:5px 9px;background:var(--orange-lt);border-radius:6px;border:1px solid rgba(201,78,26,.12)">Word generation</div>
+            <div style="font-size:11px;color:var(--ink3);padding:5px 9px;background:var(--orange-lt);border-radius:6px;border:1px solid rgba(201,78,26,.12)">Post scheduling</div>
+            <div style="font-size:11px;color:var(--ink3);padding:5px 9px;background:var(--orange-lt);border-radius:6px;border:1px solid rgba(201,78,26,.12)">Vanity metrics</div>
+            <div style="font-size:11px;color:var(--ink3);padding:5px 9px;background:var(--orange-lt);border-radius:6px;border:1px solid rgba(201,78,26,.12)">Static templates</div>
+          </div>
+          <div style="background:var(--rule);"></div>
+          <div style="display:flex;flex-direction:column;gap:5px;padding-left:12px">
+            <div style="font-size:9px;color:var(--green);font-weight:700;letter-spacing:.08em;margin-bottom:3px">WHAT'S MISSING</div>
+            <div style="font-size:11px;color:var(--ink3);padding:5px 9px;background:var(--green-lt);border-radius:6px;border:1px solid rgba(26,107,66,.12)">Strategic planning</div>
+            <div style="font-size:11px;color:var(--ink3);padding:5px 9px;background:var(--green-lt);border-radius:6px;border:1px solid rgba(26,107,66,.12)">Trend intelligence</div>
+            <div style="font-size:11px;color:var(--ink3);padding:5px 9px;background:var(--green-lt);border-radius:6px;border:1px solid rgba(26,107,66,.12)">Post-performance "why"</div>
+            <div style="font-size:11px;color:var(--ink3);padding:5px 9px;background:var(--green-lt);border-radius:6px;border:1px solid rgba(26,107,66,.12)">Feedback loops</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: pain rows -->
+    <div class="col scroll-area" style="gap:9px;justify-content:flex-start;padding-right:4px">
+      <div class="pain-row fi">
+        <div class="pain-icon" style="background:var(--orange-lt)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C94E1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r=".5" fill="#C94E1A"/></svg>
+        </div>
+        <div><div class="pain-title">Post and pray</div><div class="pain-body">Every post is a guess. No learning system, no compounding strategy, no feedback loop.</div></div>
+      </div>
+      <div class="pain-row fi">
+        <div class="pain-icon" style="background:var(--blue-lt)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1E3FD8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div><div class="pain-title">Always late to trends</div><div class="pain-body">By the time an opportunity is obvious, it's already saturated. Timing is everything.</div></div>
+      </div>
+      <div class="pain-row fi">
+        <div class="pain-icon" style="background:var(--green-lt)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1A6B42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+        <div><div class="pain-title">Analytics without answers</div><div class="pain-body">Dashboards show numbers — not <em style="color:var(--blue)">why</em> a post underperformed or how to fix the next one.</div></div>
+      </div>
+      <div class="pain-row fi">
+        <div class="pain-icon" style="background:#F3EFFE">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5B2FBE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <div><div class="pain-title">Fragmented tool stack</div><div class="pain-body">Scheduling tools, AI writers, analytics dashboards — none of which share a context model.</div></div>
+      </div>
+      <div class="quote-box fi">
+        <div class="quote-text">"There are hundreds of AI writing tools. There is no AI strategy tool."</div>
+        <div class="quote-attr">— The category gap Iterra was built to fill</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ S3: SOLUTION ══════════════ -->
+<div class="slide" data-s="3">
+  <div class="two23 fi" style="gap:28px">
+    <!-- LEFT -->
+    <div class="col scroll-area" style="justify-content:center;gap:0;padding-right:4px">
+      <div class="eyebrow fi">The Solution</div>
+      <div class="h-lg fi">A closed<br><span class="em">intelligence loop</span><br>for content.</div>
+      <div class="divider fi"></div>
+      <p class="body fi" style="margin-bottom:10px">Every competitor operates as a one-way pipeline: prompt in, text out. Static. No memory. No strategy. No learning.</p>
+      <p class="body fi" style="margin-bottom:14px">Iterra closes the loop. Trend signals inform strategy. Strategy shapes creation. Post performance feeds back into planning. Every cycle makes the next one smarter.</p>
+      <div class="col fi" style="gap:6px">
+        <div style="padding:12px 14px;background:var(--green-lt);border:1px solid rgba(26,107,66,.18);border-radius:10px">
+          <div style="font-size:10.5px;font-weight:700;color:var(--green);margin-bottom:3px">Why this is defensible</div>
+          <div style="font-size:11px;color:var(--ink3);line-height:1.55">The longer a creator uses Iterra, the smarter it becomes for them specifically. Personalized data accumulates, brand voice deepens, and the switching cost grows with every session.</div>
+        </div>
+        <div style="padding:12px 14px;background:var(--blue-lt);border:1px solid rgba(30,63,216,.18);border-radius:10px">
+          <div style="font-size:10.5px;font-weight:700;color:var(--blue);margin-bottom:3px">vs. Jasper, Copy.ai, Buffer</div>
+          <div style="font-size:11px;color:var(--ink3);line-height:1.55">Those tools each solve one step. Iterra orchestrates all five — connected, contextual, and continuously improving.</div>
+        </div>
+      </div>
+    </div>
+    <!-- RIGHT: Pentagon Loop Diagram -->
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0" class="fi">
+      <svg viewBox="0 0 420 420" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;max-height:330px">
+        <defs>
+          <filter id="gf"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="gfs"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <path id="looppath" d="M210,74 A136,136 0 0 1 346,210 A136,136 0 0 1 210,346 A136,136 0 0 1 74,210 A136,136 0 0 1 210,74" fill="none"/>
+        </defs>
+        <circle cx="210" cy="210" r="136" fill="none" stroke="rgba(13,19,33,.06)" stroke-width="48"/>
+        <circle cx="210" cy="210" r="136" fill="none" stroke="rgba(13,19,33,.12)" stroke-width="1.5"/>
+        <circle cx="210" cy="210" r="136" fill="none" stroke="rgba(30,63,216,.5)" stroke-width="2.5" stroke-dasharray="68 787" stroke-linecap="round" class="arc-spin"/>
+        <text x="210" y="204" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="9" fill="rgba(42,51,71,.45)" font-weight="700" letter-spacing="2">INTELLIGENCE</text>
+        <text x="210" y="219" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="9" fill="rgba(42,51,71,.45)" font-weight="700" letter-spacing="2">LOOP</text>
+        <g class="ng0">
+          <rect x="148" y="54" width="124" height="42" rx="10" fill="white" stroke="rgba(30,63,216,.4)" stroke-width="1.5"/>
+          <text x="210" y="73" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="10.5" fill="#1E3FD8" font-weight="700">TREND SIGNALS</text>
+          <text x="210" y="87" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8.5" fill="#4A5568">Reddit · YouTube · Trends</text>
+        </g>
+        <g class="ng1">
+          <rect x="284" y="147" width="112" height="42" rx="10" fill="white" stroke="rgba(26,107,66,.4)" stroke-width="1.5"/>
+          <text x="340" y="166" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="10.5" fill="#1A6B42" font-weight="700">STRATEGY</text>
+          <text x="340" y="180" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8.5" fill="#4A5568">Smart Calendar</text>
+        </g>
+        <g class="ng2">
+          <rect x="234" y="299" width="112" height="42" rx="10" fill="white" stroke="rgba(201,78,26,.4)" stroke-width="1.5"/>
+          <text x="290" y="318" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="10.5" fill="#C94E1A" font-weight="700">CREATION</text>
+          <text x="290" y="332" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8.5" fill="#4A5568">Repurposing Engine</text>
+        </g>
+        <g class="ng3">
+          <rect x="74" y="299" width="112" height="42" rx="10" fill="white" stroke="rgba(91,47,190,.4)" stroke-width="1.5"/>
+          <text x="130" y="318" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="10.5" fill="#5B2FBE" font-weight="700">ANALYSIS</text>
+          <text x="130" y="332" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8.5" fill="#4A5568">Engagement Coach</text>
+        </g>
+        <g class="ng4">
+          <rect x="24" y="147" width="112" height="42" rx="10" fill="white" stroke="rgba(13,116,144,.4)" stroke-width="1.5"/>
+          <text x="80" y="166" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="10.5" fill="#0D7490" font-weight="700">REFINEMENT</text>
+          <text x="80" y="180" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8.5" fill="#4A5568">Strategy Update</text>
+        </g>
+        <circle id="loopparticle" r="7" filter="url(#gf)">
+          <animateMotion dur="5s" repeatCount="indefinite"><mpath href="#looppath"/></animateMotion>
+        </circle>
+        <circle r="3.5" fill="white" filter="url(#gfs)">
+          <animateMotion dur="5s" repeatCount="indefinite"><mpath href="#looppath"/></animateMotion>
+        </circle>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ S4: PLATFORM ══════════════ -->
+<div class="slide" data-s="4">
+  <div style="flex-shrink:0" class="fi">
+    <div class="eyebrow">The Platform</div>
+    <div class="h-md">Five modules. One <span class="em">unified intelligence system.</span></div>
+    <div class="divider" style="margin-top:8px"></div>
+  </div>
+  <div class="g2 fi scroll-area" style="flex:1;min-height:0;gap:10px;margin-top:10px;padding-right:4px;align-content:start">
+
+    <div class="module-card fi" style="--accent-color:#1E3FD8">
+      <div class="row" style="gap:10px;align-items:flex-start">
+        <div class="card-icon" style="background:var(--blue-lt)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1E3FD8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div>
+          <div class="card-title" style="color:#1E3FD8">Smart Content Calendar</div>
+          <span class="badge badge-blue" style="margin-top:2px">Strategic Planning AI</span>
+        </div>
+      </div>
+      <p class="card-body">AI-generated weekly content plans tailored to your niche, audience, engagement history, and live trend signals. Not a blank template — a contextual, data-driven roadmap.</p>
+      <div style="flex:1"></div>
+      <div style="border-top:1px solid var(--rule);padding-top:9px;margin-top:3px">
+        <div style="font-size:10px;color:var(--ink4);font-weight:600;margin-bottom:5px">UNDER THE HOOD</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <span class="badge badge-neutral">CalendarEngine</span>
+          <span class="badge badge-neutral">Claude claude-sonnet</span>
+          <span class="badge badge-neutral">Typed I/O</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="module-card fi" style="--accent-color:#1A6B42">
+      <div class="row" style="gap:10px;align-items:flex-start">
+        <div class="card-icon" style="background:var(--green-lt)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1A6B42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </div>
+        <div>
+          <div class="card-title" style="color:#1A6B42">Content Repurposing Engine</div>
+          <span class="badge badge-green" style="margin-top:2px">10× Output</span>
+        </div>
+      </div>
+      <p class="card-body">One core idea becomes a LinkedIn post, Twitter/X thread, Instagram caption, and video script — all in your verified brand voice. Cross-platform in seconds, not hours.</p>
+      <div style="flex:1"></div>
+      <div style="border-top:1px solid var(--rule);padding-top:9px;margin-top:3px">
+        <div style="font-size:10px;color:var(--ink4);font-weight:600;margin-bottom:5px">UNDER THE HOOD</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <span class="badge badge-neutral">RepurposeEngine</span>
+          <span class="badge badge-neutral">Platform Rules</span>
+          <span class="badge badge-neutral">Brand Voice</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="module-card fi" style="--accent-color:#C94E1A">
+      <div class="row" style="gap:10px;align-items:flex-start">
+        <div class="card-icon" style="background:var(--orange-lt)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#C94E1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div>
+          <div class="card-title" style="color:#C94E1A">AI Engagement Coach</div>
+          <span class="badge badge-orange" style="margin-top:2px">Post Analysis AI</span>
+        </div>
+      </div>
+      <p class="card-body">Analyzes hook strength, tone calibration, structural flow, and CTA effectiveness. Doesn't just score — explains exactly why your post underperformed and prescribes fixes.</p>
+      <div style="flex:1"></div>
+      <div style="border-top:1px solid var(--rule);padding-top:9px;margin-top:3px">
+        <div style="font-size:10px;color:var(--ink4);font-weight:600;margin-bottom:5px">UNDER THE HOOD</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <span class="badge badge-neutral">EngagementCoach</span>
+          <span class="badge badge-neutral">Pydantic Schemas</span>
+          <span class="badge badge-neutral">Eval Framework</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="module-card fi" style="--accent-color:#5B2FBE">
+      <div class="row" style="gap:10px;align-items:flex-start">
+        <div class="card-icon" style="background:var(--purple-lt)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5B2FBE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        </div>
+        <div>
+          <div class="card-title" style="color:#5B2FBE">Trend Radar</div>
+          <span class="badge" style="background:var(--purple-lt);color:var(--purple);margin-top:2px">Early Signal Detection</span>
+        </div>
+      </div>
+      <p class="card-body">Monitors Reddit, YouTube, and Google Trends continuously. Surfaces niche-specific opportunities before they saturate the mainstream feed. Built on Celery async workers.</p>
+      <div style="flex:1"></div>
+      <div style="border-top:1px solid var(--rule);padding-top:9px;margin-top:3px">
+        <div style="font-size:10px;color:var(--ink4);font-weight:600;margin-bottom:5px">UNDER THE HOOD</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <span class="badge badge-neutral">TrendRadar Engine</span>
+          <span class="badge badge-neutral">Celery Workers</span>
+          <span class="badge badge-neutral">Async-first</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="module-card fi" style="--accent-color:#0D7490;grid-column:span 2">
+      <div class="row" style="gap:10px;align-items:flex-start">
+        <div class="card-icon" style="background:var(--teal-lt)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0D7490" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+        <div>
+          <div class="card-title" style="color:#0D7490">Analytics &amp; Performance Intelligence</div>
+          <span class="badge" style="background:var(--teal-lt);color:var(--teal);margin-top:2px">Continuous Strategy Refinement</span>
+        </div>
+      </div>
+      <p class="card-body">Aggregates post-performance data across all platforms into a unified dashboard. Identifies patterns in what works for your specific audience, feeds insights back into the Smart Calendar, and closes the intelligence loop — making every future strategy cycle smarter than the last.</p>
+      <div style="flex:1"></div>
+      <div style="border-top:1px solid var(--rule);padding-top:9px;margin-top:3px">
+        <div style="font-size:10px;color:var(--ink4);font-weight:600;margin-bottom:5px">UNDER THE HOOD</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <span class="badge badge-neutral">AnalyticsEngine</span>
+          <span class="badge badge-neutral">Celery compute_analytics</span>
+          <span class="badge badge-neutral">PostgreSQL time-series</span>
+          <span class="badge badge-neutral">Strategy Feedback Loop</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════ S5: MARKET ══════════════ -->
+<div class="slide" data-s="5">
+  <div class="eyebrow fi">Market Opportunity</div>
+  <div class="h-lg fi" style="margin-bottom:4px">A <span class="em">$250B economy</span> with no strategy layer.</div>
+  <div class="divider fi"></div>
+  <div class="two fi" style="gap:28px">
+    <div class="col scroll-area" style="gap:12px;justify-content:flex-start;padding-right:4px">
+      <p class="body fi" style="flex-shrink:0">The creator economy is the fastest-growing segment of the knowledge economy. Every founder, agency, and brand runs on content — and all of them are underserved. The tools they use don't talk to each other, don't learn from them, and don't get smarter over time.</p>
+
+      <div class="g2 fi" style="gap:6px;flex-shrink:0">
+        <div style="padding:14px 16px;background:white;border:1px solid var(--rule);border-radius:12px;text-align:center">
+          <div class="stat-num" style="color:var(--blue)">300M+</div>
+          <div class="stat-label">Creators worldwide<br><span style="color:var(--ink4)">50M professional</span></div>
+        </div>
+        <div style="padding:14px 16px;background:white;border:1px solid var(--rule);border-radius:12px;text-align:center">
+          <div class="stat-num" style="color:var(--orange)">40%</div>
+          <div class="stat-label">YoY market growth<br><span style="color:var(--ink4)">AI content strategy infrastructure platforms</span></div>
+        </div>
+        <div style="padding:14px 16px;background:white;border:1px solid var(--rule);border-radius:12px;text-align:center">
+          <div class="stat-num" style="color:var(--green)">$15B</div>
+          <div class="stat-label">AI content strategy infrastructure platforms SAM<br><span style="color:var(--ink4)">2025</span></div>
+        </div>
+        <div style="padding:14px 16px;background:white;border:1px solid var(--rule);border-radius:12px;text-align:center">
+          <div class="stat-num" style="color:var(--purple)">$500M</div>
+          <div class="stat-label">Iterra's SOM<br><span style="color:var(--ink4)">Strategy layer</span></div>
+        </div>
+      </div>
+
+      <div class="fi" style="padding:12px 14px;background:var(--blue-lt);border:1px solid rgba(30,63,216,.18);border-radius:10px;flex-shrink:0">
+        <div style="font-size:10.5px;font-weight:700;color:var(--blue);margin-bottom:4px">The category opportunity</div>
+        <div style="font-size:11.5px;color:var(--ink3);line-height:1.6">AI writing tools competed for the same market. Iterra defines a new one: AI content strategy — where the real value is, and where no product currently lives.</div>
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0" class="fi">
+      <svg viewBox="0 0 440 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;max-height:300px">
+        <defs>
+          <radialGradient id="g1" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="rgba(30,63,216,.1)"/>
+            <stop offset="100%" stop-color="rgba(30,63,216,.02)"/>
+          </radialGradient>
+          <radialGradient id="g2" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="rgba(26,107,66,.15)"/>
+            <stop offset="100%" stop-color="rgba(26,107,66,.03)"/>
+          </radialGradient>
+          <radialGradient id="g3" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="rgba(201,78,26,.3)"/>
+            <stop offset="100%" stop-color="rgba(201,78,26,.07)"/>
+          </radialGradient>
+        </defs>
+        <circle cx="220" cy="148" r="130" fill="url(#g1)" stroke="rgba(30,63,216,.2)" stroke-width="1.5"/>
+        <circle cx="220" cy="148" r="85" fill="url(#g2)" stroke="rgba(26,107,66,.25)" stroke-width="1.5"/>
+        <circle cx="220" cy="148" r="42" fill="url(#g3)" stroke="rgba(201,78,26,.5)" stroke-width="2"/>
+        <text x="108" y="36" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="7.5" fill="#1E3FD8" font-weight="700" letter-spacing="1.5">TAM</text>
+        <text x="108" y="54" text-anchor="middle" font-family="'Playfair Display',serif" font-size="22" fill="#0D1321" font-weight="700">$250B</text>
+        <text x="108" y="70" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="9" fill="#8A96A8">Creator Economy</text>
+        <line x1="152" y1="50" x2="180" y2="58" stroke="rgba(30,63,216,.3)" stroke-width="1" stroke-dasharray="4 3"/>
+        <circle cx="180" cy="58" r="2.5" fill="rgba(30,63,216,.4)"/>
+        <text x="345" y="36" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="7.5" fill="#1A6B42" font-weight="700" letter-spacing="1.5">SAM</text>
+        <text x="345" y="54" text-anchor="middle" font-family="'Playfair Display',serif" font-size="22" fill="#1A6B42" font-weight="700">$15B</text>
+        <text x="345" y="70" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="9" fill="#8A96A8">AI Content Tools</text>
+        <line x1="302" y1="50" x2="266" y2="90" stroke="rgba(26,107,66,.3)" stroke-width="1" stroke-dasharray="4 3"/>
+        <circle cx="266" cy="90" r="2.5" fill="rgba(26,107,66,.4)"/>
+        <text x="220" y="228" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="7.5" fill="#C94E1A" font-weight="700" letter-spacing="1.5">SOM — ITERRA'S TARGET</text>
+        <text x="220" y="248" text-anchor="middle" font-family="'Playfair Display',serif" font-size="22" fill="#C94E1A" font-weight="700">$500M</text>
+        <text x="220" y="264" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="9" fill="#8A96A8">AI Content Strategy</text>
+        <text x="220" y="282" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8" font-style="italic">currently an empty category</text>
+        <line x1="220" y1="190" x2="220" y2="225" stroke="rgba(201,78,26,.4)" stroke-width="1" stroke-dasharray="4 3"/>
+        <circle cx="220" cy="190" r="2.5" fill="rgba(201,78,26,.6)"/>
+        <text x="220" y="143" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="rgba(201,78,26,.7)" font-weight="700" letter-spacing=".5">ITERRA</text>
+        <text x="220" y="157" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="7.5" fill="#8A96A8" font-style="italic">first mover</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ S6: ARCHITECTURE ══════════════ -->
+<div class="slide" data-s="6">
+  <div style="flex-shrink:0" class="fi">
+    <div class="eyebrow">Technical Foundation</div>
+    <div class="h-md">Built to scale. Engineered for <span class="em">trust.</span></div>
+    <div class="divider" style="margin-top:8px"></div>
+  </div>
+  <div style="flex:1;min-height:0;display:flex;align-items:stretch;margin-top:10px" class="fi">
+    <svg viewBox="0 0 860 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <marker id="arb" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto">
+          <path d="M2 2L8 5L2 8" fill="none" stroke="rgba(30,63,216,.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+        <marker id="arg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto">
+          <path d="M2 2L8 5L2 8" fill="none" stroke="rgba(26,107,66,.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+        <marker id="ard" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto">
+          <path d="M2 2L8 5L2 8" fill="none" stroke="rgba(138,150,168,.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- CLIENT LAYER (y 2–78) · 35 px gaps -->
+      <rect x="2" y="2" width="856" height="76" rx="10" fill="rgba(30,63,216,.04)" stroke="rgba(30,63,216,.16)" stroke-width="1"/>
+      <text x="14" y="16" font-family="'Plus Jakarta Sans',sans-serif" font-size="7" fill="#8A96A8" font-weight="700" letter-spacing="2">CLIENT LAYER</text>
+      <rect x="20" y="20" width="165" height="48" rx="8" fill="white" stroke="rgba(30,63,216,.4)" stroke-width="1.5"/>
+      <text x="103" y="39" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#1E3FD8" font-weight="700">Next.js 14</text>
+      <text x="103" y="54" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8">TypeScript · Tailwind · Zustand</text>
+      <rect x="220" y="20" width="165" height="48" rx="8" fill="white" stroke="rgba(30,63,216,.25)" stroke-width="1"/>
+      <text x="303" y="39" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#1E3FD8" font-weight="700">Supabase Auth</text>
+      <text x="303" y="54" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8">OAuth · Magic Links · Dual JWT</text>
+      <rect x="420" y="20" width="110" height="48" rx="8" fill="rgba(30,63,216,.03)" stroke="rgba(30,63,216,.1)" stroke-width="1" stroke-dasharray="5 3"/>
+      <text x="475" y="42" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="10" fill="#8A96A8">Browser</text>
+      <text x="475" y="57" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="7.5" fill="#8A96A8">Port 3000</text>
+      <rect x="565" y="20" width="172" height="48" rx="8" fill="white" stroke="rgba(26,107,66,.3)" stroke-width="1"/>
+      <text x="651" y="39" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#1A6B42" font-weight="700">Google Drive OAuth</text>
+      <text x="651" y="54" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8">User-owned storage · Privacy shield</text>
+
+      <!-- CLIENT → API arrows (42 px) -->
+      <line x1="103" y1="68" x2="103" y2="106" stroke="rgba(30,63,216,.45)" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#arb)"/>
+      <text x="109" y="91" font-family="'Plus Jakarta Sans',sans-serif" font-size="7" fill="rgba(30,63,216,.6)" font-weight="600">HTTPS</text>
+      <line x1="303" y1="68" x2="303" y2="106" stroke="rgba(30,63,216,.35)" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#arb)"/>
+
+      <!-- API / AI LAYER (y 110–186) · 35 px gaps -->
+      <rect x="2" y="110" width="856" height="76" rx="10" fill="rgba(26,107,66,.03)" stroke="rgba(26,107,66,.16)" stroke-width="1"/>
+      <text x="14" y="124" font-family="'Plus Jakarta Sans',sans-serif" font-size="7" fill="#8A96A8" font-weight="700" letter-spacing="2">API / AI LAYER</text>
+      <rect x="20" y="128" width="165" height="48" rx="8" fill="white" stroke="rgba(26,107,66,.4)" stroke-width="1.5"/>
+      <text x="103" y="147" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#1A6B42" font-weight="700">FastAPI</text>
+      <text x="103" y="162" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8">Python 3.11 · Pydantic v2 · SQLAlchemy</text>
+      <rect x="220" y="128" width="176" height="48" rx="8" fill="white" stroke="rgba(30,63,216,.5)" stroke-width="2"/>
+      <text x="308" y="147" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#1E3FD8" font-weight="700">iterra_ai package</text>
+      <text x="308" y="162" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8">CalendarEngine · Coach · Radar · Repurpose</text>
+      <rect x="431" y="128" width="165" height="48" rx="8" fill="white" stroke="rgba(30,63,216,.25)" stroke-width="1"/>
+      <text x="514" y="147" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#1E3FD8" font-weight="700">Anthropic Claude</text>
+      <text x="514" y="162" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8">claude-sonnet · Typed prompts · Evals</text>
+      <rect x="631" y="128" width="165" height="48" rx="8" fill="rgba(138,150,168,.05)" stroke="rgba(138,150,168,.2)" stroke-width="1" stroke-dasharray="5 3"/>
+      <text x="714" y="147" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#4A5568" font-weight="600">Celery Workers</text>
+      <text x="714" y="162" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8">Radar scans · Reports · Async jobs</text>
+
+      <!-- Horizontal connectors within API layer -->
+      <line x1="185" y1="152" x2="220" y2="152" stroke="rgba(30,63,216,.6)" stroke-width="1" marker-end="url(#arb)"/>
+      <text x="202" y="143" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="7" fill="rgba(30,63,216,.6)" font-weight="600">import</text>
+      <line x1="396" y1="152" x2="431" y2="152" stroke="rgba(30,63,216,.5)" stroke-width="1" marker-end="url(#arb)"/>
+      <text x="413" y="143" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="7" fill="rgba(30,63,216,.6)" font-weight="600">API</text>
+
+      <!-- API → DATA arrows (42 px) -->
+      <line x1="103" y1="176" x2="103" y2="214" stroke="rgba(26,107,66,.45)" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#arg)"/>
+      <text x="109" y="198" font-family="'Plus Jakarta Sans',sans-serif" font-size="7" fill="rgba(26,107,66,.6)" font-weight="600">SQL</text>
+      <line x1="714" y1="176" x2="714" y2="214" stroke="rgba(138,150,168,.4)" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#ard)"/>
+
+      <!-- DATA / INFRA LAYER (y 218–278) -->
+      <rect x="2" y="218" width="856" height="60" rx="10" fill="rgba(138,150,168,.03)" stroke="rgba(138,150,168,.12)" stroke-width="1"/>
+      <text x="14" y="232" font-family="'Plus Jakarta Sans',sans-serif" font-size="7" fill="#8A96A8" font-weight="700" letter-spacing="2">DATA / INFRA LAYER</text>
+      <rect x="20" y="238" width="150" height="32" rx="7" fill="white" stroke="rgba(138,150,168,.25)" stroke-width="1"/>
+      <text x="95" y="253" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="10" fill="#2A3347" font-weight="700">PostgreSQL 16</text>
+      <text x="95" y="264" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="7.5" fill="#8A96A8">Alembic migrations</text>
+      <rect x="180" y="238" width="120" height="32" rx="7" fill="white" stroke="rgba(138,150,168,.2)" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="240" y="253" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="10" fill="#2A3347" font-weight="700">Redis</text>
+      <text x="240" y="264" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="7.5" fill="#8A96A8">Celery broker</text>
+      <text x="322" y="234" font-family="'Plus Jakarta Sans',sans-serif" font-size="7" fill="#8A96A8" font-weight="700" letter-spacing="1.2">EXTERNAL SOURCES</text>
+      <rect x="322" y="238" width="110" height="32" rx="7" fill="rgba(138,150,168,.04)" stroke="rgba(138,150,168,.12)" stroke-width="1"/>
+      <text x="377" y="257" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="9" fill="#4A5568">LinkedIn OAuth</text>
+      <rect x="442" y="238" width="110" height="32" rx="7" fill="rgba(138,150,168,.04)" stroke="rgba(138,150,168,.12)" stroke-width="1"/>
+      <text x="497" y="257" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="9" fill="#4A5568">Reddit · YouTube</text>
+      <rect x="562" y="238" width="130" height="32" rx="7" fill="rgba(138,150,168,.04)" stroke="rgba(138,150,168,.12)" stroke-width="1"/>
+      <text x="627" y="257" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="9" fill="#4A5568">Google Trends</text>
+      <rect x="706" y="238" width="148" height="32" rx="7" fill="var(--green-lt,rgba(26,107,66,.06))" stroke="rgba(26,107,66,.2)" stroke-width="1"/>
+      <text x="780" y="253" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="9.5" fill="#1A6B42" font-weight="700">GitHub Actions CI/CD</text>
+      <text x="780" y="265" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="7.5" fill="#8A96A8">Docker · Nginx · Production-ready</text>
+    </svg>
+  
+  </div>
+  <div class="row fi" style="gap:7px;flex-wrap:wrap;margin-top:8px;flex-shrink:0">
+    <span class="badge badge-blue">Contracts before code</span>
+    <span class="badge badge-green">AI as imported package — zero HTTP latency</span>
+    <span class="badge badge-blue">Typed prompts — versioned &amp; evaluated</span>
+    <span class="badge badge-neutral">Auto-generated TypeScript from Python schemas</span>
+    <span class="badge badge-neutral">Eval framework for every AI module</span>
+  </div>
+</div>
+
+<!-- ══════════════ S7: PRIVACY ══════════════ -->
+<div class="slide" data-s="7">
+  <div class="two fi" style="gap:28px">
+    <div class="col scroll-area" style="justify-content:flex-start;gap:0;padding-right:4px">
+      <div class="eyebrow fi" style="color:var(--green)">Privacy-First Architecture · Enterprise Wedge</div>
+      <div class="h-lg fi">Your content lives<br>in <span class="em">your</span> Drive.<br>Not ours.</div>
+      <div class="divider fi" style="background:linear-gradient(90deg,var(--green),transparent)"></div>
+      <p class="body fi" style="margin-bottom:8px">In an era of AI training scandals and data breaches, Iterra made a deliberate architectural choice: <strong style="color:var(--ink)">your data never touches our servers — enforced at the infrastructure level, not just policy.</strong></p>
+      <div style="padding:10px 14px;background:var(--blue-lt);border:1px solid rgba(30,63,216,.18);border-radius:10px;margin-bottom:10px" class="fi">
+        <div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:4px">🔒 The Enterprise Unlock</div>
+        <div style="font-size:11px;color:var(--ink3);line-height:1.6">This privacy architecture is our <em style="color:var(--blue)">wedge into B2B and Enterprise</em>. Large brands and agencies cannot use tools that store their proprietary strategy and content on third-party servers. Iterra is the only AI strategy platform that passes enterprise security reviews out of the box — unlocking a customer segment worth 10× the SMB market.</div>
+      </div>
+      <div class="col fi" style="gap:10px">
+        <div class="pain-row fi" style="padding:12px 16px;gap:14px">
+          <div class="pain-icon" style="background:var(--green-lt);width:38px;height:38px;border-radius:10px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1A6B42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <div><div class="pain-title" style="font-size:13.5px;margin-bottom:4px">Google Drive Storage</div><div class="pain-body" style="font-size:12px;line-height:1.6">All drafts and brand profiles live in <em style="color:var(--green)">your</em> Google Drive via OAuth. Revoke access anytime — your data stays yours.</div></div>
+        </div>
+        <div class="pain-row fi" style="padding:12px 16px;gap:14px">
+          <div class="pain-icon" style="background:var(--blue-lt);width:38px;height:38px;border-radius:10px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E3FD8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div><div class="pain-title" style="font-size:13.5px;margin-bottom:4px">Dual JWT Authentication</div><div class="pain-body" style="font-size:12px;line-height:1.6">Supabase Auth paired with custom JWTs. Battle-tested passlib and python-jose. No proprietary auth risk — fully auditable.</div></div>
+        </div>
+        <div class="pain-row fi" style="padding:12px 16px;gap:14px">
+          <div class="pain-icon" style="background:var(--orange-lt);width:38px;height:38px;border-radius:10px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C94E1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div><div class="pain-title" style="font-size:13.5px;margin-bottom:4px">Zero Raw LLM Retention</div><div class="pain-body" style="font-size:12px;line-height:1.6">Every AI response is structured through Pydantic schemas. No raw strings stored, no prompts logged without consent.</div></div>
+        </div>
+
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:70px;gap:14px;min-height:0" class="fi">
+      <svg viewBox="0 0 270 370" xmlns="http://www.w3.org/2000/svg" style="max-height:360px;width:100%">
+        <defs>
+          <linearGradient id="shieldg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(26,107,66,.2)"/>
+            <stop offset="100%" stop-color="rgba(26,107,66,.03)"/>
+          </linearGradient>
+          <filter id="glow3"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <marker id="arga" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M2 2L8 5L2 8" fill="none" stroke="rgba(26,107,66,.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+          <marker id="arba2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M2 2L8 5L2 8" fill="none" stroke="rgba(30,63,216,.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+        </defs>
+        <path d="M135 18 L224 54 L224 155 Q224 238 135 278 Q46 238 46 155 L46 54 Z" fill="url(#shieldg)" stroke="rgba(26,107,66,.25)" stroke-width="1.5"/>
+        <circle cx="135" cy="50" r="22" fill="white" stroke="rgba(30,63,216,.35)" stroke-width="1.5"/>
+        <text x="135" y="47" text-anchor="middle" font-size="16">👤</text>
+        <text x="135" y="61" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8" font-weight="600">YOU</text>
+        <line x1="135" y1="73" x2="135" y2="96" stroke="rgba(30,63,216,.4)" stroke-width="1" stroke-dasharray="3 3" marker-end="url(#arba2)"/>
+        <text x="147" y="88" font-family="'Plus Jakarta Sans',sans-serif" font-size="7.5" fill="rgba(30,63,216,.5)">OAuth</text>
+        <rect x="78" y="100" width="114" height="34" rx="8" fill="white" stroke="rgba(26,107,66,.4)" stroke-width="1.5"/>
+        <text x="135" y="116" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="10.5" fill="#1A6B42" font-weight="700">Google Drive</text>
+        <text x="135" y="128" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8">Your account · Your control</text>
+        <line x1="135" y1="134" x2="135" y2="155" stroke="rgba(26,107,66,.35)" stroke-width="1" stroke-dasharray="3 3" marker-end="url(#arga)"/>
+        <rect x="72" y="159" width="126" height="34" rx="8" fill="white" stroke="rgba(30,63,216,.28)" stroke-width="1"/>
+        <text x="135" y="174" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="10" fill="#1E3FD8" font-weight="700">iterra_ai engine</text>
+        <text x="135" y="186" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8">Reads · Processes · Forgets</text>
+        <line x1="135" y1="193" x2="135" y2="214" stroke="rgba(30,63,216,.3)" stroke-width="1" stroke-dasharray="3 3" marker-end="url(#arba2)"/>
+        <rect x="72" y="218" width="126" height="34" rx="8" fill="white" stroke="rgba(201,78,26,.3)" stroke-width="1"/>
+        <text x="135" y="233" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="10" fill="#C94E1A" font-weight="700">Typed Output</text>
+        <text x="135" y="246" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8" fill="#8A96A8">Pydantic · No raw strings</text>
+        <text x="135" y="295" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="11.5" fill="#1A6B42" font-weight="700" letter-spacing=".04em" filter="url(#glow3)">PRIVACY SHIELD</text>
+        <text x="135" y="310" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8.5" fill="#8A96A8">Revocable · Encrypted · Zero retention</text>
+        <rect x="16" y="328" width="238" height="36" rx="9" fill="var(--orange-lt)" stroke="rgba(201,78,26,.2)" stroke-width="1"/>
+        <text x="135" y="343" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="9.5" fill="#C94E1A" font-weight="700">Jasper / Buffer / Hootsuite</text>
+        <text x="135" y="357" text-anchor="middle" font-family="'Plus Jakarta Sans',sans-serif" font-size="8.5" fill="#8A96A8">Your data lives on their servers. Always.</text>
+      </svg>
+      <div style="padding:12px 14px;background:var(--orange-lt);border-left:3px solid var(--orange);border-radius:0 10px 10px 0;flex-shrink:0;align-self:stretch;margin-top:auto">
+        <div style="font-size:10.5px;font-weight:700;color:var(--orange);margin-bottom:3px">The True Compounding Moat</div>
+        <div style="font-size:11px;color:var(--ink3);line-height:1.6">Our privacy shield gets users in the door, but data gravity keeps them here. Iterra continuously learns from post performance. The longer they use it, the better it predicts their specific audience. Competitors offer a blank slate every day; we offer a compounding brain.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ S8: TRACTION — REDESIGNED (no scroll) ══════════════ -->
+<div class="slide" data-s="8">
+  <!-- Header -->
+  <div style="flex-shrink:0" class="fi">
+    <div class="eyebrow green">Traction</div>
+    <div class="h-lg" style="margin-bottom:2px">Phase 1: <span class="em-g">Private Alpha Live.</span></div>
+    <div class="divider" style="background:linear-gradient(90deg,var(--green),transparent);margin:8px 0 6px"></div>
+    <p class="body" style="max-width:700px">Not a pitch for an idea — the full production stack is built, tested, and running with 15 highly-engaged private alpha users. We're raising to scale a system that already works.</p>
+  </div>
+
+  <!-- Body: 2 columns, no scroll -->
+  <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:22px;flex:1;min-height:0;margin-top:14px;align-items:start" class="fi">
+
+    <!-- LEFT: 2×4 checklist grid -->
+    <div>
+      <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);font-weight:700;margin-bottom:9px">Phase 1 — All Systems Live</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div style="display:flex;align-items:flex-start;gap:9px;padding:9px 12px;background:white;border:1px solid rgba(26,107,66,.2);border-radius:8px;font-size:11.5px;color:var(--ink2);line-height:1.4">
+          <span style="color:var(--green);font-size:13px;font-weight:700;flex-shrink:0;margin-top:0px">✓</span>
+          <span>User auth — Supabase + dual JWT</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:9px;padding:9px 12px;background:white;border:1px solid rgba(26,107,66,.2);border-radius:8px;font-size:11.5px;color:var(--ink2);line-height:1.4">
+          <span style="color:var(--green);font-size:13px;font-weight:700;flex-shrink:0">✓</span>
+          <span>Brand profile AI — voice analysis</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:9px;padding:9px 12px;background:white;border:1px solid rgba(26,107,66,.2);border-radius:8px;font-size:11.5px;color:var(--ink2);line-height:1.4">
+          <span style="color:var(--green);font-size:13px;font-weight:700;flex-shrink:0">✓</span>
+          <span>Smart Content Calendar — live</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:9px;padding:9px 12px;background:white;border:1px solid rgba(26,107,66,.2);border-radius:8px;font-size:11.5px;color:var(--ink2);line-height:1.4">
+          <span style="color:var(--green);font-size:13px;font-weight:700;flex-shrink:0">✓</span>
+          <span>Trend Radar — Celery async workers</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:9px;padding:9px 12px;background:white;border:1px solid rgba(26,107,66,.2);border-radius:8px;font-size:11.5px;color:var(--ink2);line-height:1.4">
+          <span style="color:var(--green);font-size:13px;font-weight:700;flex-shrink:0">✓</span>
+          <span>AI Engagement Coach — CoachEngine</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:9px;padding:9px 12px;background:white;border:1px solid rgba(26,107,66,.2);border-radius:8px;font-size:11.5px;color:var(--ink2);line-height:1.4">
+          <span style="color:var(--green);font-size:13px;font-weight:700;flex-shrink:0">✓</span>
+          <span>Repurposing Engine — cross-platform</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:9px;padding:9px 12px;background:white;border:1px solid rgba(26,107,66,.2);border-radius:8px;font-size:11.5px;color:var(--ink2);line-height:1.4">
+          <span style="color:var(--green);font-size:13px;font-weight:700;flex-shrink:0">✓</span>
+          <span>CI/CD — Docker · Nginx · prod-ready</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:9px;padding:9px 12px;background:white;border:1px solid rgba(26,107,66,.2);border-radius:8px;font-size:11.5px;color:var(--ink2);line-height:1.4">
+          <span style="color:var(--green);font-size:13px;font-weight:700;flex-shrink:0">✓</span>
+          <span>AI eval framework — every module tested</span>
+        </div>
+
+        <!-- Build progress bar -->
+      <div style="background:white;border:1px solid var(--rule);border-radius:9px;padding:10px 13px;margin-top:3px;grid-column:1/-1">
+        <div style="font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--ink4);margin-bottom:7px;text-transform:uppercase">Build Progress</div>
+        <div style="display:flex;gap:4px">
+          <div style="flex:1;height:8px;border-radius:2px;background:var(--green)"></div>
+          <div style="flex:1;height:8px;border-radius:2px;background:rgba(30,63,216,.35)"></div>
+          <div style="flex:1;height:8px;border-radius:2px;background:var(--cream2)"></div>
+          <div style="flex:1;height:8px;border-radius:2px;background:var(--cream2)"></div>
+          <div style="flex:1;height:8px;border-radius:2px;background:var(--cream2)"></div>
+          <div style="flex:1;height:8px;border-radius:2px;background:var(--cream2)"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:5px">
+          <span style="font-size:8px;color:var(--green);font-weight:600">P1 done</span>
+          <span style="font-size:8px;color:var(--blue);font-weight:600">P2 in progress</span>
+          <span style="font-size:8px;color:var(--ink4)">P3–P6</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- RIGHT: 6-phase roadmap + build progress -->
+    <div style="display:flex;flex-direction:column;gap:7px">
+      <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink4);font-weight:700;margin-bottom:2px">6-Phase Roadmap</div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1.5px solid rgba(26,107,66,.3);border-radius:9px">
+        <span class="badge badge-green" style="flex-shrink:0;white-space:nowrap;font-size:8.5px">✓ P1</span>
+        <div><div style="font-size:11.5px;font-weight:700;color:var(--ink);line-height:1.2">Foundation Complete</div><div style="font-size:9.5px;color:var(--ink3);margin-top:2px">Auth · Calendar · Coach · Radar · Repurpose</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1.5px solid rgba(30,63,216,.25);border-radius:9px">
+        <span class="badge badge-blue" style="flex-shrink:0;white-space:nowrap;font-size:8.5px">→ P2</span>
+        <div><div style="font-size:11.5px;font-weight:700;color:var(--ink);line-height:1.2">Intelligence Layer</div><div style="font-size:9.5px;color:var(--ink3);margin-top:2px">Real-time scraping · Brand voice AI · A/B</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1px solid var(--rule);border-radius:9px">
+        <span class="badge badge-neutral" style="flex-shrink:0;font-size:8.5px">P3</span>
+        <div><div style="font-size:11.5px;font-weight:700;color:var(--ink);line-height:1.2">Automation</div><div style="font-size:9.5px;color:var(--ink3);margin-top:2px">Auto-publish · Notifications · Batch gen</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1px solid var(--rule);border-radius:9px">
+        <span class="badge badge-neutral" style="flex-shrink:0;font-size:8.5px">P4</span>
+        <div><div style="font-size:11.5px;font-weight:700;color:var(--ink);line-height:1.2">Analytics</div><div style="font-size:9.5px;color:var(--ink3);margin-top:2px">Engagement tracking · Competitor intel</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1px solid var(--rule);border-radius:9px">
+        <span class="badge badge-neutral" style="flex-shrink:0;font-size:8.5px">P5</span>
+        <div><div style="font-size:11.5px;font-weight:700;color:var(--ink);line-height:1.2">Collaboration</div><div style="font-size:9.5px;color:var(--ink3);margin-top:2px">Team workspaces · Approval workflows</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1.5px solid rgba(201,78,26,.25);border-radius:9px">
+        <span class="badge badge-orange" style="flex-shrink:0;font-size:8.5px">P6</span>
+        <div><div style="font-size:11.5px;font-weight:700;color:var(--ink);line-height:1.2">Enterprise</div><div style="font-size:9.5px;color:var(--ink3);margin-top:2px">White-label · API · SSO/SAML · Fine-tuning</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════ S9: GTM — REDESIGNED (no scroll) ══════════════ -->
+<div class="slide" data-s="9">
+  <!-- Header -->
+  <div style="flex-shrink:0" class="fi">
+    <div class="eyebrow">Go-to-Market</div>
+    <div class="h-lg" style="margin-bottom:2px">India first. <span class="em">Global by design.</span></div>
+    <div class="divider" style="margin:8px 0 6px"></div>
+    <p class="body" style="max-width:700px">India has one of the world's fastest-growing creator ecosystems — 50M+ active creators underserved by dollar-denominated tools. Iterra launches deep here, then globalizes the playbook.</p>
+  </div>
+
+  <!-- Body: 2 columns, no scroll -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;flex:1;min-height:0;margin-top:12px;align-items:start" class="fi">
+
+    <!-- LEFT: 4 GTM phases (2×2) + unit economics -->
+    <div style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div style="padding:10px 13px;background:white;border:1px solid var(--rule);border-radius:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:4px">① Creator Communities</div>
+          <div style="font-size:10.5px;color:var(--ink3);line-height:1.5">LinkedIn creator groups, content strategists, agency founders, and solo brand builders.</div>
+        </div>
+        <div style="padding:10px 13px;background:white;border:1px solid var(--rule);border-radius:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:4px">② Waitlist Activation</div>
+          <div style="font-size:10.5px;color:var(--ink3);line-height:1.5">Email + referral mechanics. Free Starter tier to reduce friction and build word-of-mouth.</div>
+        </div>
+        <div style="padding:10px 13px;background:white;border:1px solid var(--rule);border-radius:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:4px">③ Content Moat</div>
+          <div style="font-size:10.5px;color:var(--ink3);line-height:1.5">Use Iterra to create Iterra's own content — the ultimate proof-of-product driving inbound.</div>
+        </div>
+        <div style="padding:10px 13px;background:white;border:1px solid var(--rule);border-radius:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:4px">④ Agency Partnerships</div>
+          <div style="font-size:10.5px;color:var(--ink3);line-height:1.5">One agency deal = 20–100 Pro seats. Enterprise channel becomes primary growth lever.</div>
+        </div>
+      </div>
+
+      <!-- Unit Economics -->
+      <div style="padding:13px 16px;background:var(--blue-lt);border:1px solid rgba(30,63,216,.18);border-radius:10px">
+        <div style="font-size:10.5px;font-weight:700;color:var(--blue);margin-bottom:9px">Unit Economics (Projected at Scale)</div>
+        <div style="display:flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid rgba(30,63,216,.1)">
+          <div style="flex:1;padding:8px 10px;background:white;text-align:center;border-right:1px solid var(--rule)">
+            <div style="font-family:var(--serif);font-size:20px;font-weight:700;color:var(--blue);line-height:1">~₹3,000</div>
+            <div style="font-size:9.5px;color:var(--ink4);margin-top:3px;line-height:1.4">Target CAC<br>(blended)</div>
+          </div>
+          <div style="flex:1;padding:8px 10px;background:white;text-align:center;border-right:1px solid var(--rule)">
+            <div style="font-family:var(--serif);font-size:20px;font-weight:700;color:var(--green);line-height:1">~₹24K</div>
+            <div style="font-size:9.5px;color:var(--ink4);margin-top:3px;line-height:1.4">LTV at Pro tier<br>(24-month avg)</div>
+          </div>
+          <div style="flex:1;padding:8px 10px;background:white;text-align:center">
+            <div style="font-family:var(--serif);font-size:20px;font-weight:700;color:var(--orange);line-height:1">8×</div>
+            <div style="font-size:9.5px;color:var(--ink4);margin-top:3px;line-height:1.4">LTV : CAC ratio<br>(highly efficient)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: ICP profiles + churn note -->
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink4);font-weight:700;margin-bottom:2px">Ideal Customer Profiles</div>
+
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 13px;background:white;border:1px solid var(--rule);border-radius:10px">
+        <div style="width:36px;height:36px;background:var(--blue-lt);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">💼</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--ink)">Solo Founders &amp; Solopreneurs</div><div style="font-size:10.5px;color:var(--ink3);line-height:1.45;margin-top:2px">High value, high pain. Pays for anything that saves strategic thinking time.</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 13px;background:white;border:1px solid var(--rule);border-radius:10px">
+        <div style="width:36px;height:36px;background:var(--green-lt);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">🎬</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--ink)">Professional Content Creators</div><div style="font-size:10.5px;color:var(--ink3);line-height:1.45;margin-top:2px">LinkedIn creators, YouTubers, newsletter writers. Professionalism-oriented, ROI-conscious.</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 13px;background:white;border:1px solid var(--rule);border-radius:10px">
+        <div style="width:36px;height:36px;background:var(--orange-lt);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">📊</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--ink)">Digital Marketing Agencies</div><div style="font-size:10.5px;color:var(--ink3);line-height:1.45;margin-top:2px">Managing 10–100 client accounts. Team workspaces unlock highest revenue per seat.</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 13px;background:white;border:1px solid var(--rule);border-radius:10px">
+        <div style="width:36px;height:36px;background:var(--purple-lt);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">🏢</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--ink)">B2B SaaS Marketing Teams</div><div style="font-size:10.5px;color:var(--ink3);line-height:1.45;margin-top:2px">LinkedIn-heavy demand gen. Privacy-first architecture resonates with compliance teams.</div></div>
+      </div>
+
+      <!-- Churn note -->
+      <div style="padding:10px 14px;background:var(--green-lt);border:1px solid rgba(26,107,66,.2);border-radius:10px">
+        <div style="font-size:10.5px;font-weight:700;color:var(--green);margin-bottom:3px">Why churn is structurally low</div>
+        <div style="font-size:10.5px;color:var(--ink3);line-height:1.55">Brand voice data, performance history, and content archives all accumulate. The longer a user stays, the more painful it is to leave — not because of lock-in, but because of personalization depth.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════ S10: REVENUE ══════════════ -->
+<div class="slide" data-s="10">
+  <div style="flex-shrink:0" class="fi">
+    <div class="row" style="justify-content:space-between;align-items:flex-end">
+      <div>
+        <div class="eyebrow">Business Model</div>
+        <div class="h-md">Simple SaaS. <span class="em-g">Serious compounding.</span></div>
+      </div>
+      <div class="row" style="gap:6px;align-items:center">
+        <span style="font-size:10px;color:var(--ink4);font-weight:500">Monthly</span>
+        <label class="toggle"><input type="checkbox" id="btoggle"><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+        <span style="font-size:10px;color:var(--ink4);font-weight:500">Annual</span>
+        <span class="badge badge-green" id="blabel">Save 20%</span>
+      </div>
+    </div>
+    <div class="divider" style="margin-top:8px"></div>
+  </div>
+
+  <div class="g3 fi" style="gap:10px;flex-shrink:0;margin-top:8px">
+    <div class="price-card fi">
+      <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--ink4)">Starter</div>
+      <div><div class="price-amt" id="p0">$12</div><div style="font-size:9px;color:var(--ink4);margin-top:2px">/month · Individual creators</div></div>
+      <div style="height:1px;background:var(--rule);flex-shrink:0"></div>
+      <div class="col" style="gap:5px">
+        <div class="pf">Smart Content Calendar</div>
+        <div class="pf">Trend Radar (curated)</div>
+        <div class="pf">5 repurposed posts/month</div>
+        <div class="pf">Basic Engagement Coach</div>
+      </div>
+    </div>
+    <div class="price-card featured fi">
+      <div class="price-badge">MOST POPULAR</div>
+      <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--blue)">Pro</div>
+      <div><div class="price-amt" id="p1" style="color:var(--blue)">$49</div><div style="font-size:9px;color:var(--ink4);margin-top:2px">/month · Professionals &amp; teams</div></div>
+      <div style="height:1px;background:rgba(30,63,216,.15);flex-shrink:0"></div>
+      <div class="col" style="gap:5px">
+        <div class="pf">Everything in Starter</div>
+        <div class="pf">Real-time Trend Radar</div>
+        <div class="pf">Unlimited repurposing</div>
+        <div class="pf">Full AI Engagement Coach</div>
+        <div class="pf">Brand Voice Analysis</div>
+      </div>
+    </div>
+    <div class="price-card fi">
+      <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--ink4)">Enterprise</div>
+      <div><div class="price-amt" id="p2">$299+</div><div style="font-size:9px;color:var(--ink4);margin-top:2px">/month · Agencies &amp; brands</div></div>
+      <div style="height:1px;background:var(--rule);flex-shrink:0"></div>
+      <div class="col" style="gap:5px">
+        <div class="pf">Everything in Pro</div>
+        <div class="pf">Team workspaces</div>
+        <div class="pf">White-label &amp; API access</div>
+        <div class="pf">SSO / SAML</div>
+        <div class="pf">Custom AI fine-tuning</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Revenue chart -->
+  <div class="fi" style="flex:1;min-height:0;background:white;border:1px solid var(--rule);border-radius:12px;padding:12px 16px;margin-top:10px;display:flex;flex-direction:column;overflow:hidden">
+    <div style="font-size:9px;letter-spacing:.1em;color:var(--ink4);font-weight:700;text-transform:uppercase;margin-bottom:6px;flex-shrink:0">ARR Projection</div>
+    <div style="flex:1;min-height:0;position:relative">
+      <canvas id="revchart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ S11: TEAM ══════════════ -->
+<div class="slide" data-s="11">
+  <div class="fi" style="max-width:760px;margin-bottom:16px">
+    <div class="eyebrow green fi">Team</div>
+    <div class="h-lg fi">Founder-led execution,<br><span class="em-g">not outsourced ambition.</span></div>
+    <p class="body fi" style="max-width:660px;margin-top:10px">Iterra is being built by the people closest to the problem: operators who write the product, ship the infrastructure, and talk to creators directly.</p>
+  </div>
+
+  <div class="fi" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;flex:1;min-height:0">
+    <div style="background:white;border:1px solid rgba(30,63,216,.14);border-radius:14px;padding:18px;display:grid;grid-template-columns:112px 1fr;gap:18px;align-items:center;min-height:0">
+      <img src="/founders/ujjawal.png" alt="Ujjawal Anand" style="width:112px;height:112px;border-radius:16px;object-fit:cover;border:1px solid var(--rule);box-shadow:var(--shadow)">
+      <div style="min-width:0">
+        <div style="font-size:22px;font-weight:800;color:var(--ink);line-height:1.1">Ujjawal Anand</div>
+        <div style="font-size:11px;color:var(--blue);font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-top:7px">Co-Founder · Product &amp; AI</div>
+        <div style="font-size:11.5px;color:var(--ink3);line-height:1.62;margin-top:11px">Ujjawal is the builder behind Iterra's first working system: the AI workflows, growth loops, and product surface that turned the idea into a shipped platform. He has been close enough to the user pain to know the wedge, and technical enough to keep the core intelligence in-house.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px">
+          <a href="https://www.linkedin.com/in/ujjawalanandofficial/" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(30,63,216,.2);background:var(--blue-lt);color:var(--blue);border-radius:100px;padding:5px 9px;font-size:9px;font-weight:800;text-decoration:none;letter-spacing:.02em">LinkedIn</a>
+          <a href="https://github.com/anand-official" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--rule);background:var(--paper);color:var(--ink2);border-radius:100px;padding:5px 9px;font-size:9px;font-weight:800;text-decoration:none;letter-spacing:.02em">GitHub</a>
+          <a href="mailto:admin.ittera@gmail.com" style="display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(201,78,26,.2);background:var(--orange-lt);color:var(--orange);border-radius:100px;padding:5px 9px;font-size:9px;font-weight:800;text-decoration:none;letter-spacing:.02em">Email</a>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:white;border:1px solid rgba(26,107,66,.14);border-radius:14px;padding:18px;display:grid;grid-template-columns:112px 1fr;gap:18px;align-items:center;min-height:0">
+      <img src="/founders/kshitij.png" alt="Kshitij Singh" style="width:112px;height:112px;border-radius:16px;object-fit:cover;border:1px solid var(--rule);box-shadow:var(--shadow)">
+      <div style="min-width:0">
+        <div style="font-size:22px;font-weight:800;color:var(--ink);line-height:1.1">Kshitij Singh</div>
+        <div style="font-size:11px;color:var(--green);font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-top:7px">Co-Founder · Systems &amp; Strategy</div>
+        <div style="font-size:11.5px;color:var(--ink3);line-height:1.62;margin-top:11px">Kshitij brings the product discipline behind the intelligence layer: analytics, trend detection, and the operating logic that makes Iterra more than another content generator. He thinks in systems, ships with restraint, and keeps the product tied to measurable creator outcomes.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px">
+          <a href="https://www.linkedin.com/in/kshitij-singh-ks/" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(30,63,216,.2);background:var(--blue-lt);color:var(--blue);border-radius:100px;padding:5px 9px;font-size:9px;font-weight:800;text-decoration:none;letter-spacing:.02em">LinkedIn</a>
+          <a href="https://github.com/Kshitij-KS" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--rule);background:var(--paper);color:var(--ink2);border-radius:100px;padding:5px 9px;font-size:9px;font-weight:800;text-decoration:none;letter-spacing:.02em">GitHub</a>
+          <a href="mailto:admin.ittera@gmail.com" style="display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(201,78,26,.2);background:var(--orange-lt);color:var(--orange);border-radius:100px;padding:5px 9px;font-size:9px;font-weight:800;text-decoration:none;letter-spacing:.02em">Email</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fi" style="margin-top:14px;background:var(--ink);border-radius:12px;padding:14px 18px;color:white;display:flex;align-items:center;justify-content:space-between;gap:18px">
+    <div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.45)">Why back us</div>
+    <div style="font-size:13px;line-height:1.55;color:rgba(255,255,255,.88);max-width:780px">VCs back speed, judgment, and ownership. This team has all three: we can find the pain, build the system, test it with users, and keep moving without waiting on agencies, consultants, or handoffs.</div>
+  </div>
+</div>
+
+<!-- ══════════════ S12: THE ASK — quote removed, no scroll ══════════════ -->
+<div class="slide" data-s="12">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;flex:1;min-height:0" class="fi">
+
+    <!-- LEFT: Ask + fund allocation + runway + "Why Now" summary -->
+    <div style="display:flex;flex-direction:column;gap:0;overflow:hidden">
+      <div class="eyebrow orange fi">The Ask</div>
+      <div class="h-lg fi">Raising <span class="em-o" id="ask-total">$750,000</span><br>to win the<br>strategy category.</div>
+      <div class="divider orange fi"></div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+        <div class="fund-item fi">
+          <div style="font-family:var(--serif);font-size:26px;font-weight:700;color:var(--blue);min-width:48px;line-height:1">50%</div>
+          <div><div style="font-size:12.5px;font-weight:700;color:var(--ink)">Engineering</div><div style="font-size:10.5px;color:var(--ink3);margin-top:2px" id="ask-eng">$375K · ML engineer + full-stack · Phase 2 build-out</div></div>
+        </div>
+        <div class="fund-item fi">
+          <div style="font-family:var(--serif);font-size:26px;font-weight:700;color:var(--green);min-width:48px;line-height:1">30%</div>
+          <div><div style="font-size:12.5px;font-weight:700;color:var(--ink)">Go-to-Market</div><div style="font-size:10.5px;color:var(--ink3);margin-top:2px" id="ask-gtm">$225K · Creator communities · LinkedIn · Waitlist</div></div>
+        </div>
+        <div class="fund-item fi">
+          <div style="font-family:var(--serif);font-size:26px;font-weight:700;color:var(--orange);min-width:48px;line-height:1">20%</div>
+          <div><div style="font-size:12.5px;font-weight:700;color:var(--ink)">Operations</div><div style="font-size:10.5px;color:var(--ink3);margin-top:2px" id="ask-ops">$150K · Infrastructure · Legal · Team overhead</div></div>
+        </div>
+      </div>
+      <div class="fi" style="padding:12px 14px;background:var(--orange-lt);border:1px solid rgba(201,78,26,.18);border-radius:10px;flex-shrink:0">
+        <div style="font-size:10px;color:var(--orange);font-weight:700;margin-bottom:3px">Runway</div>
+        <div style="font-size:11.5px;color:var(--ink3)">18 months to 1,000 paying customers — Series A metrics territory.</div>
+      </div>
+      <div class="fi" style="padding:14px 18px;background:var(--ink);border-radius:10px;margin-top:10px;flex-shrink:0">
+        <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.4);letter-spacing:.13em;text-transform:uppercase;margin-bottom:6px">Why Now</div>
+        <div style="font-size:12px;font-weight:600;color:white;line-height:1.65">LLM inference costs have dropped <span style="color:#7EB8F7">90% since 2022</span>. Models can now reason strategically, not just write. The infrastructure for an AI strategy layer finally exists — and no one has claimed the category. <span style="color:rgba(255,255,255,.55)">That window closes fast.</span></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Fund chart + milestones + team — no scroll needed -->
+    <div style="display:flex;flex-direction:column;gap:12px;overflow:hidden;min-height:0">
+      <!-- Fund donut -->
+      <div style="background:white;border:1px solid var(--rule);border-radius:12px;padding:12px 16px;flex:1;min-height:0;display:flex;flex-direction:column">
+        <div style="font-size:9px;letter-spacing:.1em;color:var(--ink4);font-weight:700;text-transform:uppercase;margin-bottom:8px;flex-shrink:0">Use of Funds</div>
+        <div style="flex:1;min-height:0;position:relative"><canvas id="fundchart"></canvas></div>
+      </div>
+
+      <!-- Milestones -->
+      <div style="display:flex;flex-direction:column;gap:7px;flex-shrink:0">
+        <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink4);font-weight:700">12-Month Milestones</div>
+        <div class="ms-row fi"><div class="ms-dot" style="background:var(--blue)"></div><div><strong style="color:var(--ink);font-weight:600">Month 3</strong> — Real-time Trend Radar + 500 users</div></div>
+        <div class="ms-row fi"><div class="ms-dot" style="background:var(--green)"></div><div><strong style="color:var(--ink);font-weight:600">Month 6</strong> — Auto-publish pipeline + $100K ARR</div></div>
+        <div class="ms-row fi"><div class="ms-dot" style="background:var(--orange)"></div><div id="ask-arr"><strong style="color:var(--ink);font-weight:600">Month 9</strong> — Enterprise rollout + $250K ARR</div></div>
+        <div class="ms-row fi"><div class="ms-dot" style="background:var(--purple)"></div><div><strong style="color:var(--ink);font-weight:600">Month 12</strong> — 10,000 paid creators + Series A metrics</div></div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+  </div><!-- /deck -->
+
+  <!-- CURRENCY TOGGLE -->
+  <div id="currency-toggle" style="position:absolute;top:62px;right:24px;z-index:100;display:flex;align-items:center;gap:6px;background:white;padding:6px 12px;border-radius:20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);border:1px solid var(--rule);opacity:0;pointer-events:none;transition:opacity 0.3s">
+    <span style="font-size:10px;color:var(--ink4);font-weight:600">USD</span>
+    <label class="toggle"><input type="checkbox" id="curToggle"><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+    <span style="font-size:10px;color:var(--ink4);font-weight:600">INR</span>
+  </div>
+
+  <!-- BOTTOMBAR -->
+  <div id="bottombar">
+    <button class="nav-btn" id="prevBtn" disabled>←</button>
+    <button class="nav-btn" id="nextBtn">→</button>
+  </div>
+
+  <!-- NOTES OVERLAY -->
+  <div id="notes-panel">
+    <button class="notes-close" onclick="toggleNotes()">✕</button>
+    <div class="notes-content">
+      <div class="notes-eyebrow">Speaker Notes — Slide <span id="notes-num">1</span></div>
+      <div class="notes-title" id="notes-title"></div>
+      <p class="notes-text" id="notes-body"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOTAL = 12;
+const slides = [...document.querySelectorAll('.slide')];
+let cur = 0, notesOpen = false, chartsBuilt = {};
+let isINR = false;
+let revChartInstance = null;
+
+const pMoUSD = ['$12','$49','$299+'];
+const pAnUSD = ['$9','$39','$249+'];
+const pMoINR = ['₹999','₹3,999','₹25K+'];
+const pAnINR = ['₹799','₹3,199','₹20K+'];
+
+const askUSD = { total: '$750,000', eng: '$375K', gtm: '$225K', ops: '$150K', arr: '$250K ARR' };
+const askINR = { total: '₹6.2 Crores', eng: '₹3.1Cr', gtm: '₹1.8Cr', ops: '₹1.2Cr', arr: '₹2.1Cr ARR' };
+
+const chartDataUSD = [0, 1.5, 7.5, 22];
+const chartDataINR = [0, 12.5, 62, 183];
+
+const NOTES = [
+  {title:"Cover — Iterra",body:"Iterra is an AI content strategy platform — not a writing tool. That distinction matters. Every other pitch in this space is about word generation. Iterra is about intelligence, strategy, and compounding performance. We have four AI modules, a production-grade codebase, and a clear thesis: the creator economy needed strategy infrastructure, and nobody built it. Until now."},
+  {title:"The Problem",body:"Content marketing has never been larger or more broken. AI made writing trivially cheap. But writing was never the expensive part — strategy was. Knowing which topics to pursue, which platform to prioritize, why a post flopped, and what the next one should do differently. 73% of professional creators report burnout not from creation but from strategic fog. Every tool on the market optimizes for output. Zero optimize for outcomes."},
+  {title:"The Solution — The Intelligence Loop",body:"Iterra connects five stages into one closed system. Trend signals inform strategy. Strategy shapes creation. Performance data feeds analysis. Analysis drives refinement. Refinement updates the strategy. Every cycle, the system knows more about what works for this creator's specific audience. No competitor does this. Jasper writes. Buffer schedules. None of them learn."},
+  {title:"The Platform — Four Modules",body:"The Smart Content Calendar generates data-informed weekly content plans based on your niche, trend signals, and past performance — not a blank template. The Repurposing Engine takes one idea and creates LinkedIn posts, Twitter threads, Instagram captions, and video scripts in your brand voice. The Engagement Coach explains why your post performed the way it did and tells you how to fix the next one. The Trend Radar monitors Reddit, YouTube, and Google Trends for emerging opportunities before they saturate."},
+  {title:"Market Opportunity",body:"The creator economy is $250 billion globally, growing 40% year-over-year. 300 million creators, 50 million professional. The AI content strategy infrastructure platforms market is $15 billion. But the strategy layer — the category Iterra defines — is currently empty. First-mover advantage in a new category is the most durable competitive position a startup can have. We intend to be that category."},
+  {title:"Technical Architecture",body:"This is a production-grade monorepo: Next.js 14 frontend, FastAPI backend, PostgreSQL, Redis, Celery workers. The AI engine is a custom Python package imported directly — no microservice overhead, no internal HTTP latency. Every AI module has typed Pydantic I/O, versioned prompts, and an evaluation framework. CI/CD via GitHub Actions. Fully containerized with Docker and Nginx. The team follows strict conventions: contracts before code, no logic in routes, no API calls from React components."},
+  {title:"Privacy by Design",body:"Iterra's privacy architecture is a genuine structural moat. All user content is stored in their own Google Drive, connected via OAuth. Revoke access anytime — the data stays in their account, not ours. This is enforced architecturally, not just by policy. Buffer, Hootsuite, and Jasper store your content on their servers. To copy Iterra's approach, they'd need to rebuild their entire data model from scratch. That's not a feature — it's a foundation."},
+  {title:"Traction — Built and Shipped",body:"This is not a pitch for a concept. Phase 1 is complete and production-deployed. User authentication, brand profile AI, content calendar, trend radar, engagement coach, repurposing engine, and CI/CD pipeline — all live. We built an evaluation framework for every AI module before shipping. The raise accelerates what's already working — it doesn't fund the building of something unproven."},
+  {title:"Go-to-Market",body:"India-first for the beachhead: 50 million professional creators, underserved by dollar-denominated tools, with rapidly growing monetization ambitions. We go through creator communities and LinkedIn networks, activate a free Starter tier to reduce friction, and build word-of-mouth. Agencies become the growth multiplier — one agency deal equals 20 to 100 Pro seats. Unit economics are strong: ~₹300 CAC via community-led growth, ~₹24K LTV at Pro tier over 24 months."},
+  {title:"Business Model",body:"Three tiers: Starter at ₹999, Pro at ₹3,999, Enterprise at ₹25,000+. The SaaS model is clean. LTV compounding is structural because the product gets more valuable the longer you use it — brand voice deepens, performance history grows, strategic recommendations improve. Year 1 target: 1,000 paid users. Year 2: 5,000 users, $7.5M ARR. Year 3: enterprise expansion pushes past $22M ARR."},
+  {title:"Team",body:"This is a founder-led build. Ujjawal has been turning the product from idea into working infrastructure: AI workflows, product surface, and growth loops. Kshitij brings the systems and strategy discipline behind the intelligence layer: analytics, trend detection, and measurable creator outcomes. The point is not that we have a long resume slide. The point is that the most important parts of the company are being built directly by the founders: product, model workflows, evaluation, user learning, and launch motion."},
+  {title:"The Ask",body:"We are raising $750,000 in seed funding. 50% goes to engineering — a senior ML engineer, full-stack engineer, and Phase 2 AI intelligence layer. 30% goes to go-to-market — creator communities, LinkedIn campaigns, waitlist activation. 20% covers operations, infrastructure, and legal. This gives us 18 months to 1,000 paying customers and Series A metrics. Phase 1 is live. The category is empty. First-mover advantage is available — with your capital behind it."}
+];
+
+function goTo(n) {
+  if (n < 0 || n >= TOTAL) return;
+  slides[cur].classList.remove('active');
+  slides[cur].classList.add('exit');
+  const prev = cur;
+  setTimeout(() => slides[prev].classList.remove('exit'), 400);
+  cur = n;
+  slides[cur].classList.add('active');
+  updateUI();
+  onEnter(n);
+}
+
+function updateUI() {
+  document.getElementById('counter').textContent = String(cur+1).padStart(2,'0') + ' / ' + String(TOTAL).padStart(2,'0');
+  document.getElementById('prevBtn').disabled = cur === 0;
+  document.getElementById('nextBtn').disabled = cur === TOTAL-1;
+  document.getElementById('progress').style.width = ((cur+1)/TOTAL*100)+'%';
+  document.getElementById('notes-num').textContent = cur+1;
+  document.getElementById('notes-title').textContent = NOTES[cur].title;
+  document.getElementById('notes-body').textContent = NOTES[cur].body;
+  document.querySelectorAll('.nav-dot').forEach((d,i) => d.classList.toggle('active', i===cur));
+
+  const cTog = document.getElementById('currency-toggle');
+  if (cTog) {
+    if (cur === 9 || cur === 11) {
+      cTog.style.opacity = '1';
+      cTog.style.pointerEvents = 'auto';
+    } else {
+      cTog.style.opacity = '0';
+      cTog.style.pointerEvents = 'none';
+    }
+  }
+}
+
+function onEnter(n) {
+  if (n === 9 && !chartsBuilt[9]) { setTimeout(buildRevChart, 250); chartsBuilt[9]=true; }
+  if (n === 11 && !chartsBuilt[11]) { setTimeout(buildFundChart, 250); chartsBuilt[11]=true; }
+}
+
+function buildRevChart() {
+  const ctx = document.getElementById('revchart');
+  if (!ctx) return;
+  if (typeof Chart === 'undefined') {
+    ctx.parentElement.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:var(--ink4);line-height:1.5">Revenue chart unavailable. Check the Chart.js script connection.</div>';
+    return;
+  }
+  const data = isINR ? chartDataINR : chartDataUSD;
+  revChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Year 0', 'Year 1', 'Year 2', 'Year 3'],
+      datasets: [
+        {
+          type: 'line', label: 'Trend',
+          data: data,
+          borderColor: 'rgba(30,63,216,.4)', borderWidth: 1.5,
+          borderDash: [5,4], pointRadius: 0, fill: false, tension: 0.4, order: 0
+        },
+        {
+          type: 'bar', label: 'ARR ($M)',
+          data: data,
+          backgroundColor: ['rgba(30,63,216,.12)','rgba(30,63,216,.4)','rgba(26,107,66,.4)','rgba(201,78,26,.4)'],
+          borderColor: ['rgba(30,63,216,.3)','rgba(30,63,216,.7)','rgba(26,107,66,.7)','rgba(201,78,26,.7)'],
+          borderWidth: 1.5, borderRadius: 5, order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 900, easing: 'easeInOutQuart' },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0D1321', borderColor: 'rgba(255,255,255,.1)', borderWidth: 1,
+          titleColor: '#F7F3ED', bodyColor: '#8A96A8', padding: 10,
+          callbacks: { label: c => ' ' + (isINR ? '₹' : '$') + c.raw + (isINR ? 'Cr ARR' : 'M ARR') }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(13,19,33,.05)' }, ticks: { color: '#8A96A8', font: { family: "'Plus Jakarta Sans',sans-serif", size: 10 } }, border: { color: 'rgba(13,19,33,.08)' } },
+        y: { grid: { color: 'rgba(13,19,33,.05)' }, ticks: { color: '#8A96A8', font: { family: "'Plus Jakarta Sans',sans-serif", size: 10 }, callback: v => (isINR ? '₹' : '$')+v+(isINR ? 'Cr' : 'M') }, border: { color: 'rgba(13,19,33,.08)' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function buildFundChart() {
+  const ctx = document.getElementById('fundchart');
+  if (!ctx) return;
+  if (typeof Chart === 'undefined') {
+    ctx.parentElement.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:var(--ink4);line-height:1.5">Fund chart unavailable. Check the Chart.js script connection.</div>';
+    return;
+  }
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Engineering 50%','Go-to-Market 30%','Operations 20%'],
+      datasets: [{
+        data: [50, 30, 20],
+        backgroundColor: ['rgba(30,63,216,.75)','rgba(26,107,66,.75)','rgba(201,78,26,.75)'],
+        borderColor: ['#1E3FD8','#1A6B42','#C94E1A'],
+        borderWidth: 2, hoverOffset: 5
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '68%',
+      animation: { animateRotate: true, duration: 800 },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { color: '#8A96A8', font: { family: "'Plus Jakarta Sans',sans-serif", size: 9.5 }, padding: 8, boxWidth: 8, boxHeight: 8, usePointStyle: true } },
+        tooltip: { backgroundColor: '#0D1321', borderColor: 'rgba(255,255,255,.1)', borderWidth: 1, titleColor: '#F7F3ED', bodyColor: '#8A96A8', padding: 10 }
+      }
+    }
+  });
+}
+
+// Currency & Pricing toggle logic
+function updateCurrency() {
+  const isAnnual = document.getElementById('btoggle')?.checked ?? false;
+  const pMo = isINR ? pMoINR : pMoUSD;
+  const pAn = isINR ? pAnINR : pAnUSD;
+  const p = isAnnual ? pAn : pMo;
+  
+  ['p0','p1','p2'].forEach((id,i) => {
+    const el = document.getElementById(id);
+    el.style.opacity='0';
+    setTimeout(()=>{ el.textContent=p[i]; el.style.transition='opacity .3s'; el.style.opacity='1'; },150);
+  });
+  document.getElementById('blabel').textContent = isAnnual ? 'Annual active' : 'Save 20%';
+
+  const ask = isINR ? askINR : askUSD;
+  document.getElementById('ask-total').textContent = ask.total;
+  document.getElementById('ask-eng').textContent = ask.eng + ' · ML engineer + full-stack · Phase 2 build-out';
+  document.getElementById('ask-gtm').textContent = ask.gtm + ' · Creator communities · LinkedIn · Waitlist';
+  document.getElementById('ask-ops').textContent = ask.ops + ' · Infrastructure · Legal · Team overhead';
+  document.getElementById('ask-arr').innerHTML = '<strong style="color:var(--ink);font-weight:600">Month 9</strong> — First enterprise pilot + ' + ask.arr;
+
+  if (revChartInstance) {
+    const data = isINR ? chartDataINR : chartDataUSD;
+    revChartInstance.data.datasets[0].data = data;
+    revChartInstance.data.datasets[1].data = data;
+    revChartInstance.options.plugins.tooltip.callbacks.label = c => ' ' + (isINR ? '₹' : '$') + c.raw + (isINR ? 'Cr ARR' : 'M ARR');
+    revChartInstance.options.scales.y.ticks.callback = v => (isINR ? '₹' : '$') + v + (isINR ? 'Cr' : 'M');
+    revChartInstance.update();
+  }
+}
+
+const billingToggle = document.getElementById('btoggle');
+if (billingToggle) billingToggle.addEventListener('change', updateCurrency);
+
+const currencyToggle = document.getElementById('curToggle');
+if (currencyToggle) {
+  currencyToggle.addEventListener('change', function() {
+    isINR = this.checked;
+    updateCurrency();
+  });
+}
+
+// Nav dots
+const dotsEl = document.getElementById('dots');
+for (let i = 0; i < TOTAL; i++) {
+  const d = document.createElement('div');
+  d.className = 'nav-dot' + (i===0?' active':'');
+  d.addEventListener('click', ()=> goTo(i));
+  dotsEl.appendChild(d);
+}
+
+// Controls
+document.getElementById('prevBtn').addEventListener('click', ()=> goTo(cur-1));
+document.getElementById('nextBtn').addEventListener('click', ()=> goTo(cur+1));
+document.addEventListener('keydown', e => {
+  if (e.key==='ArrowRight'||e.key===' ') { e.preventDefault(); goTo(cur+1); }
+  else if (e.key==='ArrowLeft') { e.preventDefault(); goTo(cur-1); }
+  else if (e.key==='s'||e.key==='S') toggleNotes();
+  else if (e.key==='Escape'&&notesOpen) toggleNotes();
+});
+
+function toggleNotes() {
+  notesOpen = !notesOpen;
+  document.getElementById('notes-panel').classList.toggle('open', notesOpen);
+}
+
+updateUI();
+</script>
+</body>
+</html>
+

@@ -17,6 +17,12 @@ const nextConfig = {
    * When the browser calls same-origin `/api/v1/*`, forward to FastAPI so we avoid CORS.
    * - Local Next dev: default target http://127.0.0.1:8000
    * - Docker web image: pass API_PROXY_TARGET=http://api:8000 at build time
+
+
+  /**
+   * When the browser calls same-origin `/api/v1/*`, forward to FastAPI so we avoid CORS.
+   * - Local Next dev: default target http://127.0.0.1:8000
+   * - Docker web image: pass API_PROXY_TARGET=http://api:8000 at build time
    */
 
 
