@@ -98,12 +98,13 @@ async def _fetch_supabase_user(token: str) -> dict | None:
     """
     Fallback: call the Supabase REST API to validate an opaque or mismatched token.
     Returns a dict with at least {'sub': <uuid>} on success, or None on failure.
-    Requires SUPABASE_URL and the token to be a valid Supabase access token.
+    Requires SUPABASE_URL, a public Supabase key, and a valid Supabase access token.
     """
     import httpx
 
-    url = settings.SUPABASE_URL
-    if not url or not token:
+    url = (settings.SUPABASE_URL or settings.NEXT_PUBLIC_SUPABASE_URL).rstrip("/")
+    api_key = settings.SUPABASE_ANON_KEY or settings.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if not url or not api_key or not token:
         return None
     try:
         async with httpx.AsyncClient(timeout=5) as client:
@@ -111,7 +112,7 @@ async def _fetch_supabase_user(token: str) -> dict | None:
                 f"{url}/auth/v1/user",
                 headers={
                     "Authorization": f"Bearer {token}",
-                    "apikey": settings.SUPABASE_JWT_SECRET,  # anon key not needed here; JWT validates
+                    "apikey": api_key,
                 },
             )
             if resp.is_error:
@@ -138,6 +139,13 @@ async def get_current_user(
 
     # --- Try Supabase JWT first ---
     supabase_payload = _decode_supabase_jwt(token)
+    if supabase_payload is not None:
+        return _get_or_create_user_from_supabase(db, supabase_payload)
+
+    # --- Fall back to Supabase Auth API validation ---
+    # Useful when local JWT verification is not configured, or when the project
+    # uses signing keys that this service cannot verify locally.
+    supabase_payload = await _fetch_supabase_user(token)
     if supabase_payload is not None:
         return _get_or_create_user_from_supabase(db, supabase_payload)
 

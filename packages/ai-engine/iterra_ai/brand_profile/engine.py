@@ -17,11 +17,11 @@ class BrandProfileEngine(BaseEngine[BrandProfileInput, BrandProfileOutput]):
     Input posts are expected to be pre-formatted annotation strings:
         "Post #N | YYYY-MM-DD | Engagement: X.X%\\n{content}"
 
-    Falls back to a deterministic mock if ANTHROPIC_API_KEY is not set.
+    Falls back to a deterministic mock if no LLM provider key is set.
     """
 
     def generate(self, input: BrandProfileInput) -> BrandProfileOutput:  # noqa: A002
-        if not os.getenv("ANTHROPIC_API_KEY"):
+        if not self._client and not os.getenv("AIML_API_KEY"):
             return self._mock_output(input)
 
         posts_block = "\n\n".join(input.posts)
@@ -34,7 +34,7 @@ class BrandProfileEngine(BaseEngine[BrandProfileInput, BrandProfileOutput]):
     # ── Fallback (no API key) ─────────────────────────────────────────────────
 
     def _mock_output(self, input: BrandProfileInput) -> BrandProfileOutput:
-        """Deterministic fallback used in development when no Anthropic key is set."""
+        """Deterministic fallback used in development when no AI key is set."""
         # Compute avg post length from the formatted post strings if available
         raw_bodies = [p.split("\n", 1)[-1] for p in input.posts if "\n" in p]
         avg_len: int | None = None

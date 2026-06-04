@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -19,7 +19,15 @@ class User(Base):
     goals = Column(Text, nullable=True)
     primary_platform = Column(String, nullable=False, default="linkedin")
     onboarding_complete = Column(Boolean, nullable=False, default=False)
-    storage_preference = Column(String, nullable=False, default="google_drive")  # "google_drive"|"local"|"ittera"
+    # Granular storage preferences - JSON allows per-content-type settings
+    # Format: {"default": "google_drive", "drafts": "google_drive", "analysis": "local", ...}
+    storage_preferences = Column(JSON, nullable=False, default=lambda: {"default": "google_drive"})
+    # Legacy storage preference (for backwards compatibility)
+    # If storage_preferences is not set, falls back to this
+    storage_preference = Column(String, nullable=True, default="google_drive")  # DEPRECATED: use storage_preferences
+    # Data retention policy in days (0 = never delete, null = use system default)
+    data_retention_days = Column(Integer, nullable=True, default=365)
+    auto_post_enabled = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
@@ -42,4 +50,33 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
         order_by="UserContext.version",
+    )
+    persona_profile = relationship("PersonaProfile", back_populates="user", cascade="all, delete-orphan")
+    
+    # Analytics relationships
+    analytics_snapshots = relationship(
+        "DailyAnalyticsSnapshot",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="DailyAnalyticsSnapshot.snapshot_date.desc()",
+    )
+    analytics_events = relationship(
+        "AnalyticsEvent",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="AnalyticsEvent.created_at.desc()",
+    )
+    
+    # Organization/Agency relationships
+    organization_memberships = relationship(
+        "OrganizationMember",
+        back_populates="user",
+        foreign_keys="OrganizationMember.user_id",
+        cascade="all, delete-orphan",
+    )
+    workspace_memberships = relationship(
+        "WorkspaceMember",
+        back_populates="user",
+        foreign_keys="WorkspaceMember.user_id",
+        cascade="all, delete-orphan",
     )

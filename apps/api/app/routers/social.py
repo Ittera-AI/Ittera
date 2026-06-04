@@ -97,9 +97,9 @@ async def sync_linkedin(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    from workers.celery.tasks.scraper import scrape_linkedin_posts
+    from app.services import linkedin_service
 
-    task = scrape_linkedin_posts.delay(str(current_user.id))
+    task = linkedin_service.queue_scrape_task(str(current_user.id))
     return SyncResponse(task_id=task.id)
 
 
@@ -108,8 +108,9 @@ async def sync_status(
     task_id: str,
     current_user: User = Depends(get_current_user),
 ):
-    from workers.celery.app import celery_app
-    result = celery_app.AsyncResult(task_id)
+    from app.services import linkedin_service
+
+    result = linkedin_service.get_scrape_task_result(task_id)
     return SyncStatusResponse(
         task_id=task_id,
         status=result.status,

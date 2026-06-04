@@ -26,3 +26,21 @@ export function hasStoredSupabaseSession(): boolean {
 
   return false;
 }
+
+/** Remove any Supabase browser auth entries when the server rejects the token. */
+export function clearStoredSupabaseSessions() {
+  if (typeof window === "undefined") return;
+
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("sb-") && key.endsWith("-auth-token")) {
+        keys.push(key);
+      }
+    }
+    keys.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Ignore storage access errors; signOut/onAuthStateChange still handle normal cases.
+  }
+}

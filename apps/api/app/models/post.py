@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -11,8 +11,9 @@ class Post(Base):
     __tablename__ = "posts"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    platform = Column(String, nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
+    platform = Column(String, nullable=False, index=True)
     platform_post_id = Column(String, nullable=True, index=True)
     content = Column(Text, nullable=False)
     content_type = Column(String, nullable=False)
@@ -29,4 +30,5 @@ class Post(Base):
     created_at = Column(DateTime, default=utc_now)
 
     user = relationship("User", back_populates="posts")
+    workspace = relationship("Workspace", back_populates="posts")
     analysis = relationship("PostAnalysis", back_populates="post", cascade="all, delete-orphan", uselist=False)

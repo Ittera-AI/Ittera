@@ -10,9 +10,10 @@ Flow:
 
 import base64
 import hashlib
+import html
 import json
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -27,6 +28,13 @@ from app.dependencies.auth import get_current_user, _decode_supabase_jwt, _decod
 from app.dependencies.db import get_db
 from app.models.social_connection import SocialConnection
 from app.models.user import User
+from app.services.publishing_state import (
+    LINKEDIN_POSTING_SCOPES,
+    LINKEDIN_READ_SCOPES,
+    X_MEDIA_SCOPES,
+    X_POSTING_SCOPES,
+    missing_scopes,
+)
 
 router = APIRouter()
 
@@ -103,6 +111,7 @@ def _upsert_connection(
     refresh_token: Optional[str] = None,
     scopes: list = [],
     metadata: dict = {},
+    token_expires_at: datetime | None = None,
 ) -> SocialConnection:
     conn = (
         db.query(SocialConnection)
@@ -114,6 +123,7 @@ def _upsert_connection(
         conn.platform_username = platform_username
         conn.access_token = access_token
         conn.refresh_token = refresh_token
+        conn.token_expires_at = token_expires_at
         conn.scopes = scopes
         conn.connection_metadata = metadata
         conn.is_active = True
@@ -126,6 +136,7 @@ def _upsert_connection(
             platform_username=platform_username,
             access_token=access_token,
             refresh_token=refresh_token,
+            token_expires_at=token_expires_at,
             scopes=scopes,
             connection_metadata=metadata,
         )
@@ -141,15 +152,7 @@ def _upsert_connection(
 def connection_status(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Return all active social connections for the current user."""
     conns = db.query(SocialConnection).filter_by(user_id=current_user.id, is_active=True).all()
-    return [
-        {
-            "platform": c.platform,
-            "username": c.platform_username,
-            "connected_at": c.created_at,
-            "last_synced": c.last_synced_at,
-        }
-        for c in conns
-    ]
+    return [_connection_status_payload(c) for c in conns]
 
 
 @router.delete("/{platform}")
@@ -170,7 +173,7 @@ def disconnect(
 TWITTER_AUTH_URL = "https://twitter.com/i/oauth2/authorize"
 TWITTER_TOKEN_URL = "https://api.twitter.com/2/oauth2/token"
 TWITTER_ME_URL = "https://api.twitter.com/2/users/me"
-TWITTER_SCOPES = "tweet.read users.read offline.access"
+TWITTER_SCOPES = "tweet.read users.read tweet.write media.write offline.access"
 
 
 def _pkce_pair():
@@ -248,6 +251,10 @@ async def twitter_callback(
         tokens = token_res.json()
         access_token = tokens.get("access_token", "")
         refresh_token = tokens.get("refresh_token")
+        token_expires_at = None
+        if tokens.get("expires_in"):
+            token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(tokens["expires_in"]))
+        scopes = str(tokens.get("scope") or TWITTER_SCOPES).split()
 
         me_res = await client.get(
             f"{TWITTER_ME_URL}?user.fields=username,name,profile_image_url",
@@ -266,7 +273,8 @@ async def twitter_callback(
         platform_username=me.get("username", ""),
         access_token=access_token,
         refresh_token=refresh_token,
-        scopes=TWITTER_SCOPES.split(),
+        scopes=scopes,
+        token_expires_at=token_expires_at,
         metadata={"name": me.get("name", ""), "profile_image": me.get("profile_image_url", "")},
     )
     return _popup_response("twitter", "connected", username=me.get("username", ""))
@@ -303,10 +311,18 @@ async def linkedin_start(
 
 @router.get("/linkedin/callback")
 async def linkedin_callback(
-    code: str = Query(...),
-    state: str = Query(...),
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    error_description: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
+    if error:
+        message = html.unescape(error_description or error)
+        return _popup_response("linkedin", "error", error=message)
+    if not code or not state:
+        return _popup_response("linkedin", "error", error="LinkedIn did not return an authorization code.")
+
     decoded = _decode_connect_state(state)
     if not decoded or decoded.get("platform") != "linkedin":
         return _popup_response("linkedin", "error", error="Invalid OAuth state.")
@@ -330,6 +346,7 @@ async def linkedin_callback(
 
         tokens = token_res.json()
         access_token = tokens.get("access_token", "")
+        scopes = str(tokens.get("scope") or LINKEDIN_CONNECT_SCOPES).split()
 
         profile_res = await client.get(
             "https://api.linkedin.com/v2/userinfo",
@@ -348,15 +365,16 @@ async def linkedin_callback(
         platform_user_id=profile.get("sub", ""),
         platform_username=username,
         access_token=access_token,
-        scopes=LINKEDIN_CONNECT_SCOPES.split(),
+        scopes=scopes,
         metadata={"name": profile.get("name", ""), "picture": profile.get("picture", "")},
     )
 
     # ── Auto-trigger post sync immediately after OAuth completes ─────────────
     # This fires in the background (Celery) — the user sees "Connected" right away.
     try:
-        from workers.celery.tasks.scraper import scrape_linkedin_posts
-        scrape_linkedin_posts.delay(user_id)
+        from app.services import linkedin_service
+        if "r_member_social" in scopes:
+            linkedin_service.queue_scrape_task(user_id)
     except Exception:
         import logging
         logging.getLogger(__name__).warning(
@@ -448,3 +466,28 @@ async def instagram_callback(
         scopes=INSTAGRAM_SCOPES.split(","),
     )
     return _popup_response("instagram", "connected", username=me.get("username", ""))
+
+
+def _connection_status_payload(conn: SocialConnection) -> dict:
+    scopes = list(conn.scopes or [])
+    if conn.platform == "linkedin":
+        posting_missing = missing_scopes(scopes, LINKEDIN_POSTING_SCOPES)
+        read_missing = missing_scopes(scopes, LINKEDIN_READ_SCOPES)
+    elif conn.platform == "twitter":
+        posting_missing = missing_scopes(scopes, X_POSTING_SCOPES | X_MEDIA_SCOPES)
+        read_missing = []
+    else:
+        posting_missing = []
+        read_missing = []
+    return {
+        "platform": conn.platform,
+        "username": conn.platform_username,
+        "connected_at": conn.created_at,
+        "last_synced": conn.last_synced_at,
+        "scopes": scopes,
+        "missing_scopes": posting_missing,
+        "posting_ready": not posting_missing,
+        "read_sync_ready": not read_missing,
+        "missing_read_scopes": read_missing,
+        "reconnect_required": bool(posting_missing),
+    }

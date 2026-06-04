@@ -9,7 +9,7 @@
  *   const drafts = await api.content.listDrafts();
  */
 
-import { supabase } from "@/lib/supabase";
+import { clearStoredSupabaseSessions, supabase } from "@/lib/supabase";
 
 function resolveApiBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_API_URL;
@@ -19,10 +19,7 @@ function resolveApiBaseUrl(): string {
   if (raw !== undefined && raw.trim() !== "") {
     return raw.replace(/\/$/, "");
   }
-  if (process.env.NODE_ENV === "development") {
-    return "";
-  }
-  return "http://localhost:8000";
+  return "";
 }
 
 const BASE_URL = resolveApiBaseUrl();
@@ -30,10 +27,48 @@ const BASE_URL = resolveApiBaseUrl();
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 
 async function getToken(): Promise<string | null> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshToken(): Promise<string | null> {
+  try {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.refreshSession();
+    if (error) return null;
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function clearInvalidSession() {
+  if (typeof window === "undefined") return;
+
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    clearStoredSupabaseSessions();
+  }
+
+  try {
+    await fetch(`${BASE_URL}/api/v1/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    // Preserve the original API error path if cookie cleanup cannot complete.
+  }
+
+  window.dispatchEvent(new Event("ittera-auth-invalid"));
 }
 
 class ApiError extends Error {
@@ -57,12 +92,31 @@ async function request<T>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers,
-    credentials: "include",
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const send = (requestHeaders: Record<string, string>) =>
+    fetch(`${BASE_URL}${path}`, {
+      method,
+      headers: requestHeaders,
+      credentials: "include",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+
+  let res = await send(headers);
+
+  if (res.status === 401) {
+    if (token) {
+      const refreshedToken = await refreshToken();
+      if (refreshedToken) {
+        res = await send({
+          ...headers,
+          Authorization: `Bearer ${refreshedToken}`,
+        });
+      }
+    }
+
+    if (res.status === 401) {
+      await clearInvalidSession();
+    }
+  }
 
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;

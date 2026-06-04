@@ -27,31 +27,78 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-import httpx
+from celery import Celery
 from sqlalchemy.orm import Session
 
+from app.core.linkedin_client import (
+    LinkedInClient,
+    LinkedInClientError,
+    LinkedInCookieClient,
+    ScopeMissingError,
+    TokenExpiredError,
+)
 from app.core.security import decrypt_value
 from app.db.datetime_helpers import utc_now
 from app.models.post import Post
 from app.models.social_connection import SocialConnection
 from app.models.user import User
 from app.services.mock_data import mock_posts
+from app.services.publishing_state import LINKEDIN_POSTING_SCOPES, LINKEDIN_READ_SCOPES, missing_scopes
+from app.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
 # ── Minimum posts before BrandProfileEngine is triggered ─────────────────────
 MIN_POSTS_FOR_ANALYSIS = 5
+SCRAPE_LINKEDIN_TASK = "workers.celery.tasks.scraper.scrape_linkedin_posts"
+_celery_client: Celery | None = None
+
+
+def _get_celery_client() -> Celery:
+    global _celery_client
+    if _celery_client is None:
+        from app.config import settings
+
+        _celery_client = Celery(
+            "iterra-api",
+            broker=settings.CELERY_BROKER_URL or settings.REDIS_URL,
+            backend=settings.CELERY_RESULT_BACKEND,
+        )
+    return _celery_client
+
+
+def queue_scrape_task(user_id: str):
+    return _get_celery_client().send_task(SCRAPE_LINKEDIN_TASK, args=[str(user_id)])
+
+
+def get_scrape_task_result(task_id: str):
+    return _get_celery_client().AsyncResult(task_id)
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def get_status(db: Session, user: User) -> dict:
     connection = _connection(db, user)
+    scopes = list(connection.scopes or []) if connection else []
+    missing_posting = missing_scopes(scopes, LINKEDIN_POSTING_SCOPES)
+    missing_read = missing_scopes(scopes, LINKEDIN_READ_SCOPES)
+    connected = connection is not None and connection.is_active
     return {
-        "connected": connection is not None and connection.is_active,
+        "connected": connected,
         "platform_username": connection.platform_username if connection else None,
         "last_synced_at": connection.last_synced_at if connection else None,
         "synced_posts": db.query(Post).filter(Post.user_id == user.id, Post.platform == "linkedin").count(),
+        "scopes": scopes,
+        "posting_ready": connected and not missing_posting,
+        "read_sync_ready": connected and not missing_read,
+        "missing_posting_scopes": missing_posting,
+        "missing_read_scopes": missing_read,
+        "reconnect_required": connected and bool(missing_posting),
+        "message": (
+            "LinkedIn posting is ready. Historical read sync is pending approval and separate from posting."
+            if connected and not missing_posting and missing_read
+            else None
+        ),
     }
 
 
@@ -62,14 +109,24 @@ async def sync_real_posts(db: Session, user: User) -> dict:
     """
     connection = _connection(db, user)
     if connection is None:
-        logger.warning("sync_real_posts: no LinkedIn connection for user_id=%s — using mock", user.id)
-        return _sync_mock_posts_fallback(db, user)
+        logger.warning("sync_real_posts: no LinkedIn connection for user_id=%s", user.id)
+        return _real_sync_unavailable(db, user, "No real LinkedIn connection is configured.")
+    if not connection.is_active:
+        logger.warning("sync_real_posts: LinkedIn connection is disconnected user_id=%s", user.id)
+        return _real_sync_unavailable(db, user, "LinkedIn is disconnected. Reconnect before syncing.")
 
     token = connection.access_token or ""
 
     if token == "mock-linkedin-token":
-        logger.info("sync_real_posts: mock token detected — using mock fallback user_id=%s", user.id)
-        return _sync_mock_posts_fallback(db, user)
+        logger.warning("sync_real_posts: mock token cannot be used for real sync user_id=%s", user.id)
+        return _real_sync_unavailable(db, user, "Reconnect LinkedIn with a real account before syncing.")
+
+    if "r_member_social" not in (connection.scopes or []):
+        return _real_sync_unavailable(
+            db,
+            user,
+            "LinkedIn read permission is not active for this OAuth connection. Posting can work, but historical sync requires r_member_social approval and reconnect.",
+        )
 
     if token == "linkedin-cookie-auth":
         logger.info("sync_real_posts: cookie-auth mode user_id=%s", user.id)
@@ -81,14 +138,17 @@ async def sync_real_posts(db: Session, user: User) -> dict:
         result = await _sync_via_oauth_api(db, user, connection)
         if result is not None:
             return result
-    except _ScopeMissingError:
+    except ScopeMissingError:
         logger.warning(
-            "sync_real_posts: r_member_social scope missing — falling back to cookie path user_id=%s",
+            "sync_real_posts: r_member_social scope missing user_id=%s",
             user.id,
         )
 
-    # OAuth API failed due to missing scope — try cookie path
-    return await _sync_via_cookie(db, user, connection)
+    return _real_sync_unavailable(
+        db,
+        user,
+        "LinkedIn read permission is not active for this OAuth connection. Enable r_member_social for the LinkedIn app, then disconnect and reconnect LinkedIn.",
+    )
 
 
 # ── Legacy mock connect (kept for dev convenience) ────────────────────────────
@@ -118,9 +178,6 @@ def connect_mock(db: Session, user: User) -> dict:
 
 # ── PATH A: LinkedIn OAuth API ────────────────────────────────────────────────
 
-class _ScopeMissingError(Exception):
-    """Raised when the OAuth token lacks r_member_social scope."""
-
 
 async def _sync_via_oauth_api(
     db: Session,
@@ -129,7 +186,7 @@ async def _sync_via_oauth_api(
 ) -> dict | None:
     """
     Calls the LinkedIn UGC Posts API to fetch the user's own posts.
-    Requires r_member_social scope. Raises _ScopeMissingError on 403.
+    Requires r_member_social scope. Raises ScopeMissingError on 403.
     Returns None if the member_urn cannot be resolved.
     """
     token = connection.access_token
@@ -143,40 +200,32 @@ async def _sync_via_oauth_api(
         logger.warning("sync_via_oauth_api: no member_urn for user_id=%s", user.id)
         return None
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "LinkedIn-Version": "202404",
-        "X-Restli-Protocol-Version": "2.0.0",
-    }
+    client = LinkedInClient(access_token=token)
 
-    async with httpx.AsyncClient(timeout=20) as client:
-        resp = await client.get(
-            "https://api.linkedin.com/v2/ugcPosts",
-            headers=headers,
-            params={
-                "q": "authors",
-                "authors": f"List({member_urn})",
-                "count": 50,
-                "start": 0,
-            },
+    try:
+        elements = await client.get_posts(
+            member_urn=member_urn,
+            count=50,
+            start=0,
         )
-
-    if resp.status_code == 403:
-        raise _ScopeMissingError("r_member_social scope not granted")
-
-    if resp.status_code == 401:
+    except ScopeMissingError:
+        # Re-raise to trigger fallback to cookie auth
+        raise
+    except TokenExpiredError:
         logger.warning("sync_via_oauth_api: token expired/invalid user_id=%s", user.id)
         return None
-
-    resp.raise_for_status()
-    data = resp.json()
-    elements: list[dict] = data.get("elements", [])
 
     posts_data = [_map_ugc_post(el) for el in elements if el]
     posts_data = [p for p in posts_data if p]  # drop None entries
 
     synced = _upsert_posts(db, user, posts_data)
     _update_last_synced(db, connection)
+
+    # Save to Google Drive if connected
+    try:
+        _save_scraped_posts_to_drive_if_connected(db, user, posts_data)
+    except Exception as e:
+        logger.warning("Failed to save scraped posts to Drive: %s", e)
 
     post_count = db.query(Post).filter(Post.user_id == user.id, Post.platform == "linkedin").count()
 
@@ -272,32 +321,36 @@ async def _sync_via_cookie(
 
     if not enc_username or not enc_password:
         logger.warning(
-            "sync_via_cookie: no encrypted credentials found — using mock user_id=%s",
+            "sync_via_cookie: no encrypted credentials found user_id=%s",
             user.id,
         )
-        return _sync_mock_posts_fallback(db, user)
-
-    try:
-        from linkedin_api import Linkedin  # type: ignore[import]
-    except ImportError:
-        logger.warning("sync_via_cookie: linkedin-api not installed — using mock user_id=%s", user.id)
-        return _sync_mock_posts_fallback(db, user)
+        return _real_sync_unavailable(
+            db,
+            user,
+            "LinkedIn read permission is not active for this OAuth connection. Enable r_member_social for the LinkedIn app, then disconnect and reconnect LinkedIn.",
+        )
 
     username = decrypt_value(enc_username)
     password = decrypt_value(enc_password)
 
     try:
-        client = Linkedin(username, password)
+        client = LinkedInCookieClient(username=username, password=password)
         # Get own profile to resolve public_id
-        own_profile = client.get_profile(urn_id=None)
+        own_profile = client.get_profile()
         public_id = own_profile.get("publicIdentifier", username.split("@")[0])
 
-        raw_posts = client.get_profile_posts(public_id=public_id, post_count=50)
+        raw_posts = client.get_posts(public_id=public_id, count=50)
         posts_data = [_map_cookie_post(p) for p in (raw_posts or [])]
         posts_data = [p for p in posts_data if p]
 
         synced = _upsert_posts(db, user, posts_data)
         _update_last_synced(db, connection)
+
+        # Save to Google Drive if connected
+        try:
+            _save_scraped_posts_to_drive_if_connected(db, user, posts_data)
+        except Exception as e:
+            logger.warning("Failed to save scraped posts to Drive: %s", e)
 
         post_count = db.query(Post).filter(Post.user_id == user.id, Post.platform == "linkedin").count()
 
@@ -315,9 +368,12 @@ async def _sync_via_cookie(
             "ready_for_analysis": post_count >= MIN_POSTS_FOR_ANALYSIS,
             "sync_path": "cookie_auth",
         }
+    except LinkedInClientError as e:
+        logger.warning("sync_via_cookie: client error %s user_id=%s", e, user.id)
+        return _real_sync_unavailable(db, user, f"LinkedIn scraper failed: {e}")
     except Exception:
-        logger.exception("sync_via_cookie: failed — using mock user_id=%s", user.id)
-        return _sync_mock_posts_fallback(db, user)
+        logger.exception("sync_via_cookie: failed user_id=%s", user.id)
+        return _real_sync_unavailable(db, user, "LinkedIn scraper failed.")
 
 
 def _map_cookie_post(raw: dict) -> dict | None:
@@ -368,6 +424,18 @@ def _map_cookie_post(raw: dict) -> dict | None:
 
 
 # ── MOCK FALLBACK ─────────────────────────────────────────────────────────────
+
+def _real_sync_unavailable(db: Session, user: User, message: str) -> dict:
+    post_count = db.query(Post).filter(Post.user_id == user.id, Post.platform == "linkedin").count()
+    return {
+        "synced_posts": 0,
+        "total_posts": post_count,
+        "last_synced_at": utc_now(),
+        "message": message,
+        "ready_for_analysis": post_count >= MIN_POSTS_FOR_ANALYSIS,
+        "sync_path": "unavailable",
+    }
+
 
 def _sync_mock_posts_fallback(db: Session, user: User) -> dict:
     """
@@ -448,3 +516,85 @@ def _connection(db: Session, user: User) -> SocialConnection | None:
         .filter(SocialConnection.user_id == user.id, SocialConnection.platform == "linkedin")
         .first()
     )
+
+
+def _save_scraped_posts_to_drive_if_connected(
+    db: Session, user: User, posts: list[dict]
+) -> str | None:
+    """
+    Save scraped posts to Google Drive if user has Drive connected.
+    Updates LinkedIn connection metadata with drive_posts_file_id.
+
+    Returns the Drive file ID or None if not saved.
+    """
+    # Check storage preference
+    if user.storage_preference != "google_drive":
+        return None
+
+    # Get Google Drive connection
+    drive_connection = (
+        db.query(SocialConnection)
+        .filter(
+            SocialConnection.user_id == user.id,
+            SocialConnection.platform == "google_drive",
+            SocialConnection.is_active == True,
+        )
+        .first()
+    )
+
+    if not drive_connection:
+        logger.debug("User %s has no Google Drive connection, skipping Drive save", user.id)
+        return None
+
+    # Get folder ID from metadata
+    meta = drive_connection.connection_metadata or {}
+    iterra_folder_id = meta.get("iterra_folder_id")
+
+    if not iterra_folder_id:
+        logger.warning("User %s has Drive connection but no Iterra folder ID", user.id)
+        return None
+
+    # Get LinkedIn connection to store posts file ID
+    linkedin_connection = (
+        db.query(SocialConnection)
+        .filter(
+            SocialConnection.user_id == user.id,
+            SocialConnection.platform == "linkedin",
+            SocialConnection.is_active == True,
+        )
+        .first()
+    )
+
+    # Prepare posts data for Drive
+    posts_data = {
+        "synced_at": utc_now().isoformat(),
+        "posts_count": len(posts),
+        "posts": posts,
+    }
+
+    # Save to Drive
+    storage = StorageService(
+        access_token=drive_connection.access_token,
+        refresh_token=drive_connection.refresh_token,
+    )
+
+    # Use existing file ID if available (update), else create new
+    existing_file_id = None
+    if linkedin_connection and linkedin_connection.connection_metadata:
+        existing_file_id = linkedin_connection.connection_metadata.get("drive_posts_file_id")
+
+    file_id = storage.save_scraped_posts(
+        folder_id=iterra_folder_id,
+        posts_data=posts_data,
+        existing_file_id=existing_file_id,
+    )
+
+    # Update LinkedIn connection metadata with file ID
+    if linkedin_connection:
+        linkedin_meta = dict(linkedin_connection.connection_metadata or {})
+        linkedin_meta["drive_posts_file_id"] = file_id
+        linkedin_connection.connection_metadata = linkedin_meta
+        db.commit()
+
+    logger.info("Saved %d scraped posts to Drive with file ID %s", len(posts), file_id)
+    return file_id

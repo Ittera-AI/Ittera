@@ -9,7 +9,7 @@ Endpoints:
   POST /sync/trigger    — enqueue real sync as a background Celery task
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status as http_status
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -31,7 +31,7 @@ async def status(current_user: User = Depends(get_current_user), db: Session = D
         return linkedin_service.get_status(db, current_user)
     except (OperationalError, ProgrammingError) as exc:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Database schema is out of date. Run `alembic upgrade head` in apps/api.",
         ) from exc
 
@@ -70,7 +70,7 @@ async def sync_real(
         return result
     except Exception as exc:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
+            status_code=http_status.HTTP_502_BAD_GATEWAY,
             detail=f"LinkedIn sync failed: {exc}",
         ) from exc
 
@@ -85,8 +85,7 @@ async def sync_trigger(
     Returns immediately. Check task status via Celery or /status.
     """
     try:
-        from workers.celery.tasks.scraper import scrape_linkedin_posts
-        task = scrape_linkedin_posts.delay(str(current_user.id))
+        task = linkedin_service.queue_scrape_task(str(current_user.id))
         return {
             "queued": True,
             "task_id": task.id,
@@ -94,6 +93,6 @@ async def sync_trigger(
         }
     except Exception as exc:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Could not enqueue sync task (Celery may not be running): {exc}",
         ) from exc

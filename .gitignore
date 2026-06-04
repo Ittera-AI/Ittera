@@ -58,6 +58,8 @@ Thumbs.db
 # Logs
 *.log
 logs/
+uploads/
+apps/api/uploads/
 
 # Alembic (generated migration artifacts)
 # Keep versions/ but ignore compiled .pyc inside

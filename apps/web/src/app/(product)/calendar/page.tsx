@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Clock, X } from "lucide-react";
+import { AuthenticatedImage } from "@/components/product/AuthenticatedImage";
 import { ProductShell } from "@/components/product/ProductShell";
 import { useProduct } from "@/hooks/useProduct";
 
@@ -13,7 +15,12 @@ const PLATFORM_COLORS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   scheduled: { bg: "rgba(163,138,112,0.18)", text: "var(--bronze)" },
+  publishing: { bg: "rgba(163,138,112,0.18)", text: "var(--bronze)" },
   published: { bg: "rgba(150,165,145,0.18)", text: "var(--olive)" },
+  failed: { bg: "rgba(180,83,9,0.14)", text: "rgb(180,83,9)" },
+  cancelled: { bg: "var(--muted)", text: "var(--text-muted)" },
+  review_due: { bg: "rgba(196,168,130,0.18)", text: "var(--bronze)" },
+  approved: { bg: "rgba(150,165,145,0.18)", text: "var(--olive)" },
   draft:     { bg: "var(--muted)",             text: "var(--text-muted)" },
 };
 
@@ -27,6 +34,7 @@ function getFirstDayOfWeek(year: number, month: number) {
 
 export default function CalendarPage() {
   const product = useProduct();
+  const searchParams = useSearchParams();
   const calendar = product.calendar;
   const loadCalendar = product.loadCalendar;
   const [selectedEvent, setSelectedEvent] = useState<(typeof calendar)[0] | null>(null);
@@ -36,8 +44,23 @@ export default function CalendarPage() {
   const [viewMonth, setViewMonth] = useState(today.getMonth());
 
   useEffect(() => {
-    void loadCalendar();
+    void loadCalendar().catch(() => undefined);
   }, [loadCalendar]);
+
+  useEffect(() => {
+    const reviewId = searchParams.get("review");
+    if (!reviewId || !calendar.length) return;
+    const event = calendar.find((item) => item.id === reviewId);
+    if (event) {
+      const timer = window.setTimeout(() => {
+        setSelectedEvent(event);
+        const starts = new Date(event.starts_at);
+        setViewYear(starts.getFullYear());
+        setViewMonth(starts.getMonth());
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+  }, [calendar, searchParams]);
 
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDay = getFirstDayOfWeek(viewYear, viewMonth);
@@ -97,8 +120,10 @@ export default function CalendarPage() {
 
         {/* Summary chips */}
         <div className="flex flex-wrap gap-2">
-          {(["scheduled", "published"] as const).map((status) => {
-            const count = calendar.filter((e) => e.status === status).length;
+          {(["scheduled", "review_due", "publishing", "published", "failed", "cancelled"] as const).map((status) => {
+            const count = status === "review_due"
+              ? calendar.filter((e) => e.review_status === "review_due").length
+              : calendar.filter((e) => e.status === status).length;
             return (
               <div
                 key={status}
@@ -109,7 +134,7 @@ export default function CalendarPage() {
                   className="h-2 w-2 rounded-full"
                   style={{ background: STATUS_COLORS[status]?.text }}
                 />
-                <span className="text-xs font-medium text-foreground capitalize">{status}</span>
+                <span className="text-xs font-medium text-foreground capitalize">{status.replace("_", " ")}</span>
                 <span className="text-xs text-muted-foreground">{count}</span>
               </div>
             );
@@ -193,19 +218,16 @@ export default function CalendarPage() {
 
         {/* Event detail panel */}
         {selectedEvent && (
-          <div
-            className="rounded-xl border p-5"
-            style={{ background: "var(--card)" }}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
+          <div className="rounded-xl border p-5" style={{ background: "var(--card)" }}>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
                 <span
                   className="h-3 w-3 flex-shrink-0 rounded-full"
                   style={{ background: PLATFORM_COLORS[selectedEvent.platform] ?? "var(--bronze)" }}
                 />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{selectedEvent.title}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <p className="truncate text-sm font-semibold text-foreground">{selectedEvent.title}</p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2">
                     <Clock size={11} className="text-muted-foreground" />
                     <p className="text-xs text-muted-foreground">
                       {new Date(selectedEvent.starts_at).toLocaleDateString(undefined, {
@@ -216,44 +238,86 @@ export default function CalendarPage() {
                         minute: "2-digit",
                       })}
                     </p>
-                    <span
-                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize"
-                      style={{
-                        background: STATUS_COLORS[selectedEvent.status]?.bg,
-                        color: STATUS_COLORS[selectedEvent.status]?.text,
-                      }}
-                    >
-                      {selectedEvent.status}
-                    </span>
+                        {([selectedEvent.status, selectedEvent.review_status].filter(Boolean) as string[]).map((statusLabel) => (
+                      <span
+                        key={statusLabel}
+                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize"
+                        style={{
+                          background: STATUS_COLORS[statusLabel]?.bg ?? "var(--muted)",
+                          color: STATUS_COLORS[statusLabel]?.text ?? "var(--text-muted)",
+                        }}
+                      >
+                        {statusLabel.replace("_", " ")}
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {selectedEvent.status === "scheduled" && (
+              <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+                {selectedEvent.status === "scheduled" && selectedEvent.review_status !== "approved" ? (
                   <button
-                    onClick={() => {
-                      void product.cancelSchedule(selectedEvent.id);
-                      setSelectedEvent(null);
-                    }}
-                    className="rounded-lg border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all active:scale-[0.97]"
+                    onClick={() => void product.approveDraft(selectedEvent.id)}
+                    className="rounded-lg border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-[0.97]"
                   >
-                    Cancel schedule
+                    Approve
                   </button>
-                )}
+                ) : null}
+                {selectedEvent.status === "scheduled" || selectedEvent.status === "failed" ? (
+                  <>
+                    <button
+                      onClick={() => void product.publish(selectedEvent.id)}
+                      className="rounded-lg border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-[0.97]"
+                    >
+                      Publish now
+                    </button>
+                    {selectedEvent.status === "scheduled" ? (
+                      <button
+                        onClick={() => {
+                          void product.cancelSchedule(selectedEvent.id);
+                          setSelectedEvent(null);
+                        }}
+                        className="rounded-lg border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-[0.97]"
+                      >
+                        Cancel schedule
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
                 <button
                   onClick={() => setSelectedEvent(null)}
-                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted transition-all"
+                  className="rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-muted"
                 >
                   <X size={14} />
                 </button>
               </div>
             </div>
+            {selectedEvent.media?.length ? (
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {selectedEvent.media.map((media) => (
+                  media.preview_url ? (
+                    <AuthenticatedImage
+                      key={media.id}
+                      mediaId={media.id}
+                      fallbackSrc={media.preview_url}
+                      alt={media.filename}
+                      className="aspect-video rounded-lg border object-cover"
+                    />
+                  ) : null
+                ))}
+              </div>
+            ) : null}
+            {selectedEvent.platform === "linkedin" && (selectedEvent.media?.length ?? 0) > 1 ? (
+              <p className="mt-3 text-xs text-destructive">
+                LinkedIn publishing currently supports 1 image per post. Remove extra images before scheduling or publishing.
+              </p>
+            ) : null}
             <div
               className="mt-4 rounded-lg p-4 text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed"
               style={{ background: "var(--muted)" }}
             >
               {selectedEvent.content}
             </div>
+            {product.error ? <p className="mt-3 text-xs text-destructive">{product.error}</p> : null}
           </div>
         )}
       </div>

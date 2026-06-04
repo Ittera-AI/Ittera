@@ -6,6 +6,8 @@ Celery Beat schedule — periodic background tasks.
   ENABLE_LINKEDIN_SYNC=true       → enables the 24h LinkedIn post re-sync for all
                                     active users (Sprint 2 — always safe to enable
                                     once real LinkedIn credentials are configured)
+  ENABLE_ANALYTICS_TASKS=true     → enables analytics snapshot computation
+                                    (runs daily at 1am UTC to cache analytics data)
 """
 
 import os
@@ -14,6 +16,7 @@ from celery.schedules import crontab
 
 _enable_placeholder_tasks = os.getenv("ENABLE_PLACEHOLDER_TASKS", "false").lower() == "true"
 _enable_linkedin_sync = os.getenv("ENABLE_LINKEDIN_SYNC", "false").lower() == "true"
+_enable_analytics_tasks = os.getenv("ENABLE_ANALYTICS_TASKS", "true").lower() == "true"
 
 # ── Placeholder / demo tasks ──────────────────────────────────────────────────
 _placeholder_tasks: dict = (
@@ -50,4 +53,43 @@ _linkedin_tasks: dict = (
     else {}
 )
 
-BEAT_SCHEDULE = {**_placeholder_tasks, **_linkedin_tasks}
+# ── Analytics Tasks ─────────────────────────────────────────────────────────────
+# Pre-computes daily analytics snapshots for efficient dashboard queries.
+# Enabled by default (set ENABLE_ANALYTICS_TASKS=false to disable).
+_analytics_tasks: dict = (
+    {
+        "analytics-snapshot-daily": {
+            "task": "workers.celery.tasks.compute_analytics.compute_all_users_snapshots",
+            "schedule": crontab(hour=1, minute=0),  # 1am UTC daily (before LinkedIn sync)
+        },
+        "analytics-cleanup-monthly": {
+            "task": "workers.celery.tasks.compute_analytics.delete_old_snapshots",
+            "schedule": crontab(hour=4, minute=0, day_of_month=1),  # 1st of month 4am UTC
+            "kwargs": {"retention_days": 365},  # Keep 1 year of snapshots
+        },
+    }
+    if _enable_analytics_tasks
+    else {}
+)
+
+# ── Smart Scheduler Tasks ───────────────────────────────────────────────────────
+# AI-powered optimal timing for content scheduling.
+# Reviews and optimizes upcoming scheduled posts daily.
+_enable_scheduler_tasks = os.getenv("ENABLE_SCHEDULER_TASKS", "true").lower() == "true"
+
+_scheduler_tasks: dict = (
+    {
+        "schedule-optimization-daily": {
+            "task": "workers.celery.tasks.smart_scheduler.daily_schedule_optimization",
+            "schedule": crontab(hour=6, minute=0),  # 6am UTC daily
+        },
+    }
+    if _enable_scheduler_tasks
+    else {}
+)
+
+BEAT_SCHEDULE = {**_placeholder_tasks, **_linkedin_tasks, **_analytics_tasks, **_scheduler_tasks}
+BEAT_SCHEDULE["publishing-queue-every-five-minutes"] = {
+    "task": "workers.celery.tasks.publisher.process_publishing_queue",
+    "schedule": crontab(minute="*/5"),
+}

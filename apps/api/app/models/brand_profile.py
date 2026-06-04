@@ -12,6 +12,7 @@ class BrandProfile(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
     profile = Column(JSON, nullable=False, default=dict)
     version = Column(Integer, nullable=False, default=1)
     ai_confidence_score = Column(Float, nullable=False, default=0.0)
@@ -24,3 +25,4 @@ class BrandProfile(Base):
     drive_analysis_file_id = Column(String, nullable=True)
 
     user = relationship("User", back_populates="brand_profile")
+    workspace = relationship("Workspace", back_populates="brand_profiles")

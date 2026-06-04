@@ -1,6 +1,4 @@
-import { supabase } from "@/lib/supabase";
-
-const isDev = process.env.NODE_ENV === "development";
+import { clearStoredSupabaseSessions, supabase } from "@/lib/supabase";
 
 /**
  * API base URL for `fetch`.
@@ -16,10 +14,7 @@ function resolveApiBaseUrl(): string {
   if (raw !== undefined && raw.trim() !== "") {
     return raw.replace(/\/$/, "");
   }
-  if (isDev) {
-    return "";
-  }
-  return "http://localhost:8000";
+  return "";
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
@@ -34,32 +29,86 @@ export class ApiError extends Error {
   }
 }
 
+async function getAccessToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) return null;
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function clearInvalidSession() {
+  if (typeof window === "undefined") return;
+
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    clearStoredSupabaseSessions();
+  }
+
+  try {
+    await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    // Keep the original API error path intact when cookie cleanup cannot complete.
+  }
+
+  window.dispatchEvent(new Event("ittera-auth-invalid"));
+}
+
+async function parseErrorMessage(response: Response): Promise<string> {
+  let message = response.statusText;
+  try {
+    const body = await response.json();
+    message = body.detail ?? message;
+  } catch {
+    // Keep the HTTP status text when the API did not return JSON.
+  }
+  return message;
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (!headers.has("Content-Type") && init.body) {
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (!headers.has("Content-Type") && init.body && !isFormData) {
     headers.set("Content-Type", "application/json");
   }
 
-  if (typeof window !== "undefined") {
-    try {
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.access_token && !headers.has("Authorization")) {
-        headers.set("Authorization", `Bearer ${data.session.access_token}`);
-      }
-    } catch {
-      // Ignore auth errors during fetch
-    }
+  const callerProvidedAuthorization = headers.has("Authorization");
+  const accessToken = callerProvidedAuthorization ? null : await getAccessToken();
+  if (accessToken && !callerProvidedAuthorization) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
   const url = `${API_BASE_URL}${path}`;
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
+  const send = (requestHeaders: Headers) =>
+    fetch(url, {
       ...init,
-      headers,
+      headers: requestHeaders,
       credentials: "include",
     });
+
+  let response: Response;
+  try {
+    response = await send(headers);
   } catch (err) {
     const hint =
       API_BASE_URL === ""
@@ -69,14 +118,23 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     throw new ApiError(`Failed to reach API (${cause}). ${hint}`, 0);
   }
 
-  if (!response.ok) {
-    let message = response.statusText;
-    try {
-      const body = await response.json();
-      message = body.detail ?? message;
-    } catch {
-      // Keep the HTTP status text when the API did not return JSON.
+  if (response.status === 401 && !callerProvidedAuthorization) {
+    if (accessToken) {
+      const refreshedToken = await refreshAccessToken();
+      if (refreshedToken) {
+        const retryHeaders = new Headers(headers);
+        retryHeaders.set("Authorization", `Bearer ${refreshedToken}`);
+        response = await send(retryHeaders);
+      }
     }
+
+    if (response.status === 401) {
+      await clearInvalidSession();
+    }
+  }
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
     throw new ApiError(message, response.status);
   }
 

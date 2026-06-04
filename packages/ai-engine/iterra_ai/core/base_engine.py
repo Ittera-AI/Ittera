@@ -23,25 +23,55 @@ class BaseEngine(ABC, Generic[InputT, OutputT]):
     def generate(self, input: InputT) -> OutputT:
         """Generate a typed output for a typed input."""
 
-    def _call_llm(self, system: str, user: str, max_tokens: int = 2000) -> str:
+    def _call_llm(
+        self,
+        system: str,
+        user: str,
+        max_tokens: int = 2000,
+        temperature: float | None = None,
+    ) -> str:
         try:
             if self._client is None:
-                from iterra_ai.core.client import get_anthropic_client
+                from openai import OpenAI
 
-                self._client = get_anthropic_client()
-            response = self._client.messages.create(
-                model=self._get_model(),
-                max_tokens=max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": user}],
-            )
-            usage = getattr(response, "usage", None)
+                self._client = OpenAI(
+                    api_key=os.getenv("AIML_API_KEY"),
+                    base_url=os.getenv("AIML_BASE_URL", "https://api.aimlapi.com/v1"),
+                )
+            request = {
+                "model": self._get_model(),
+                "max_tokens": max_tokens,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            }
+            if temperature is not None:
+                request["temperature"] = temperature
+            if hasattr(self._client, "chat"):
+                response = self._client.chat.completions.create(**request)
+                usage = getattr(response, "usage", None)
+                message = response.choices[0].message if response.choices else None
+                response_text = getattr(message, "content", "") or ""
+                input_tokens = getattr(usage, "prompt_tokens", 0)
+                output_tokens = getattr(usage, "completion_tokens", 0)
+            else:
+                response = self._client.messages.create(
+                    model=request["model"],
+                    max_tokens=max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": user}],
+                )
+                usage = getattr(response, "usage", None)
+                response_text = response.content[0].text if getattr(response, "content", None) else ""
+                input_tokens = getattr(usage, "input_tokens", 0)
+                output_tokens = getattr(usage, "output_tokens", 0)
             self._tracker.log(
                 engine=self.__class__.__name__,
-                input_tokens=getattr(usage, "input_tokens", 0),
-                output_tokens=getattr(usage, "output_tokens", 0),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
-            return response.content[0].text
+            return response_text
         except Exception as exc:
             raise EngineError(f"{self.__class__.__name__} failed: {exc}") from exc
 
@@ -71,4 +101,4 @@ class BaseEngine(ABC, Generic[InputT, OutputT]):
         return json.dumps(parsed)
 
     def _get_model(self) -> str:
-        return os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
+        return getattr(self, "model", None) or os.getenv("AIML_MODEL", "gpt-4o-mini")

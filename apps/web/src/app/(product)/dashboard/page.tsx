@@ -215,11 +215,19 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={() => void product.generateBrandProfile()}
-                disabled={product.isLoading || !stepStatus.sync || stepStatus.confirm}
+                disabled={product.isLoading || !stepStatus.sync || stepStatus.profile}
                 className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-all active:scale-[0.97] disabled:opacity-40"
                 style={{ background: "var(--muted)" }}
               >
                 Generate profile
+              </button>
+              <button
+                onClick={() => void product.confirmBrandProfile()}
+                disabled={product.isLoading || !stepStatus.profile || stepStatus.confirm}
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-all active:scale-[0.97] disabled:opacity-40"
+                style={{ background: "var(--muted)" }}
+              >
+                Confirm voice
               </button>
             </div>
           </div>

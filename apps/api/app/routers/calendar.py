@@ -16,7 +16,7 @@ router = APIRouter()
     description=(
         "Produces a structured weekly-style plan. "
         "By default this is a deterministic mock plan suitable for demos and CI. "
-        "Set `USE_ITERRA_AI_CALENDAR=true` with `ANTHROPIC_API_KEY` configured to use "
+        "Set `USE_ITERRA_AI_CALENDAR=true` with `AIML_API_KEY` configured to use "
         "`iterra_ai.CalendarEngine` (falls back to mock on LLM failure)."
     ),
 )

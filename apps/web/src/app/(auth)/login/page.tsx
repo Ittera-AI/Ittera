@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
 
 import { useAuth } from "@/hooks/useAuth";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { signIn } = useAuth();
   const [email, setEmail] = useState("");
@@ -21,11 +20,13 @@ function LoginForm() {
     setError(null);
     try {
       await signIn(email, password);
+      // Use hard navigation to avoid competing with SessionRouteGuard's soft redirect.
+      // Only allow same-origin paths for `next` to prevent open-redirect attacks.
       const next = searchParams.get("next");
-      router.push(next ?? "/dashboard");
+      const destination = next?.startsWith("/") ? next : "/dashboard";
+      window.location.replace(destination);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "An error occurred");
-    } finally {
       setIsLoading(false);
     }
   }

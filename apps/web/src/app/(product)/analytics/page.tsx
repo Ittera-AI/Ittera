@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { X, TrendingUp } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { X, TrendingUp, Filter, ArrowUpDown, BarChart3 } from "lucide-react";
 import { ProductShell } from "@/components/product/ProductShell";
 import { useProduct } from "@/hooks/useProduct";
 import type { AnalyticsPost } from "@/services/product.service";
+import { TimeSeriesChart, DateRangePills, InsightsFeed } from "@/components/analytics";
+
+type SortKey = "published_at" | "engagement_rate" | "likes";
+type SortOrder = "asc" | "desc";
 
 function ScoreBar({ label, value }: { label: string; value: number }) {
   const pct = Math.round(value * 100);
@@ -65,30 +69,90 @@ function EngagementChart({ posts }: { posts: AnalyticsPost[] }) {
 
 export default function AnalyticsPage() {
   const product = useProduct();
-  const loadAnalytics = product.loadAnalytics;
   const [selected, setSelected] = useState<AnalyticsPost | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("published_at");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [platformFilter, setPlatformFilter] = useState<string | null>(null);
 
+  // Load data on mount
   useEffect(() => {
-    void loadAnalytics();
-  }, [loadAnalytics]);
+    void product.loadAnalytics().catch(() => undefined);
+    void product.loadAnalyticsSummary(30).catch(() => undefined);
+    void product.loadTrendsData().catch(() => undefined);
+    void product.loadContentInsights(30).catch(() => undefined);
+  }, []);
 
-  const topPost = [...product.analytics].sort((a, b) => b.engagement_rate - a.engagement_rate)[0];
+  // Sort and filter posts
+  const sortedPosts = useMemo(() => {
+    let posts = [...product.analytics];
+
+    if (platformFilter) {
+      posts = posts.filter((p) => p.platform === platformFilter);
+    }
+
+    posts.sort((a, b) => {
+      let comparison = 0;
+      switch (sortKey) {
+        case "engagement_rate":
+          comparison = a.engagement_rate - b.engagement_rate;
+          break;
+        case "likes":
+          comparison = a.likes - b.likes;
+          break;
+        case "published_at":
+        default:
+          const dateA = a.published_at ? new Date(a.published_at).getTime() : 0;
+          const dateB = b.published_at ? new Date(b.published_at).getTime() : 0;
+          comparison = dateA - dateB;
+          break;
+      }
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+
+    return posts;
+  }, [product.analytics, sortKey, sortOrder, platformFilter]);
+
+  const topPost = sortedPosts[0];
   const avgEngagement =
     product.analytics.length > 0
       ? product.analytics.reduce((s, p) => s + p.engagement_rate, 0) / product.analytics.length
       : 0;
   const totalLikes = product.analytics.reduce((s, p) => s + p.likes, 0);
 
+  // Get unique platforms
+  const platforms = useMemo(() => {
+    return [...new Set(product.analytics.map((p) => p.platform))];
+  }, [product.analytics]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortOrder("desc");
+    }
+  };
+
   return (
     <ProductShell>
       <div className="flex flex-col gap-6">
-        {/* Header */}
-        <div>
-          <p className="eyebrow">Analytics</p>
-          <h1 className="mt-1.5 text-3xl font-semibold tracking-[-0.04em]">Learn what works</h1>
-          <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
-            Review post performance. Click any row to open the Engagement Coach.
-          </p>
+        {/* Header with date range selector */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="eyebrow">Analytics</p>
+            <h1 className="mt-1.5 text-3xl font-semibold tracking-[-0.04em]">Learn what works</h1>
+            <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
+              Review post performance and AI-powered insights
+            </p>
+          </div>
+          <DateRangePills
+            value={30}
+            onChange={(days) => {
+              void product.loadAnalyticsSummary(days).catch(() => undefined);
+              void product.loadTrendsData({ periodDays: days }).catch(() => undefined);
+              void product.loadContentInsights(days).catch(() => undefined);
+            }}
+          />
         </div>
 
         {/* KPI row */}
@@ -109,93 +173,179 @@ export default function AnalyticsPage() {
           ))}
         </div>
 
-        {/* Engagement Chart */}
-        {product.analytics.length > 0 && (
-          <div className="rounded-xl border p-5" style={{ background: "var(--card)" }}>
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp size={14} style={{ color: "var(--bronze)" }} />
-              <h2 className="text-sm font-semibold text-foreground">Engagement rate — top 10 posts</h2>
+        {/* Time Series Chart */}
+        <div className="rounded-xl border p-5" style={{ background: "var(--card)" }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <BarChart3 size={16} style={{ color: "var(--bronze)" }} />
+              <h2 className="text-sm font-semibold text-foreground">Engagement over time</h2>
             </div>
-            <p className="text-xs text-muted-foreground mb-3">Hover a bar to see the rate. Sorted best to worst.</p>
-            <EngagementChart posts={product.analytics} />
+            <div className="flex items-center gap-2">
+              {["day", "week", "month"].map((int) => (
+                <button
+                  key={int}
+                  onClick={() => product.setTrendsFilter({ interval: int as "day" | "week" | "month" })}
+                  className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                    product.trendsFilter.interval === int
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {int.charAt(0).toUpperCase() + int.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
+          <TimeSeriesChart
+            data={product.trendsData || []}
+            metric={product.trendsFilter.metric}
+            interval={product.trendsFilter.interval}
+            height={250}
+          />
+        </div>
 
-        {/* Top post spotlight */}
-        {topPost && (
-          <div
-            className="rounded-xl border p-5"
-            style={{ background: "var(--card)", borderColor: "rgba(163,138,112,0.3)" }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <p className="eyebrow">Top performing post</p>
-              <span
-                className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                style={{ background: "rgba(163,138,112,0.12)", color: "var(--bronze)" }}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Insights Feed */}
+          <div className="lg:col-span-1 space-y-4">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <TrendingUp size={16} style={{ color: "var(--olive)" }} />
+              AI Insights
+            </h2>
+            <InsightsFeed
+              insights={product.contentInsights}
+              loading={product.loadingStates.insights === "loading"}
+            />
+          </div>
+
+          {/* Top Performers */}
+          <div className="lg:col-span-2 space-y-4">
+            <h2 className="text-sm font-semibold text-foreground">Top Performers</h2>
+
+            {topPost && (
+              <div
+                className="rounded-xl border p-5"
+                style={{ background: "var(--card)", borderColor: "rgba(163,138,112,0.3)" }}
               >
-                {Math.round(topPost.engagement_rate * 1000) / 10}% engagement
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap max-w-3xl">
-              {topPost.content.slice(0, 280)}
-              {topPost.content.length > 280 && "…"}
-            </p>
-            {topPost.analysis && (
-              <div className="mt-4 grid grid-cols-3 gap-3">
-                <ScoreBar label="Hook" value={topPost.analysis.hook_score / 100} />
-                <ScoreBar label="Tone match" value={topPost.analysis.tone_match_score / 100} />
-                <ScoreBar label="Structure" value={topPost.analysis.structure_score / 100} />
+                <div className="flex items-center justify-between mb-3">
+                  <p className="eyebrow">Top performing post</p>
+                  <span
+                    className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                    style={{ background: "rgba(163,138,112,0.12)", color: "var(--bronze)" }}
+                  >
+                    {Math.round(topPost.engagement_rate * 1000) / 10}% engagement
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap max-w-3xl">
+                  {topPost.content.slice(0, 280)}
+                  {topPost.content.length > 280 && "…"}
+                </p>
+                {topPost.analysis && (
+                  <div className="mt-4 grid grid-cols-3 gap-3">
+                    <ScoreBar label="Hook" value={topPost.analysis.hook_score / 100} />
+                    <ScoreBar label="Tone match" value={topPost.analysis.tone_match_score / 100} />
+                    <ScoreBar label="Structure" value={topPost.analysis.structure_score / 100} />
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Posts table */}
-        <div className="rounded-xl border overflow-hidden" style={{ background: "var(--card)" }}>
-          <div className="px-5 py-4 border-b">
-            <h2 className="text-sm font-semibold text-foreground">All posts</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Click a row to open Coach analysis.</p>
+            {/* Posts table with filters */}
+            <div className="rounded-xl border overflow-hidden" style={{ background: "var(--card)" }}>
+              <div className="px-5 py-4 border-b flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">All posts</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {sortedPosts.length} posts
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Platform filter */}
+                  {platforms.length > 1 && (
+                    <div className="flex items-center gap-1">
+                      <Filter size={14} className="text-muted-foreground" />
+                      <select
+                        value={platformFilter || ""}
+                        onChange={(e) => setPlatformFilter(e.target.value || null)}
+                        className="text-xs rounded-md border bg-background px-2 py-1"
+                      >
+                        <option value="">All platforms</option>
+                        {platforms.map((p) => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {product.analytics.length === 0 ? (
+                <div className="px-5 py-10 text-center">
+                  <p className="text-sm text-muted-foreground">No posts yet. Sync LinkedIn to see performance data.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left">
+                        {[
+                          { key: "published_at", label: "Post" },
+                          { key: "likes", label: "Likes" },
+                          { key: "engagement_rate", label: "Engagement" },
+                        ].map(({ key, label }) => (
+                          <th
+                            key={key}
+                            className="px-4 py-3 text-xs font-semibold text-muted-foreground cursor-pointer hover:text-foreground"
+                            onClick={() => toggleSort(key as SortKey)}
+                          >
+                            <div className="flex items-center gap-1">
+                              {label}
+                              {sortKey === key && (
+                                <ArrowUpDown size={12} />
+                              )}
+                            </div>
+                          </th>
+                        ))}
+                        <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Coach</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {sortedPosts.slice(0, 20).map((post) => (
+                        <tr
+                          key={post.id}
+                          className="cursor-pointer transition-colors hover:bg-muted/40"
+                          onClick={() => setSelected(post)}
+                        >
+                          <td className="px-4 py-3 max-w-xs">
+                            <p className="truncate text-xs text-foreground">{post.content}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {post.published_at
+                                ? new Date(post.published_at).toLocaleDateString()
+                                : "Unknown date"}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3 text-xs font-medium">{post.likes}</td>
+                          <td className="px-4 py-3 text-xs font-semibold" style={{ color: "var(--bronze)" }}>
+                            {Math.round(post.engagement_rate * 1000) / 10}%
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">
+                            {post.analysis ? (
+                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] bg-olive/20 text-olive">
+                                Hook: {post.analysis.hook_score}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
-          {product.analytics.length === 0 ? (
-            <div className="px-5 py-10 text-center">
-              <p className="text-sm text-muted-foreground">No posts yet. Sync LinkedIn to see performance data.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    {["Post", "Likes", "Comments", "Engagement", "Coach"].map((h) => (
-                      <th key={h} className="px-4 py-3 text-xs font-semibold text-muted-foreground">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {product.analytics.map((post) => (
-                    <tr
-                      key={post.id}
-                      className="cursor-pointer transition-colors hover:bg-muted/40"
-                      onClick={() => setSelected(post)}
-                    >
-                      <td className="px-4 py-3 max-w-xs">
-                        <p className="truncate text-xs text-foreground">{post.content}</p>
-                      </td>
-                      <td className="px-4 py-3 text-xs font-medium">{post.likes}</td>
-                      <td className="px-4 py-3 text-xs font-medium">{post.comments}</td>
-                      <td className="px-4 py-3 text-xs font-semibold" style={{ color: "var(--bronze)" }}>
-                        {Math.round(post.engagement_rate * 1000) / 10}%
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">
-                        {post.analysis ? `Hook: ${post.analysis.hook_score}` : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       </div>
 
@@ -230,7 +380,7 @@ export default function AnalyticsPage() {
               </p>
 
               <button
-                onClick={() => void product.analyze(selected.id)}
+                onClick={() => void product.analyzePost(selected.id)}
                 disabled={product.isLoading}
                 className="w-full rounded-lg border px-4 py-2.5 text-sm font-medium text-foreground transition-all active:scale-[0.97] hover:bg-muted disabled:opacity-50"
                 style={{ background: "var(--muted)" }}
@@ -245,10 +395,7 @@ export default function AnalyticsPage() {
                     <ScoreBar label="Tone match" value={selected.analysis.tone_match_score / 100} />
                     <ScoreBar label="Structure" value={selected.analysis.structure_score / 100} />
                   </div>
-                  <div
-                    className="rounded-lg p-4 space-y-3 text-xs"
-                    style={{ background: "var(--muted)" }}
-                  >
+                  <div className="rounded-lg p-4 space-y-3 text-xs" style={{ background: "var(--muted)" }}>
                     <div>
                       <p className="font-semibold text-foreground mb-1">Strength</p>
                       <p className="text-muted-foreground">{selected.analysis.top_strength}</p>
@@ -271,10 +418,16 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      <style>{`
+      <style jsx>{`
         @keyframes slideInRight {
-          from { transform: translateX(100%); opacity: 0; }
-          to   { transform: translateX(0);    opacity: 1; }
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
         }
       `}</style>
     </ProductShell>

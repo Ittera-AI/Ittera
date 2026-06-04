@@ -13,7 +13,7 @@ def _token(client):
     return response.json()["access_token"]
 
 
-def test_mock_first_product_loop(client):
+def test_mock_first_product_loop(client, monkeypatch):
     token = _token(client)
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -83,6 +83,11 @@ def test_mock_first_product_loop(client):
     assert calendar.status_code == 200
     assert calendar.json()
 
+    async def fake_publish(_db, _user, _draft):
+        return {"platform_post_id": "mocked-real-publish"}
+
+    monkeypatch.setattr("app.services.content_service.publish_draft", fake_publish)
+
     publish = client.post("/api/v1/content/publish", json={"draft_id": draft_id}, headers=headers)
     assert publish.status_code == 200
-    assert publish.json()["platform_post_id"].startswith("mock-published")
+    assert publish.json()["platform_post_id"] == "mocked-real-publish"

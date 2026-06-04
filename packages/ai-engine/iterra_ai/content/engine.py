@@ -27,7 +27,7 @@ class ContentGenerationEngine(BaseEngine[ContentGenerationInput, ContentGenerati
         )
         
         # Mock fallback if no API key
-        if not os.getenv("ANTHROPIC_API_KEY"):
+        if not self._client and not os.getenv("AIML_API_KEY"):
             return self._mock_generate(input)
         
         # Real generation

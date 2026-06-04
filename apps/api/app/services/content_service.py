@@ -1,14 +1,54 @@
 from datetime import datetime, timezone, timedelta
+import logging
+import re
+import uuid
+from pathlib import Path
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models.content_draft import ContentDraft
+from app.config import settings
+from app.models.content_draft import ContentDraft, ContentDraftMedia
+from app.models.social_connection import SocialConnection
 from app.models.user import User
 from app.schemas.content import GenerateRequest, RepurposeRequest, ScheduleRequest, SuggestRequest
 from app.services import brand_profile_service, context_service, trend_service
+from app.services.publisher_service import PublishError, publish_draft
+from app.services.publishing_state import (
+    DRAFT_STATUS_CANCELLED,
+    DRAFT_STATUS_DRAFT,
+    DRAFT_STATUS_FAILED,
+    DRAFT_STATUS_PUBLISHED,
+    DRAFT_STATUS_PUBLISHING,
+    DRAFT_STATUS_SCHEDULED,
+    REVIEW_STATUS_APPROVED,
+    REVIEW_STATUS_DRAFT,
+    REVIEW_STATUS_REJECTED,
+    REVIEW_STATUS_REVIEW_DUE,
+    TERMINAL_PUBLISH_STATUSES,
+    PublishingValidationError,
+    validate_platform_media,
+)
+from app.services.storage_queue import StorageOperationType, get_storage_queue
+from app.services.storage_service import StorageError, StorageService
+from app.services.social_service import get_calendar_connection
+from app.services.google_calendar_service import GoogleCalendarService
+
+logger = logging.getLogger(__name__)
 
 LIMITS = {"linkedin": 3000, "instagram": 2200, "twitter": 280}
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_DRAFT_IMAGES = 4
+IMAGE_SIGNATURES = {
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/webp": (b"RIFF",),
+}
+IMAGE_EXTENSIONS = {
+    "image/jpeg": {".jpg", ".jpeg"},
+    "image/png": {".png"},
+    "image/webp": {".webp"},
+}
 
 
 def suggest(db: Session, user: User, payload: SuggestRequest) -> dict:
@@ -73,6 +113,24 @@ def generate(db: Session, user: User, payload: GenerateRequest) -> dict:
     
     engine = ContentGenerationEngine()
     output = engine.generate(engine_input)
+    fit_score, fit_notes = _persona_fit(output.content, ctx)
+    if fit_score < 60:
+        rewrite_input = ContentGenerationInput(
+            platform=payload.platform,
+            prompt=(
+                f"{payload.prompt}\n\nRewrite once to fit the persona more tightly. "
+                "Use the user's voice, audience, pillars, avoid-topic constraints, and prior performance facts."
+            ),
+            hook=payload.suggestion.hook if payload.suggestion else None,
+            system_prompt=ctx.system_prompt,
+            platform_rules=get_rules(payload.platform),
+        )
+        rewritten = engine.generate(rewrite_input)
+        rewritten_score, rewritten_notes = _persona_fit(rewritten.content, ctx)
+        if rewritten_score >= fit_score:
+            output = rewritten
+            fit_score = rewritten_score
+            fit_notes = rewritten_notes
 
     draft = ContentDraft(
         user_id=user.id,
@@ -81,10 +139,19 @@ def generate(db: Session, user: User, payload: GenerateRequest) -> dict:
         prompt_used=payload.prompt,
         trend_used=payload.trend_used,
         generation_model=output.model,
+        persona_fit_score=fit_score,
+        persona_fit_notes=fit_notes,
     )
     db.add(draft)
     db.commit()
     db.refresh(draft)
+
+    # Save to Google Drive if user has Drive connected
+    try:
+        _save_draft_to_drive_if_connected(db, user, draft, output.content)
+    except Exception as e:
+        # Don't fail the generation if Drive save fails
+        logger.warning("Failed to save draft to Drive: %s", e)
     
     return {
         "draft_id": draft.id,
@@ -97,6 +164,8 @@ def generate(db: Session, user: User, payload: GenerateRequest) -> dict:
             "persona_confidence": ctx.persona.confidence_score,
             "report_posts": ctx.report.posts_analysed,
             "context_version": ctx.permanent.context_version,
+            "persona_fit_score": fit_score,
+            "persona_fit_notes": fit_notes,
         },
         "generation_mode": "mock" if output.is_mock else "live",
     }
@@ -136,69 +205,320 @@ def list_drafts(db: Session, user: User, status_filter: str | None = None) -> li
 
 
 def get_draft(db: Session, user: User, draft_id: str) -> ContentDraft:
-    return _draft(db, user, draft_id)
+    """
+    Get a draft by ID.
+
+    If draft has drive_file_id and user's storage_preference is google_drive,
+    content is loaded from Google Drive (with DB as fallback).
+    """
+    draft = _draft(db, user, draft_id)
+
+    # Try to load from Drive if applicable
+    if draft.drive_file_id and user.storage_preference == "google_drive":
+        try:
+            drive_content = _load_draft_from_drive(db, user, draft)
+            if drive_content:
+                # Update draft content from Drive (sync latest version)
+                draft.content = drive_content
+                logger.debug("Loaded draft %s content from Drive", draft_id)
+        except Exception as e:
+            logger.warning("Failed to load draft from Drive, using DB content: %s", e)
+
+    return draft
 
 
 def update_draft(db: Session, user: User, draft_id: str, payload) -> ContentDraft:
     draft = _draft(db, user, draft_id)
-    for field in ("content", "status", "scheduled_for"):
-        value = getattr(payload, field, None)
-        if value is not None:
-            setattr(draft, field, value)
+    if draft.status in {DRAFT_STATUS_PUBLISHED, DRAFT_STATUS_PUBLISHING}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Published or publishing drafts cannot be edited.")
+        
+    content_changed = False
+    if getattr(payload, "content", None) is not None:
+        draft.content = payload.content
+        content_changed = True
+    if getattr(payload, "scheduled_for", None) is not None:
+        draft.scheduled_for = _aware(payload.scheduled_for)
+    requested_status = getattr(payload, "status", None)
+    if requested_status is not None:
+        if requested_status not in {DRAFT_STATUS_DRAFT, DRAFT_STATUS_SCHEDULED}:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported draft status update.")
+        draft.status = requested_status
+    if content_changed:
+        _reset_review_after_edit(draft)
+        draft.publish_error = None
     draft.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(draft)
     return draft
 
 
-def publish_now(db: Session, user: User, draft_id: str) -> dict:
-    draft = _draft(db, user, draft_id)
+async def publish_now(db: Session, user: User, draft_id: str) -> dict:
+    draft = _lock_draft(db, user, draft_id)
     now = datetime.now(timezone.utc)
-    draft.status = "published"
-    draft.published_at = now
-    draft.platform_post_id = f"mock-published-{draft.id[:8]}"
+    if draft.status == DRAFT_STATUS_PUBLISHED and draft.platform_post_id:
+        return {"platform_post_id": draft.platform_post_id, "published_at": draft.published_at or now}
+    if draft.status in TERMINAL_PUBLISH_STATUSES:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Draft is already {draft.status}.")
+    if not (draft.content or "").strip():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Draft content is empty")
+    try:
+        validate_platform_media(draft.platform, len([item for item in draft.media if item.status != "deleted"]))
+    except PublishingValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    draft.status = DRAFT_STATUS_PUBLISHING
     draft.publish_error = None
+    draft.updated_at = now
     db.commit()
-    return {"platform_post_id": draft.platform_post_id, "published_at": now}
+    db.refresh(draft)
+    try:
+        result = await publish_draft(db, user, draft)
+    except PublishError as exc:
+        draft.status = DRAFT_STATUS_FAILED
+        draft.publish_error = exc.detail
+        draft.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except HTTPException as exc:
+        draft.status = DRAFT_STATUS_FAILED
+        draft.publish_error = str(exc.detail)
+        draft.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        raise
+    except Exception as exc:
+        logger.exception("Publish failed draft_id=%s", draft.id)
+        draft.status = DRAFT_STATUS_FAILED
+        draft.publish_error = "Publishing failed. Try again after checking the connection."
+        draft.updated_at = now
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=draft.publish_error) from exc
+
+    published_at = datetime.now(timezone.utc)
+    draft.status = DRAFT_STATUS_PUBLISHED
+    draft.published_at = published_at
+    draft.review_status = REVIEW_STATUS_APPROVED
+    draft.platform_post_id = result.get("platform_post_id") or draft.platform_post_id
+    draft.publish_error = None
+    draft.updated_at = published_at
+    db.commit()
+    return {"platform_post_id": draft.platform_post_id, "published_at": published_at}
 
 
 def schedule_post(db: Session, user: User, payload: ScheduleRequest) -> dict:
-    if payload.scheduled_for <= datetime.now(timezone.utc):
+    scheduled_for = _aware(payload.scheduled_for)
+    if scheduled_for <= datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Schedule time must be in the future")
     draft = _draft(db, user, payload.draft_id)
-    draft.status = "scheduled"
-    draft.scheduled_for = payload.scheduled_for
-    draft.celery_task_id = f"mock-task-{draft.id[:8]}"
+    if draft.status in {DRAFT_STATUS_PUBLISHED, DRAFT_STATUS_PUBLISHING}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Draft is already {draft.status}.")
+    if not (draft.content or "").strip():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Draft content is empty")
+    try:
+        validate_platform_media(draft.platform, len([item for item in draft.media if item.status != "deleted"]))
+    except PublishingValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    draft.status = DRAFT_STATUS_SCHEDULED
+    draft.scheduled_for = scheduled_for
+    draft.auto_post_enabled_snapshot = bool(user.auto_post_enabled)
+    if user.auto_post_enabled:
+        draft.review_status = REVIEW_STATUS_APPROVED
+    else:
+        review_due_at = scheduled_for - timedelta(hours=24)
+        draft.review_status = REVIEW_STATUS_REVIEW_DUE if review_due_at <= datetime.now(timezone.utc) else REVIEW_STATUS_DRAFT
+    draft.review_email_sent_at = None
+    draft.celery_task_id = "publishing-queue"
+    draft.publish_error = None
+    
+    # Try to sync with Google Calendar
+    calendar_conn = get_calendar_connection(db, user.id)
+    if calendar_conn:
+        try:
+            calendar_service = GoogleCalendarService(
+                access_token=calendar_conn.access_token,
+                refresh_token=calendar_conn.refresh_token,
+                encrypted=True,
+            )
+            event_id = calendar_service.create_event(
+                title=f"Iterra Post: {draft.platform.capitalize()}",
+                description=f"Link: {settings.FRONTEND_URL}/draft/{draft.id}\n\nContent Preview:\n{(draft.content or '')[:100]}...",
+                start_time=scheduled_for,
+            )
+            # Store event id in platform_media JSON column since we don't have a dedicated column
+            media_data = draft.platform_media or {}
+            media_data["google_calendar_event_id"] = event_id
+            draft.platform_media = media_data
+        except Exception as exc:
+            logger.warning("Failed to sync scheduled post to Google Calendar: %s", exc)
+
+    draft.updated_at = datetime.now(timezone.utc)
     db.commit()
     return {
         "celery_task_id": draft.celery_task_id,
-        "scheduled_for": payload.scheduled_for,
+        "scheduled_for": scheduled_for,
         "suggested_times": suggested_times(),
     }
 
 
 def cancel_schedule(db: Session, user: User, draft_id: str) -> dict:
     draft = _draft(db, user, draft_id)
-    draft.status = "draft"
-    draft.scheduled_for = None
+    if draft.status == DRAFT_STATUS_PUBLISHED:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Published drafts cannot be cancelled.")
+    draft.status = DRAFT_STATUS_CANCELLED
+    draft.review_status = REVIEW_STATUS_REJECTED
     draft.celery_task_id = None
+    draft.publish_error = None
+    
+    # Delete from Google Calendar if synced
+    if draft.platform_media and "google_calendar_event_id" in draft.platform_media:
+        event_id = draft.platform_media.pop("google_calendar_event_id")
+        calendar_conn = get_calendar_connection(db, user.id)
+        if calendar_conn:
+            try:
+                calendar_service = GoogleCalendarService(
+                    access_token=calendar_conn.access_token,
+                    refresh_token=calendar_conn.refresh_token,
+                    encrypted=True,
+                )
+                calendar_service.delete_event(event_id)
+            except Exception as exc:
+                logger.warning("Failed to delete scheduled post from Google Calendar: %s", exc)
+                
+    draft.updated_at = datetime.now(timezone.utc)
     db.commit()
     return {"status": "cancelled"}
+
+
+def approve_draft(db: Session, user: User, draft_id: str) -> ContentDraft:
+    draft = _draft(db, user, draft_id)
+    if draft.status in {DRAFT_STATUS_CANCELLED, DRAFT_STATUS_PUBLISHED, DRAFT_STATUS_PUBLISHING}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Draft is already {draft.status}.")
+    draft.review_status = REVIEW_STATUS_APPROVED
+    draft.publish_error = None
+    draft.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(draft)
+    return draft
+
+
+def add_media_to_draft(
+    db: Session,
+    user: User,
+    draft_id: str,
+    filename: str,
+    mime_type: str,
+    content: bytes,
+) -> ContentDraftMedia:
+    draft = _draft(db, user, draft_id)
+    if draft.status in {DRAFT_STATUS_PUBLISHED, DRAFT_STATUS_PUBLISHING, DRAFT_STATUS_CANCELLED}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Cannot change media while draft is {draft.status}.")
+    canonical_mime = _validate_image_upload(filename, mime_type, content)
+    existing = (
+        db.query(ContentDraftMedia)
+        .filter(ContentDraftMedia.draft_id == draft.id, ContentDraftMedia.status != "deleted")
+        .count()
+    )
+    if existing >= MAX_DRAFT_IMAGES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A draft can have up to 4 images.")
+
+    media_id = str(uuid.uuid4())
+    clean_name = _safe_filename(filename)
+    storage_dir = Path(settings.MEDIA_STORAGE_DIR) / user.id / draft.id
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    local_path = storage_dir / f"{media_id}_{clean_name}"
+    local_path.write_bytes(content)
+
+    media = ContentDraftMedia(
+        id=media_id,
+        draft_id=draft.id,
+        user_id=user.id,
+        filename=clean_name,
+        mime_type=canonical_mime,
+        local_path=str(local_path),
+        public_path=f"{settings.MEDIA_PUBLIC_URL_PREFIX.rstrip('/')}/{media_id}",
+        position=existing,
+        status="ready",
+    )
+    db.add(media)
+    _reset_review_after_edit(draft)
+    draft.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(media)
+
+    try:
+        drive_file_id = _mirror_media_to_drive_if_connected(db, user, media, content)
+        if drive_file_id:
+            media.drive_file_id = drive_file_id
+            db.commit()
+            db.refresh(media)
+    except Exception as exc:
+        logger.warning("Failed to mirror media %s to Drive: %s", media.id, exc)
+
+    return media
+
+
+def delete_media(db: Session, user: User, draft_id: str, media_id: str) -> dict:
+    draft = _draft(db, user, draft_id)
+    media = (
+        db.query(ContentDraftMedia)
+        .filter(
+            ContentDraftMedia.id == media_id,
+            ContentDraftMedia.draft_id == draft.id,
+            ContentDraftMedia.user_id == user.id,
+        )
+        .first()
+    )
+    if media is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
+    if draft.status in {DRAFT_STATUS_PUBLISHED, DRAFT_STATUS_PUBLISHING, DRAFT_STATUS_CANCELLED}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Cannot change media while draft is {draft.status}.")
+    path = Path(media.local_path)
+    media.status = "deleted"
+    media.drive_file_id = None
+    _reset_review_after_edit(draft)
+    db.commit()
+    db.delete(media)
+    draft.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    try:
+        if path.is_file():
+            path.unlink()
+    except OSError as exc:
+        logger.warning("Failed to remove media file %s: %s", path, exc)
+    _compact_media_positions(db, draft.id)
+    return {"deleted": media_id}
+
+
+def get_media_file(db: Session, user: User, media_id: str) -> ContentDraftMedia:
+    media = (
+        db.query(ContentDraftMedia)
+        .filter(ContentDraftMedia.id == media_id, ContentDraftMedia.user_id == user.id, ContentDraftMedia.status != "deleted")
+        .first()
+    )
+    if media is None or not Path(media.local_path).is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
+    return media
 
 
 def calendar_events(db: Session, user: User) -> list[dict]:
     events = []
     for draft in list_drafts(db, user):
         starts_at = draft.scheduled_for or draft.published_at
-        if starts_at and draft.status in {"scheduled", "published"}:
+        if starts_at and draft.status in {
+            DRAFT_STATUS_SCHEDULED,
+            DRAFT_STATUS_PUBLISHING,
+            DRAFT_STATUS_PUBLISHED,
+            DRAFT_STATUS_FAILED,
+            DRAFT_STATUS_CANCELLED,
+        }:
             events.append(
                 {
                     "id": draft.id,
-                    "title": draft.content.splitlines()[0][:80],
+                    "title": (draft.content.splitlines()[0][:80] if draft.content and draft.content.splitlines() else "Untitled Draft"),
                     "platform": draft.platform,
                     "status": draft.status,
+                    "review_status": draft.review_status,
                     "starts_at": starts_at,
                     "content": draft.content,
+                    "media": draft.media,
                 }
             )
     return events
@@ -229,6 +549,149 @@ def suggested_times(db: Session | None = None, user: User | None = None, platfor
     return [now + timedelta(days=1, hours=9), now + timedelta(days=2, hours=12), now + timedelta(days=3, hours=9)]
 
 
+def _persona_fit(content: str, ctx) -> tuple[int, list[str]]:
+    score = 100
+    notes: list[str] = []
+    lowered = content.lower()
+
+    persona = ctx.persona
+    if persona.voice_tone and not _contains_any(lowered, _keywords(persona.voice_tone)):
+        score -= 15
+        notes.append(f"Voice tone may not fully reflect: {persona.voice_tone}.")
+    target_audience = ctx.permanent.target_audience
+    if target_audience and not _contains_any(lowered, _keywords(target_audience)):
+        score -= 15
+        notes.append(f"Audience fit is light: {target_audience}.")
+    if persona.content_pillars and not any(_contains_any(lowered, _keywords(pillar)) for pillar in persona.content_pillars[:5]):
+        score -= 20
+        notes.append("Draft does not clearly touch the confirmed content pillars.")
+    avoid_topics = getattr(persona, "avoid_topics", []) or []
+    matched_avoid = [topic for topic in avoid_topics if _contains_any(lowered, _keywords(topic))]
+    if matched_avoid:
+        score -= 30
+        notes.append(f"Draft touches avoid topics: {', '.join(matched_avoid[:3])}.")
+    if ctx.report.top_performing_topics and not any(
+        _contains_any(lowered, _keywords(topic)) for topic in ctx.report.top_performing_topics[:5]
+    ):
+        score -= 10
+        notes.append("Could be tied more strongly to prior top-performing topics.")
+
+    if not notes:
+        notes.append("Strong persona fit.")
+    return max(0, min(100, score)), notes
+
+
+def _keywords(value: str) -> list[str]:
+    words = re.findall(r"[a-zA-Z0-9]+", value.lower())
+    return [word for word in words if len(word) >= 4]
+
+
+def _contains_any(text: str, words: list[str]) -> bool:
+    return any(word in text for word in words)
+
+
+def _aware(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _safe_filename(filename: str) -> str:
+    name = Path(filename or "image").name
+    name = re.sub(r"[^a-zA-Z0-9._-]+", "-", name).strip(".-")
+    return name or "image"
+
+
+def _validate_image_upload(filename: str, declared_mime: str, content: bytes) -> str:
+    if not content:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Image file is empty.")
+    if len(content) > settings.MEDIA_MAX_BYTES:
+        limit_mb = max(1, settings.MEDIA_MAX_BYTES // (1024 * 1024))
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"Image must be {limit_mb}MB or smaller.")
+    if declared_mime not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Only JPEG, PNG, and WebP images are supported.",
+        )
+
+    suffix = Path(filename or "").suffix.lower()
+    if suffix and suffix not in IMAGE_EXTENSIONS[declared_mime]:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Image extension does not match its content type.")
+    if declared_mime == "image/webp":
+        valid = content.startswith(b"RIFF") and len(content) >= 12 and content[8:12] == b"WEBP"
+    else:
+        valid = any(content.startswith(signature) for signature in IMAGE_SIGNATURES[declared_mime])
+    if not valid:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Image file signature is invalid.")
+    return declared_mime
+
+
+def _reset_review_after_edit(draft: ContentDraft) -> None:
+    if draft.status != DRAFT_STATUS_SCHEDULED:
+        return
+    if draft.auto_post_enabled_snapshot:
+        return
+    draft.review_status = REVIEW_STATUS_DRAFT
+    draft.review_email_sent_at = None
+
+
+def _lock_draft(db: Session, user: User, draft_id: str) -> ContentDraft:
+    query = db.query(ContentDraft).filter(ContentDraft.id == draft_id, ContentDraft.user_id == user.id)
+    try:
+        if db.bind and db.bind.dialect.name != "sqlite":
+            query = query.with_for_update()
+    except Exception:
+        pass
+    draft = query.first()
+    if draft is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
+    return draft
+
+
+def _compact_media_positions(db: Session, draft_id: str) -> None:
+    media_items = (
+        db.query(ContentDraftMedia)
+        .filter(ContentDraftMedia.draft_id == draft_id, ContentDraftMedia.status != "deleted")
+        .order_by(ContentDraftMedia.position.asc(), ContentDraftMedia.created_at.asc())
+        .all()
+    )
+    for idx, item in enumerate(media_items):
+        item.position = idx
+    db.commit()
+
+
+def _mirror_media_to_drive_if_connected(db: Session, user: User, media: ContentDraftMedia, content: bytes) -> str | None:
+    drive_connection = (
+        db.query(SocialConnection)
+        .filter(
+            SocialConnection.user_id == user.id,
+            SocialConnection.platform == "google_drive",
+            SocialConnection.is_active == True,
+        )
+        .first()
+    )
+    if not drive_connection:
+        return None
+    meta = drive_connection.connection_metadata or {}
+    folder_id = meta.get("drafts_folder_id") or meta.get("iterra_folder_id")
+    if not folder_id:
+        return None
+
+    storage = StorageService(
+        access_token=drive_connection.access_token,
+        refresh_token=drive_connection.refresh_token,
+        encrypted=True,
+        expires_at=drive_connection.token_expires_at,
+    )
+    return storage.save_media_file(
+        folder_id=folder_id,
+        filename=media.filename,
+        content=content,
+        mime_type=media.mime_type,
+        user_id=user.id,
+    )
+
+
 def _require_brand_profile(db: Session, user: User) -> None:
     if brand_profile_service.ensure_confirmed_profile(db, user) is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Confirm your Brand Profile before creating content.")
@@ -245,3 +708,160 @@ def _repurposed_content(content: str, platform: str) -> str:
     if platform == "instagram":
         return f"{content}\n\nSave this for your next planning sprint.\n\n#ContentStrategy #CreatorSystems #AIWorkflow"
     return f"1/3 {content[:220]}\n\n2/3 The point: build the loop before chasing volume.\n\n3/3 Better systems create better taste."
+
+
+def _get_storage_preference(user: User, content_type: str = "default") -> str:
+    """
+    Get the storage preference for a specific content type.
+
+    Args:
+        user: The user to get preferences for
+        content_type: Type of content (drafts, analysis, etc.)
+
+    Returns:
+        Storage location (google_drive, local, or iterra)
+    """
+    # First check new granular preferences
+    if user.storage_preferences:
+        specific = user.storage_preferences.get(content_type)
+        if specific:
+            return specific
+        default = user.storage_preferences.get("default", "google_drive")
+        return default
+
+    # Fall back to legacy storage_preference
+    if user.storage_preference:
+        return user.storage_preference
+
+    # Default to google_drive for privacy-first default
+    return "google_drive"
+
+
+def _save_draft_to_drive_if_connected(
+    db: Session, user: User, draft: ContentDraft, content: str
+) -> None:
+    """
+    Save draft to Google Drive if user has Drive connected.
+    Updates draft.drive_file_id with the Drive file ID.
+    If Drive save fails, queues the operation for later retry.
+    """
+    # Check storage preference for drafts
+    storage_pref = _get_storage_preference(user, "drafts")
+    if storage_pref != "google_drive":
+        logger.debug("User %s has drafts storage preference '%s', skipping Drive save", user.id, storage_pref)
+        return
+
+    # Get Google Drive connection
+    drive_connection = (
+        db.query(SocialConnection)
+        .filter(
+            SocialConnection.user_id == user.id,
+            SocialConnection.platform == "google_drive",
+            SocialConnection.is_active == True,
+        )
+        .first()
+    )
+
+    if not drive_connection:
+        logger.debug("User %s has no Google Drive connection, skipping Drive save", user.id)
+        return
+
+    # Get folder IDs from metadata
+    meta = drive_connection.connection_metadata or {}
+    drafts_folder_id = meta.get("drafts_folder_id")
+
+    if not drafts_folder_id:
+        logger.warning("User %s has Drive connection but no drafts folder ID", user.id)
+        return
+
+    # Prepare draft data for Drive
+    draft_data = {
+        "id": draft.id,
+        "content": content,
+        "platform": draft.platform,
+        "prompt_used": draft.prompt_used,
+        "trend_used": draft.trend_used,
+        "generation_model": draft.generation_model,
+        "status": draft.status,
+        "created_at": draft.created_at.isoformat() if draft.created_at else None,
+    }
+
+    # Save to Drive
+    storage = StorageService(
+        access_token=drive_connection.access_token,
+        refresh_token=drive_connection.refresh_token,
+        encrypted=True,
+        expires_at=drive_connection.token_expires_at,
+    )
+
+    try:
+        file_id = storage.save_draft(
+            drafts_folder_id=drafts_folder_id,
+            draft_id=draft.id,
+            draft_data=draft_data,
+        )
+
+        # Update draft with Drive file ID
+        draft.drive_file_id = file_id
+        db.commit()
+
+        logger.info("Saved draft %s to Drive with file ID %s", draft.id, file_id)
+
+    except StorageError as e:
+        logger.warning("Failed to save draft %s to Drive: %s. Queuing for retry.", draft.id, e)
+
+        # Queue the operation for later retry
+        queue = get_storage_queue()
+        if queue.is_available():
+            job_id = queue.queue_operation(
+                user_id=user.id,
+                operation_type=StorageOperationType.SAVE_DRAFT,
+                draft_id=draft.id,
+                data=draft_data,
+            )
+            if job_id:
+                logger.info("Queued draft save operation with job ID: %s", job_id)
+            else:
+                logger.error("Failed to queue draft save operation")
+        else:
+            logger.error("Storage queue not available - draft will not be saved to Drive")
+
+
+def _load_draft_from_drive(db: Session, user: User, draft: ContentDraft) -> str | None:
+    """
+    Load draft content from Google Drive.
+
+    Returns the content string, or None if Drive load fails.
+    """
+    if not draft.drive_file_id:
+        return None
+
+    # Get Google Drive connection
+    drive_connection = (
+        db.query(SocialConnection)
+        .filter(
+            SocialConnection.user_id == user.id,
+            SocialConnection.platform == "google_drive",
+            SocialConnection.is_active == True,
+        )
+        .first()
+    )
+
+    if not drive_connection:
+        logger.debug("User %s has no Drive connection for loading draft", user.id)
+        return None
+
+    # Load from Drive
+    storage = StorageService(
+        access_token=drive_connection.access_token,
+        refresh_token=drive_connection.refresh_token,
+        encrypted=True,
+        expires_at=drive_connection.token_expires_at,
+    )
+
+    draft_data = storage.load_draft(file_id=draft.drive_file_id)
+
+    if draft_data and "content" in draft_data:
+        return draft_data["content"]
+
+    return None

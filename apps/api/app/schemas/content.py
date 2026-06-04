@@ -60,17 +60,34 @@ class DraftUpdateRequest(BaseModel):
     scheduled_for: datetime | None = None
 
 
+class DraftMediaResponse(BaseModel):
+    id: str
+    filename: str
+    mime_type: str
+    preview_url: str | None = None
+    drive_file_id: str | None = None
+    status: str
+    position: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class DraftResponse(BaseModel):
     id: str
     platform: str
     content: str | None = None      # None when content lives in Google Drive
     drive_file_id: str | None = None  # Google Drive file ID for draft content
+    media: list[DraftMediaResponse] = Field(default_factory=list)
     repurposed_versions: dict[str, str] = Field(default_factory=dict)
     status: str
+    review_status: str = "draft"
     scheduled_for: datetime | None = None
     platform_post_id: str | None = None
     published_at: datetime | None = None
     publish_error: str | None = None
+    auto_post_enabled_snapshot: bool = False
+    persona_fit_score: int | None = None
+    persona_fit_notes: list[str] = Field(default_factory=list)
     trend_used: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -103,5 +120,7 @@ class CalendarEventResponse(BaseModel):
     title: str
     platform: str
     status: str
+    review_status: str = "draft"
     starts_at: datetime
     content: str
+    media: list[DraftMediaResponse] = Field(default_factory=list)

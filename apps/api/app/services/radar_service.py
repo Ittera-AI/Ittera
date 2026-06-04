@@ -1,8 +1,12 @@
 from datetime import datetime, timezone
+import logging
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.schemas.radar import RadarInput, RadarOutput, TrendItem
+
+logger = logging.getLogger(__name__)
 
 _NICHE_TRENDS: dict[str, list[dict]] = {
     "ai": [
@@ -64,6 +68,26 @@ class RadarService:
         self.db = db
 
     async def scan(self, input: RadarInput) -> RadarOutput:
+        if settings.AIML_API_KEY:
+            try:
+                from iterra_ai.radar.engine import TrendRadar
+                from iterra_ai.radar.schemas import RadarInput as EngineRadarInput
+
+                engine_out = TrendRadar().scan(EngineRadarInput.model_validate(input.model_dump()))
+                items = [
+                    TrendItem(
+                        topic=item.topic,
+                        score=round(item.score / 10 if item.score > 1 else item.score, 2),
+                        platforms=item.platforms,
+                        summary=item.summary,
+                    )
+                    for item in engine_out.trends
+                ]
+                if items:
+                    return RadarOutput(trends=items, scanned_at=engine_out.scanned_at)
+            except Exception as exc:
+                logger.warning("TrendRadar failed; falling back to static trends: %s", exc)
+
         raw_trends = _find_trends(input.niche)
         limit = min(input.limit, len(raw_trends))
 

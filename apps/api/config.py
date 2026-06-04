@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+    MEDIA_STORAGE_DIR: str = "uploads"
+    MEDIA_PUBLIC_URL_PREFIX: str = "/api/v1/content/media-file"
+    MEDIA_MAX_BYTES: int = 5 * 1024 * 1024
 
     # Auth
     SECRET_KEY: str = _INSECURE_SECRET
@@ -40,6 +43,7 @@ class Settings(BaseSettings):
     GOOGLE_DRIVE_REDIRECT_URI: str = "http://localhost:8000/api/v1/social/callback/google-drive"
     # LinkedIn scraper session cookie (alternative to username/password)
     LINKEDIN_SESSION_COOKIE: str = ""
+    ENABLE_LINKEDIN_SYNC: bool = False
     # Twitter / X OAuth 2.0 (PKCE)
     TWITTER_CLIENT_ID: str = ""
     TWITTER_CLIENT_SECRET: str = ""
@@ -64,12 +68,24 @@ class Settings(BaseSettings):
     # Find this in: Supabase Dashboard → Project Settings → API → JWT Settings → JWT Secret
     SUPABASE_JWT_SECRET: str = ""
     SUPABASE_URL: str = ""
+    NEXT_PUBLIC_SUPABASE_URL: str = ""
+    # Public Supabase API key used when validating a user JWT through Supabase Auth.
+    # `NEXT_PUBLIC_SUPABASE_ANON_KEY` is accepted so Docker can share the web env file.
+    SUPABASE_ANON_KEY: str = ""
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: str = ""
 
     # AI
+    AIML_API_KEY: str = ""
+    AIML_BASE_URL: str = "https://api.aimlapi.com/v1"
+    AIML_MODEL: str = "gpt-4o-mini"
+    LLM_PROVIDER: str = "aiml"
+    LLM_MODEL: str = ""
     OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = ""
+    OPENAI_MODEL: str = ""
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-5"
-    # When true and Anthropic credentials are configured, calendar generation uses CalendarEngine (LLM).
+    # When true and an AI provider key is configured, calendar generation uses CalendarEngine (LLM).
     # Otherwise the API returns a deterministic mock plan for demos and offline tests.
     USE_ITERRA_AI_CALENDAR: bool = False
 
@@ -82,6 +98,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="ignore",
     )
 
 

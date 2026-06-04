@@ -1,6 +1,11 @@
+import logging
+
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.schemas.coach import CoachInput, CoachOutput
+
+logger = logging.getLogger(__name__)
 
 _PLATFORM_TIPS: dict[str, list[str]] = {
     "linkedin": [
@@ -38,6 +43,33 @@ class CoachService:
         self.db = db
 
     async def analyze(self, input: CoachInput) -> CoachOutput:
+        if settings.AIML_API_KEY:
+            try:
+                from iterra_ai.coach.engine import EngagementCoach
+                from iterra_ai.coach.schemas import CoachInput as EngineCoachInput
+
+                engine_out = EngagementCoach().analyze(
+                    EngineCoachInput(
+                        content=input.content,
+                        platform=input.platform,
+                        goal=input.goal,
+                    )
+                )
+                score = round((engine_out.score or 0) / 10, 2)
+                suggestions = engine_out.suggestions or [engine_out.top_improvement]
+                summary = (
+                    engine_out.detailed_feedback
+                    or engine_out.summary
+                    or engine_out.top_strength
+                )
+                return CoachOutput(
+                    score=max(0.0, min(score, 1.0)),
+                    suggestions=[s for s in suggestions if s][:5],
+                    summary=summary,
+                )
+            except Exception as exc:
+                logger.warning("EngagementCoach failed; falling back to heuristics: %s", exc)
+
         content = input.content.strip()
         platform = input.platform.lower()
         word_count = len(content.split())

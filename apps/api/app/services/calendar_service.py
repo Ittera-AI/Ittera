@@ -13,7 +13,7 @@ class CalendarService:
         self.db = db
 
     async def generate(self, input: CalendarInput) -> CalendarOutput:
-        if settings.USE_ITERRA_AI_CALENDAR and settings.ANTHROPIC_API_KEY:
+        if settings.USE_ITERRA_AI_CALENDAR and settings.AIML_API_KEY:
             try:
                 from iterra_ai.calendar.engine import CalendarEngine
                 from iterra_ai.calendar.schemas import CalendarInput as EngineCalendarInput

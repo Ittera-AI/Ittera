@@ -3,12 +3,26 @@ from app.models.post import Post
 from app.models.content_plan import ContentPlan
 from app.models.social_connection import SocialConnection
 from app.models.brand_profile import BrandProfile
-from app.models.content_draft import ContentDraft
+from app.models.content_draft import ContentDraft, ContentDraftMedia
 from app.models.trend_snapshot import TrendSnapshot
 from app.models.post_analysis import PostAnalysis
 from app.models.waitlist import WaitlistEntry
 from app.models.user_context import UserContext
 from app.models.persona import PersonaProfile, PersonaSource, PersonaDocument, PersonaInsight
+from app.models.analytics_snapshot import DailyAnalyticsSnapshot, AnalyticsEvent
+from app.models.organization import (
+    Organization,
+    OrganizationMember,
+    Workspace,
+    WorkspaceMember,
+    Competitor,
+    CompetitorPost,
+    CompetitorAnalysis,
+    ApprovalWorkflow,
+    ContentApproval,
+    ApprovalDecision,
+    Prediction,
+)
 
 __all__ = [
     "User",
@@ -17,6 +31,7 @@ __all__ = [
     "SocialConnection",
     "BrandProfile",
     "ContentDraft",
+    "ContentDraftMedia",
     "TrendSnapshot",
     "PostAnalysis",
     "WaitlistEntry",
@@ -25,4 +40,18 @@ __all__ = [
     "PersonaSource",
     "PersonaDocument",
     "PersonaInsight",
+    "DailyAnalyticsSnapshot",
+    "AnalyticsEvent",
+    # Agency/Organization models
+    "Organization",
+    "OrganizationMember",
+    "Workspace",
+    "WorkspaceMember",
+    "Competitor",
+    "CompetitorPost",
+    "CompetitorAnalysis",
+    "ApprovalWorkflow",
+    "ContentApproval",
+    "ApprovalDecision",
+    "Prediction",
 ]

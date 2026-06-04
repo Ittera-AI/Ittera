@@ -222,6 +222,7 @@ Ittera/
 │  - Validate brand profile               │
 │  - Generate content (mock or AI)        │
 │  - Save to ContentDraft table           │
+│  - If Drive connected: backup to Drive    │
 └──────┬──────────────────────────────────┘
        │ 6. Return draft
        ▼
@@ -330,6 +331,55 @@ Ittera/
 └─────────────┘
 ```
 
+### Analytics with Real AI Flow
+```
+┌─────────────┐
+│   User      │
+│  Clicks     │
+│  "Analyze"  │
+└──────┬──────┘
+       │ 1. Request analysis
+       ▼
+┌─────────────────────────────────────────┐
+│  POST /api/v1/analytics/analyze/{id}  │
+│  Router: analytics.py                 │
+└──────┬──────────────────────────────────┘
+       │ 2. Delegate to service
+       ▼
+┌─────────────────────────────────────────┐
+│  AnalyticsService.analyze_post()        │
+│  - Fetch brand profile for context      │
+│  - Call EngagementCoach AI engine       │
+│     ↓                                   │
+│  Anthropic Claude API                   │
+│     ↓                                   │
+│  Real AI-generated scores               │
+│  (hook, tone, structure, CTA)           │
+│     ↓                                   │
+│  Save to post_analyses table            │
+└──────┬──────────────────────────────────┘
+       │ 3. Return analysis
+       ▼
+┌─────────────┐
+│   User      │
+│  Sees AI    │
+│  Feedback   │
+└─────────────┘
+```
+
+### Performance Sync (Background)
+```
+Celery Beat (daily) or manual trigger
+       ↓
+┌─────────────────────────────────────────┐
+│  performance_sync Celery task           │
+│  - Find published posts (90d window)    │
+│  - Call LinkedIn socialActions API      │
+│  - Update engagement metrics            │
+│  - Recalculate engagement_rate          │
+└─────────────────────────────────────────┘
+```
+
 
 ## API Endpoints
 
@@ -434,8 +484,9 @@ Ittera/
 ### Analytics (`/api/v1/analytics`)
 | Method | Endpoint | Description | Auth Required |
 |--------|----------|-------------|---------------|
+| GET | `/summary` | Get analytics dashboard KPIs (posts, engagement, coverage) | Yes |
 | GET | `/posts` | List posts with analysis (filter by platform, limit) | Yes |
-| POST | `/analyze/{post_id}` | Run/refresh analysis for a specific post | Yes |
+| POST | `/analyze/{post_id}` | Run/refresh AI analysis for a specific post | Yes |
 
 ### Storage (`/api/v1/storage`)
 | Method | Endpoint | Description | Auth Required |
@@ -1667,20 +1718,27 @@ npm run test
 - ✅ Trend radar (curated)
 - ✅ AI engagement coach
 
-### Phase 2: Intelligence Layer
+### Phase 2: Intelligence Layer (Partially Complete)
+- ✅ Real AI-powered engagement coach (Anthropic Claude)
+- ✅ Analytics dashboard with KPIs (summary endpoint)
+- ✅ Performance sync Celery task (LinkedIn metrics)
 - 🔄 Real-time trend scraping (Reddit, YouTube, Google Trends)
 - 🔄 Advanced brand voice analysis
 - 🔄 Performance prediction models
 - 🔄 Content A/B testing suggestions
 
-### Phase 3: Automation
+### Phase 3: Automation (In Progress)
+- ✅ Google Drive integration (drafts, analysis, posts backup)
+- ✅ Storage preference system (google_drive | local | iterra)
 - ⏳ Scheduled publishing to LinkedIn
 - ⏳ Auto-repurposing pipeline
 - ⏳ Smart notification system
 - ⏳ Batch content generation
 
-### Phase 4: Analytics & Insights
-- ⏳ Engagement tracking dashboard
+### Phase 4: Analytics & Insights (Partially Complete)
+- ✅ Engagement tracking dashboard (with AI-powered analysis)
+- ✅ Analytics summary endpoint (KPIs, coverage, platform breakdown)
+- ✅ Performance sync Celery task (background metrics updates)
 - ⏳ Competitor analysis
 - ⏳ ROI measurement
 - ⏳ Custom reporting

@@ -1,7 +1,7 @@
 """EXPERIMENTAL — template repurposing until LLM path is production-hardened."""
 
-import os
 import json
+import os
 from iterra_ai.core.base_engine import BaseEngine
 from iterra_ai.repurpose.schemas import RepurposedItem, RepurposeInput, RepurposeOutput
 from iterra_ai.prompts.repurpose import SYSTEM_PROMPT, REPURPOSE_PROMPT
@@ -10,8 +10,11 @@ from iterra_ai.prompts.repurpose import SYSTEM_PROMPT, REPURPOSE_PROMPT
 class RepurposeEngine(BaseEngine[RepurposeInput, RepurposeOutput]):
     """Repurposes content across different social platforms."""
 
+    def repurpose(self, input: RepurposeInput) -> RepurposeOutput:
+        return self.generate(input)
+
     def generate(self, input: RepurposeInput) -> RepurposeOutput:
-        if not os.getenv("ANTHROPIC_API_KEY"):
+        if not self._client and not os.getenv("AIML_API_KEY"):
             return self._mock_repurpose(input)
         
         user_prompt = REPURPOSE_PROMPT.format(

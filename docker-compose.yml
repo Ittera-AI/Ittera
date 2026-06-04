@@ -35,11 +35,14 @@ services:
     environment:
       - DATABASE_URL=postgresql://iterra:iterra@db:5432/iterra
       - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
     restart: unless-stopped
     volumes:
       - ./apps/api:/app
       - ./packages/ai-engine:/packages/ai-engine
       - ./scripts:/scripts
+      - media_uploads:/app/uploads
 
   worker:
     build:
@@ -53,11 +56,13 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://iterra:iterra@db:5432/iterra}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
-      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      - DATABASE_URL=postgresql://iterra:iterra@db:5432/iterra
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - ENABLE_PLACEHOLDER_TASKS=${ENABLE_PLACEHOLDER_TASKS:-false}
+    volumes:
+      - media_uploads:/app/uploads
     restart: unless-stopped
 
   beat:
@@ -73,10 +78,10 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://iterra:iterra@db:5432/iterra}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
-      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      - DATABASE_URL=postgresql://iterra:iterra@db:5432/iterra
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - ENABLE_PLACEHOLDER_TASKS=${ENABLE_PLACEHOLDER_TASKS:-false}
     restart: unless-stopped
 
@@ -125,4 +130,5 @@ services:
 
 volumes:
   postgres_data:
+  media_uploads:
   redis_data:

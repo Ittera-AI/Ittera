@@ -9,6 +9,13 @@ class LinkedInStatusResponse(BaseModel):
     platform_username: str | None = None
     last_synced_at: datetime | None = None
     synced_posts: int = 0
+    scopes: list[str] = []
+    posting_ready: bool = False
+    read_sync_ready: bool = False
+    missing_posting_scopes: list[str] = []
+    missing_read_scopes: list[str] = []
+    reconnect_required: bool = False
+    message: str | None = None
 
 
 class LinkedInConnectResponse(BaseModel):
@@ -30,5 +37,5 @@ class LinkedInRealSyncResponse(BaseModel):
     total_posts: int
     last_synced_at: datetime
     message: str
-    sync_path: str  # "oauth_api" | "cookie_auth" | "mock"
+    sync_path: str  # "oauth_api" | "cookie_auth" | "unavailable" | "mock"
     ready_for_analysis: bool

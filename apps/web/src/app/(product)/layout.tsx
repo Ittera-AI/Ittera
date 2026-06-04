@@ -9,35 +9,37 @@ import { supabase } from "@/lib/supabase";
 export default function ProductRoutesLayout({ children }: { children: React.ReactNode }) {
   const { user, sessionLoading } = useAuth();
   const router = useRouter();
-  const [sessionChecked, setSessionChecked] = useState(false);
-  const [hasSupabaseSession, setHasSupabaseSession] = useState(false);
+  const [sessionProbe, setSessionProbe] = useState<"idle" | "has-session" | "no-session">("idle");
 
   useEffect(() => {
     if (sessionLoading || user) {
-      setSessionChecked(true);
-      setHasSupabaseSession(!!user);
       return;
     }
 
     let cancelled = false;
-    setSessionChecked(false);
-    setHasSupabaseSession(false);
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelled) return;
-      setSessionChecked(true);
-      if (session) {
-        setHasSupabaseSession(true);
-      } else {
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (cancelled) return;
+        setSessionProbe(session ? "has-session" : "no-session");
+        if (!session) {
+          router.replace("/");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSessionProbe("no-session");
         router.replace("/");
-      }
-    });
+      });
 
     return () => {
       cancelled = true;
     };
   }, [user, sessionLoading, router]);
 
+  const sessionChecked = sessionLoading || Boolean(user) || sessionProbe !== "idle";
+  const hasSupabaseSession = Boolean(user) || sessionProbe === "has-session";
   const waitingForUser = hasSupabaseSession && !user;
 
   if (sessionLoading || !sessionChecked || waitingForUser) {

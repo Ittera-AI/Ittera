@@ -5,11 +5,14 @@ Responsibilities:
   - Build OAuth URLs for LinkedIn (posting) and Google Drive (storage)
   - Handle Google Drive OAuth callback: exchange code, create Drive folders, upsert connection
   - Store LinkedIn credentials encrypted for the scraper
+  - Store OAuth tokens encrypted for security
   - Return connection status for all platforms
 """
 
+import logging
 import secrets
 import uuid
+from datetime import datetime
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -23,19 +26,21 @@ from app.models.social_connection import SocialConnection
 from app.schemas.social import PlatformStatus, SocialStatusResponse
 from app.services.storage_service import StorageService
 
+logger = logging.getLogger("iterra.social")
+
 
 # ── LinkedIn OAuth URL (for publishing / posting) ───────────────────────────
 
 def build_linkedin_oauth_url() -> str:
     """
     Returns LinkedIn OAuth authorization URL.
-    Scopes: openid profile email w_member_social r_basicprofile
+    Scopes: openid profile email w_member_social r_member_social
     """
     query = urlencode({
         "response_type": "code",
         "client_id": settings.LINKEDIN_CLIENT_ID,
         "redirect_uri": settings.LINKEDIN_REDIRECT_URI,
-        "scope": "openid profile email w_member_social r_basicprofile",
+        "scope": "openid profile email w_member_social r_member_social",
         "state": _make_state(),
     })
     return f"https://www.linkedin.com/oauth/v2/authorization?{query}"
@@ -52,7 +57,7 @@ def build_google_drive_oauth_url(user_id: str) -> str:
         "client_id": settings.GOOGLE_CLIENT_ID,
         "redirect_uri": settings.GOOGLE_DRIVE_REDIRECT_URI,
         "response_type": "code",
-        "scope": "https://www.googleapis.com/auth/drive.file",
+        "scope": "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events",
         "access_type": "offline",
         "prompt": "consent",
         "state": user_id,
@@ -68,7 +73,7 @@ async def handle_google_drive_callback(
     """
     Exchanges the authorization code for Drive tokens.
     Creates Iterra/ folder structure in the user's Drive.
-    Upserts a SocialConnection record with folder IDs stored in metadata.
+    Upserts a SocialConnection record with encrypted tokens and folder IDs stored in metadata.
     """
     async with httpx.AsyncClient(timeout=15) as client:
         token_resp = await client.post(
@@ -90,24 +95,34 @@ async def handle_google_drive_callback(
     tokens = token_resp.json()
     access_token: str = tokens.get("access_token", "")
     refresh_token: Optional[str] = tokens.get("refresh_token")
+    expires_in: int = tokens.get("expires_in", 3600)
     if not access_token:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,
             "Google did not return an access token",
         )
 
-    # Create Iterra folder structure in user's Drive
+    # Create Iterra folder structure in user's Drive (using plaintext tokens temporarily)
     storage = StorageService(access_token=access_token, refresh_token=refresh_token)
     folder_ids = storage.setup_iterra_folder()
+
+    # Encrypt tokens before storing in database
+    encrypted_access_token = encrypt_value(access_token)
+    encrypted_refresh_token = encrypt_value(refresh_token) if refresh_token else None
+
+    # Calculate token expiry time
+    from datetime import datetime, timezone, timedelta
+    token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
     conn = _upsert_connection(
         db,
         user_id=user_id,
         platform="google_drive",
         platform_user_id=user_id,
-        access_token=access_token,
-        refresh_token=refresh_token,
-        scopes=["https://www.googleapis.com/auth/drive.file"],
+        access_token=encrypted_access_token,
+        refresh_token=encrypted_refresh_token,
+        token_expires_at=token_expires_at,
+        scopes=["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/calendar.events"],
         metadata={
             "iterra_folder_id": folder_ids["iterra_folder_id"],
             "drafts_folder_id": folder_ids["drafts_folder_id"],
@@ -131,8 +146,7 @@ async def store_linkedin_credentials(
     try:
         from linkedin_api import Linkedin  # type: ignore[import]
         client = Linkedin(username, password)
-        # Quick validation: fetch own profile summary
-        client.get_profile(public_id=username.split("@")[0])
+        client.get_profile(urn_id=None)
     except Exception as exc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -199,13 +213,98 @@ def get_connection_status(db: Session, user_id: str) -> SocialStatusResponse:
 
 # ── Drive connection helper ───────────────────────────────────────────────────
 
+# Required scopes for Google Drive integration
+REQUIRED_DRIVE_SCOPES = {"https://www.googleapis.com/auth/drive.file"}
+
+
 def get_drive_connection(db: Session, user_id: str) -> Optional[SocialConnection]:
-    """Returns the active Google Drive SocialConnection or None."""
-    return (
+    """
+    Returns the active Google Drive SocialConnection or None.
+    Validates that the connection has required scopes.
+    """
+    conn = (
         db.query(SocialConnection)
         .filter_by(user_id=user_id, platform="google_drive", is_active=True)
         .first()
     )
+
+    if not conn:
+        return None
+
+    # Validate scopes
+    if not _validate_drive_scopes(conn.scopes):
+        logger.warning(
+            "User %s Google Drive connection missing required scopes: %s",
+            user_id,
+            conn.scopes,
+        )
+        return None
+
+    return conn
+
+
+REQUIRED_CALENDAR_SCOPES = {"https://www.googleapis.com/auth/calendar.events"}
+
+def get_calendar_connection(db: Session, user_id: str) -> Optional[SocialConnection]:
+    """
+    Returns the active Google Connection that has calendar scopes or None.
+    """
+    conn = (
+        db.query(SocialConnection)
+        .filter_by(user_id=user_id, platform="google_drive", is_active=True)
+        .first()
+    )
+    if not conn or not conn.scopes:
+        return None
+        
+    scope_set = set(conn.scopes)
+    if not REQUIRED_CALENDAR_SCOPES.issubset(scope_set):
+        return None
+        
+    return conn
+
+
+def _validate_drive_scopes(scopes: Optional[list[str]]) -> bool:
+    """
+    Validate that the stored scopes include all required Drive scopes.
+
+    Args:
+        scopes: List of OAuth scopes stored for the connection
+
+    Returns:
+        True if all required scopes are present, False otherwise
+    """
+    if not scopes:
+        return False
+
+    scope_set = set(scopes)
+    return REQUIRED_DRIVE_SCOPES.issubset(scope_set)
+
+
+def check_drive_scope_status(conn: Optional[SocialConnection]) -> dict:
+    """
+    Check the scope status of a Google Drive connection.
+
+    Returns:
+        Dict with 'valid' (bool), 'missing_scopes' (list), and 'current_scopes' (list)
+    """
+    if not conn:
+        return {
+            "valid": False,
+            "missing_scopes": list(REQUIRED_DRIVE_SCOPES),
+            "current_scopes": [],
+            "message": "No Google Drive connection found",
+        }
+
+    current_scopes = set(conn.scopes or [])
+    missing = REQUIRED_DRIVE_SCOPES - current_scopes
+
+    return {
+        "valid": len(missing) == 0,
+        "missing_scopes": list(missing),
+        "current_scopes": list(current_scopes),
+        "message": "Scopes valid" if not missing else f"Missing scopes: {list(missing)}",
+    }
 
 
 # ── Internal helpers ─────────────────────────────────────────────────────────
@@ -217,6 +316,7 @@ def _upsert_connection(
     platform_user_id: str,
     access_token: str,
     refresh_token: Optional[str] = None,
+    token_expires_at: Optional[datetime] = None,
     platform_username: Optional[str] = None,
     scopes: Optional[list[str]] = None,
     metadata: Optional[dict] = None,
@@ -238,6 +338,7 @@ def _upsert_connection(
     conn.platform_username = platform_username or conn.platform_username
     conn.access_token = access_token
     conn.refresh_token = refresh_token or conn.refresh_token
+    conn.token_expires_at = token_expires_at
     conn.scopes = scopes or conn.scopes or []
     conn.connection_metadata = metadata or conn.connection_metadata or {}
     conn.is_active = True

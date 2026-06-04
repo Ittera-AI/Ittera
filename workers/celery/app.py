@@ -14,6 +14,7 @@ celery_app = Celery(
         "workers.celery.tasks.weekly_reports",
         "workers.celery.tasks.scraper",
         "workers.celery.tasks.brand_profile",
+        "workers.celery.tasks.publisher",
     ],
 )
 

@@ -29,7 +29,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   completeOAuthSignIn: (token: string) => Promise<void>;
   refreshWorkspaceAccess: () => Promise<boolean>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -98,10 +98,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ? userFromSupabase(session.user) : null);
-      setSessionLoading(false);
-    });
+    const resetAuthState = () => {
+      setUser(null);
+      setHasWorkspaceAccess(false);
+      setWaitlistPosition(null);
+      setWorkspaceAccessChecked(false);
+    };
+
+    window.addEventListener("ittera-auth-invalid", resetAuthState);
+
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setUser(session?.user ? userFromSupabase(session.user) : null);
+      })
+      .catch(() => {
+        setUser(null);
+      })
+      .finally(() => {
+        setSessionLoading(false);
+      });
 
     const {
       data: { subscription },
@@ -111,13 +127,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthOpen(false);
         setAuthSeedEmail("");
       } else {
-        setHasWorkspaceAccess(false);
-        setWaitlistPosition(null);
-        setWorkspaceAccessChecked(false);
+        resetAuthState();
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      window.removeEventListener("ittera-auth-invalid", resetAuthState);
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -81,7 +80,6 @@ function InputField({
 }
 
 export default function AuthModal() {
-  const router = useRouter();
   const { authOpen, authMode, authSeedEmail, setAuthMode, closeAuth, signIn, signUp, signInWithGoogle, signInWithLinkedIn, resetPassword } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -143,19 +141,22 @@ export default function AuthModal() {
     try {
       if (authMode === "signin") {
         await signIn(email, password);
-        router.push("/dashboard");
+        // onAuthStateChange closes the modal; SessionRouteGuard redirects to /dashboard.
+        // Use hard navigation so it doesn't compete with the guard's soft redirect.
+        window.location.replace("/dashboard");
       } else {
         const res = await signUp(email, password, name);
         if (res.needsEmailConfirmation) {
           setSuccessMsg("Account created! Check your inbox and confirm your email before signing in.");
-          setAuthMode("signin"); // Switch to sign in for them after they confirm
+          setAuthMode("signin");
+          setLoading(false);
         } else {
-          router.push("/dashboard");
+          // Session created immediately — hard navigate to dashboard.
+          window.location.replace("/dashboard");
         }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
-    } finally {
       setLoading(false);
     }
   };

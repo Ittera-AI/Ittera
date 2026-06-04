@@ -12,6 +12,7 @@ class SocialConnection(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
     platform = Column(String, nullable=False, index=True)
     platform_user_id = Column(String, nullable=False)
     platform_username = Column(String, nullable=True)
@@ -22,8 +23,10 @@ class SocialConnection(Base):
     last_synced_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     # Platform-specific extras: Drive folder IDs, encrypted LinkedIn creds, etc.
-    connection_metadata = Column("metadata", JSON, nullable=True, default=dict)
+    # Renamed from 'metadata' to avoid SQL reserved keyword conflict
+    connection_metadata = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     user = relationship("User", back_populates="social_connections")
+    workspace = relationship("Workspace", back_populates="social_connections")

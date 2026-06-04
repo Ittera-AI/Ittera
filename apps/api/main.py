@@ -5,6 +5,7 @@ import app.models  # noqa: F401
 from app.config import settings
 from app.routers import (
     analytics,
+    approvals,
     auth,
     brand_profile,
     calendar,
@@ -13,15 +14,20 @@ from app.routers import (
     context,
     linkedin,
     onboarding,
+    organizations,
     persona,
+    predictions,
     radar,
     repurpose,
+    reports,
     social,
     social_oauth,
     storage,
     trends,
+    users,
+    workspaces,
 )
-from app.routers import waitlist
+from app.routers import competitors, waitlist
 
 app = FastAPI(
     title="Iterra API",
@@ -47,6 +53,7 @@ app.include_router(trends.router, prefix="/api/v1/trends", tags=["trends"])
 app.include_router(content.router, prefix="/api/v1/content", tags=["content"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 app.include_router(waitlist.router, prefix="/api/v1/waitlist", tags=["waitlist"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(calendar.router, prefix="/api/v1/calendar", tags=["calendar"])
 app.include_router(repurpose.router, prefix="/api/v1/repurpose", tags=["repurpose"])
 app.include_router(coach.router, prefix="/api/v1/coach", tags=["coach"])
@@ -55,6 +62,12 @@ app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
 app.include_router(social_oauth.router, prefix="/api/v1/connect", tags=["connect"])
 app.include_router(persona.router, prefix="/api/v1/persona", tags=["persona"])
 app.include_router(storage.router, prefix="/api/v1/storage", tags=["storage"])
+app.include_router(organizations.router, prefix="/api/v1/organizations", tags=["organizations"])
+app.include_router(workspaces.router, prefix="/api/v1/workspaces", tags=["workspaces"])
+app.include_router(predictions.router, prefix="/api/v1/predictions", tags=["predictions"])
+app.include_router(competitors.router, prefix="/api/v1/competitors", tags=["competitors"])
+app.include_router(reports.router, prefix="/api/v1/reports", tags=["reports"])
+app.include_router(approvals.router, prefix="/api/v1/approvals", tags=["approvals"])
 
 
 @app.get("/health", tags=["health"])

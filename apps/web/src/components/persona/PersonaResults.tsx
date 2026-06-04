@@ -2,18 +2,24 @@
 
 import { useState } from "react"
 import { api, PersonaProfile } from "@/lib/api"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/Button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Loader2 } from "lucide-react"
 
+type PersonaEditableValue = PersonaProfile[keyof PersonaProfile] | string
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error"
+}
+
 export function PersonaResults({ persona, onConfirm }: { persona: PersonaProfile; onConfirm: () => void }) {
   const [profile, setProfile] = useState<PersonaProfile>(persona)
   const [isSaving, setIsSaving] = useState(false)
 
-  const handleUpdate = (field: keyof PersonaProfile, value: any) => {
+  const handleUpdate = (field: keyof PersonaProfile, value: PersonaEditableValue) => {
     setProfile({ ...profile, [field]: value })
   }
 
@@ -31,8 +37,8 @@ export function PersonaResults({ persona, onConfirm }: { persona: PersonaProfile
       })
       await api.persona.confirm()
       onConfirm()
-    } catch (err: any) {
-      alert("Failed to confirm persona: " + err.message)
+    } catch (err: unknown) {
+      alert("Failed to confirm persona: " + getErrorMessage(err))
     } finally {
       setIsSaving(false)
     }

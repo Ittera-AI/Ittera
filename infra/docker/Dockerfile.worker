@@ -10,7 +10,10 @@ WORKDIR /app
 ENV PYTHONPATH=/app/apps/api
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev && \
+    build-essential libpq-dev \
+    # WeasyPrint dependencies
+    libgirepository1.0-dev libpango-1.0-0 libpangoft2-1.0-0 \
+    libcairo2 libffi-dev shared-mime-info && \
     rm -rf /var/lib/apt/lists/*
 
 COPY apps/api/requirements.txt .

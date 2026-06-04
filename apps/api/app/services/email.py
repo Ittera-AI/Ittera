@@ -260,3 +260,46 @@ def send_waitlist_confirmation_email(
             server.send_message(message)
     except Exception:
         logger.exception("Failed to send waitlist confirmation email to %s", email)
+
+
+def send_post_review_email(email: str, name: str | None, draft_id: str, title: str, scheduled_for: str) -> None:
+    if not _mail_is_configured():
+        return
+
+    first = _first_name(name, email)
+    review_url = f"{settings.FRONTEND_URL.rstrip('/')}/calendar?review={draft_id}"
+    subject = "Review your scheduled Ittera post"
+    text_body = (
+        f"Hey {first},\n\n"
+        f"Your post is scheduled for {scheduled_for} and is ready for review.\n\n"
+        f"{title}\n\n"
+        f"Review, edit, approve, or cancel it here:\n{review_url}\n\n"
+        "If auto-posting is enabled, Ittera will publish approved posts at the scheduled time.\n"
+    )
+    html_body = f"""<!doctype html>
+<html><body style="font-family:Arial,Helvetica,sans-serif;background:#F4EFE8;padding:24px;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #E8E0D6;border-radius:20px;padding:28px;">
+    <p style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#A38A70;">Scheduled post review</p>
+    <h1 style="font-family:Georgia,serif;color:#1A1614;">Hey {escape(first)}, review this before it goes live.</h1>
+    <p style="color:#5F5A54;">Scheduled for {escape(scheduled_for)}.</p>
+    <div style="white-space:pre-wrap;background:#F8F4EE;border-radius:14px;padding:16px;color:#2B241E;">{escape(title)}</div>
+    <p><a href="{escape(review_url)}" style="display:inline-block;background:#1A1614;color:#F4EFE8;text-decoration:none;border-radius:999px;padding:12px 20px;">Open review</a></p>
+  </div>
+</body></html>"""
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = settings.MAIL_FROM
+    message["To"] = email
+    if settings.REPLY_TO_EMAIL:
+        message["Reply-To"] = settings.REPLY_TO_EMAIL
+    message.set_content(text_body)
+    message.add_alternative(html_body, subtype="html")
+    try:
+        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as server:
+            if settings.SMTP_USE_TLS:
+                server.starttls()
+            if settings.SMTP_USERNAME:
+                server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD.replace(" ", ""))
+            server.send_message(message)
+    except Exception:
+        logger.exception("Failed to send scheduled post review email to %s", email)

@@ -1,22 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { api, PersonaProfile, SocialConnectionStatus } from "@/lib/api";
+import { api, PersonaProfile } from "@/lib/api";
 import { PersonaResults } from "@/components/persona/PersonaResults";
 import { supabase } from "@/lib/supabase";
 import {
-  CheckCircle2,
   ArrowRight,
   Sparkles,
-  Target,
   Users,
   MessageSquare,
   ChevronLeft,
-  Zap,
   Loader2,
   AlertCircle,
   ExternalLink,
+  Target,
+  CheckCircle2,
 } from "lucide-react";
 
 // ─── Platform brand icons ─────────────────────────────────────────────────────
@@ -116,7 +115,16 @@ function openOAuthPopup(url: string): Window | null {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-type WizardStep = "welcome" | "connect" | "context" | "loading" | "results";
+type WizardStep = "welcome" | "connect" | "loading" | "results";
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const detail = "detail" in error ? error.detail : undefined;
+    if (typeof detail === "string") return detail;
+  }
+  return "Something went wrong.";
+}
 
 export default function PersonaOnboardingPage() {
   const router = useRouter();
@@ -131,8 +139,7 @@ export default function PersonaOnboardingPage() {
   const [connecting, setConnecting] = useState<PlatformId | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
 
-  // Context fields
-  const [consent, setConsent] = useState(false);
+  // Context fields - consent is now implied at connect step
 
   // Loading
   const [loadingPhrase, setLoadingPhrase] = useState(LOADING_PHRASES[0]);
@@ -224,7 +231,7 @@ export default function PersonaOnboardingPage() {
   }
 
   async function handleBuild() {
-    if (!consent || connectedCount === 0) return;
+    if (connectedCount === 0) return;
     setStep("loading");
     setLoadingProgress(0);
     try {
@@ -264,9 +271,9 @@ export default function PersonaOnboardingPage() {
       });
       setPersona(result);
       setStep("results");
-    } catch (err: any) {
-      alert(err?.detail || err?.message || "Something went wrong.");
-      setStep("context");
+    } catch (err: unknown) {
+      alert(getErrorMessage(err));
+      setStep("connect");
     }
   }
 
@@ -554,121 +561,22 @@ export default function PersonaOnboardingPage() {
                   Skip for now
                 </button>
               )}
-              <button
-                onClick={() => setStep("context")}
-                disabled={connectedCount === 0}
-                className="group flex items-center gap-2 rounded-full px-8 py-4 text-sm font-bold text-white transition-all hover:scale-105 active:scale-[0.98] disabled:opacity-30 disabled:scale-100 disabled:cursor-not-allowed shadow-[0_0_30px_-10px_var(--bronze)] hover:shadow-[0_0_40px_-10px_var(--bronze)]"
-                style={{ background: "linear-gradient(135deg, var(--bronze), #7A6040)" }}>
-                Continue to Analysis
-                <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Context step ──
-  if (step === "context") {
-    return (
-      <div className="min-h-screen px-6 py-16 flex flex-col items-center justify-center" style={{ background: "var(--background)" }}>
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(circle at bottom, rgba(163,138,112,0.15), transparent 60%)" }} />
-        
-        <div className="relative z-10 w-full max-w-[800px] animate-in slide-in-from-bottom-8 fade-in duration-700">
-          
-          <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">
-              Ready for Engine Ignition
-            </h1>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Review your sources and authorize the final analysis.
-            </p>
-          </div>
-
-          <div className="rounded-[2.5rem] border border-white/10 bg-white/5 backdrop-blur-2xl p-8 md:p-12 shadow-2xl">
-            
-            {/* Sources Summary */}
-            <div className="mb-10">
-              <h3 className="text-sm font-bold tracking-widest text-muted-foreground uppercase mb-6 flex items-center gap-3">
-                <Target size={16} className="text-[var(--bronze)]" />
-                Data Sources
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {Object.entries(connected).map(([id, username]) => {
-                  const p = PLATFORMS.find((pl) => pl.id === id)!;
-                  const Icon = p.icon;
-                  return (
-                    <div key={id} className="flex items-center gap-4 rounded-2xl p-4 border border-white/5 bg-black/40 shadow-inner">
-                      <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
-                        style={{ background: p.gradient }}>
-                        <Icon size={18} className="text-white" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-muted-foreground">{p.name}</p>
-                        <p className="text-sm font-bold text-foreground truncate">@{username}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Consent Toggle */}
-            <div
-              className="group relative overflow-hidden rounded-2xl border p-6 md:p-8 cursor-pointer transition-all duration-300"
-              onClick={() => setConsent((c) => !c)}
-              style={{
-                background: consent ? "rgba(163,138,112,0.08)" : "rgba(0,0,0,0.4)",
-                borderColor: consent ? "var(--bronze)" : "var(--border)",
-                boxShadow: consent ? "0 0 0 1px var(--bronze), inset 0 0 40px rgba(163,138,112,0.1)" : "none",
-              }}>
-              
-              {consent && <div className="absolute right-0 top-0 w-32 h-32 bg-[var(--bronze)]/20 blur-[50px] rounded-full" />}
-
-              <div className="relative z-10 flex items-start gap-6">
-                <div className="flex-shrink-0 mt-1 h-8 w-8 rounded-xl border-2 flex items-center justify-center transition-all duration-300 shadow-sm"
-                  style={{ 
-                    borderColor: consent ? "var(--bronze)" : "var(--muted-foreground)", 
-                    background: consent ? "var(--bronze)" : "transparent",
-                    transform: consent ? "scale(1.1)" : "scale(1)"
-                  }}>
-                  {consent && <CheckCircle2 size={20} className="text-white animate-in zoom-in" />}
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-white transition-colors">Authorize AI Analysis</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    I grant Ittera permission to analyze the public content from my connected accounts. 
-                    This data will be used strictly to train my private voice model. Ittera will never post, share, or modify my content.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-12 flex flex-col-reverse sm:flex-row items-center justify-between gap-6">
-              <button onClick={() => setStep("connect")}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-all hover:-translate-x-1 py-4">
-                <ChevronLeft size={18} />
-                Modify sources
-              </button>
-              
-              <button
-                onClick={handleBuild}
-                disabled={!consent}
-                className="relative w-full sm:w-auto overflow-hidden rounded-full px-10 py-5 text-lg font-bold text-white transition-all duration-500 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed shadow-[0_0_40px_-10px_var(--bronze)]"
-                style={{ background: "linear-gradient(135deg, var(--bronze), #8B6040)" }}>
-                <span className="relative z-10 flex items-center justify-center gap-3">
-                  <Zap size={20} className={consent ? "animate-pulse" : ""} />
+              <div className="flex flex-col items-end gap-3">
+                <button
+                  onClick={handleBuild}
+                  disabled={connectedCount === 0}
+                  className="group flex items-center gap-2 rounded-full px-8 py-4 text-sm font-bold text-white transition-all hover:scale-105 active:scale-[0.98] disabled:opacity-30 disabled:scale-100 disabled:cursor-not-allowed shadow-[0_0_30px_-10px_var(--bronze)] hover:shadow-[0_0_40px_-10px_var(--bronze)]"
+                  style={{ background: "linear-gradient(135deg, var(--bronze), #7A6040)" }}>
                   Extract Persona
-                </span>
-                {consent && <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent" />}
-              </button>
+                  <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+                </button>
+                <p className="text-xs text-muted-foreground max-w-[280px] text-right leading-relaxed">
+                  By continuing, you authorize AI analysis of your public content to train your private voice model.
+                </p>
+              </div>
             </div>
           </div>
         </div>
-        <style>{`
-          @keyframes shimmer { 100% { transform: translateX(100%); } }
-        `}</style>
       </div>
     );
   }

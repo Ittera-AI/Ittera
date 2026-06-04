@@ -21,9 +21,11 @@ from sqlalchemy.orm import Session
 from app.db.datetime_helpers import utc_now
 from app.models.brand_profile import BrandProfile
 from app.models.post import Post
+from app.models.social_connection import SocialConnection
 from app.models.user import User
 from app.schemas.brand_profile import BrandProfileData, normalize_profile
 from app.services.mock_data import topics_for_niche
+from app.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +104,13 @@ def generate_profile_from_data(
 
     db.commit()
     db.refresh(profile)
+
+    # Save to Google Drive if user has Drive connected
+    try:
+        _save_brand_analysis_to_drive_if_connected(db, user, profile, profile_dict)
+    except Exception as e:
+        # Don't fail the profile generation if Drive save fails
+        logger.warning("Failed to save brand analysis to Drive: %s", e)
 
     logger.info(
         "generate_profile_from_data: saved profile v%d confidence=%.2f posts=%d user_id=%s",
@@ -235,3 +244,66 @@ def _response(profile: BrandProfile | None) -> dict:
         "confirmed_at": profile.confirmed_at,
         "updated_at": profile.updated_at,
     }
+
+
+def _save_brand_analysis_to_drive_if_connected(
+    db: Session, user: User, profile: BrandProfile, analysis_data: dict
+) -> None:
+    """
+    Save brand analysis to Google Drive if user has Drive connected.
+    Updates profile.drive_analysis_file_id with the Drive file ID.
+    """
+    # Check storage preference
+    if user.storage_preference != "google_drive":
+        return
+
+    # Get Google Drive connection
+    drive_connection = (
+        db.query(SocialConnection)
+        .filter(
+            SocialConnection.user_id == user.id,
+            SocialConnection.platform == "google_drive",
+            SocialConnection.is_active == True,
+        )
+        .first()
+    )
+
+    if not drive_connection:
+        logger.debug("User %s has no Google Drive connection, skipping Drive save", user.id)
+        return
+
+    # Get folder ID from metadata
+    meta = drive_connection.connection_metadata or {}
+    iterra_folder_id = meta.get("iterra_folder_id")
+
+    if not iterra_folder_id:
+        logger.warning("User %s has Drive connection but no Iterra folder ID", user.id)
+        return
+
+    # Prepare analysis data for Drive
+    drive_data = {
+        "version": profile.version,
+        "generated_at": profile.generated_at.isoformat() if profile.generated_at else None,
+        "ai_confidence_score": profile.ai_confidence_score,
+        "analysis_based_on_posts": profile.analysis_based_on_posts,
+        "profile": analysis_data,
+    }
+
+    # Save to Drive
+    storage = StorageService(
+        access_token=drive_connection.access_token,
+        refresh_token=drive_connection.refresh_token,
+    )
+
+    # Use existing file ID if available (update), else create new
+    file_id = storage.save_brand_analysis(
+        folder_id=iterra_folder_id,
+        analysis_data=drive_data,
+        existing_file_id=profile.drive_analysis_file_id,
+    )
+
+    # Update profile with Drive file ID
+    profile.drive_analysis_file_id = file_id
+    db.commit()
+
+    logger.info("Saved brand analysis v%d to Drive with file ID %s", profile.version, file_id)

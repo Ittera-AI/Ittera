@@ -11,7 +11,7 @@ class TrendSnapshot(Base):
     __table_args__ = (UniqueConstraint("niche", name="uq_trend_snapshots_niche"),)
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    niche = Column(String, nullable=False)
+    niche = Column(String, nullable=False, index=True)
     trends = Column(JSON, nullable=False, default=list)
     top_pick = Column(JSON, nullable=True)
     fetched_at = Column(DateTime, default=utc_now)
