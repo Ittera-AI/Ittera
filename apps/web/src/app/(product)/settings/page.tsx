@@ -221,12 +221,14 @@ export default function SettingsPage() {
           statuses.push({
             platform: "twitter",
             connected: true,
-            username: xConn.username ?? null,
-            lastSyncedAt: xConn.last_synced ?? null,
+            username: xConn.platform_username ?? xConn.username ?? null,
+            lastSyncedAt: xConn.last_synced_at ?? xConn.last_synced ?? null,
             syncedPosts: 0,
             postingReady: xConn.posting_ready ?? false,
             readSyncReady: xConn.read_sync_ready ?? true,
-            missingScopes: xConn.missing_scopes ?? [],
+            missingScopes:
+              xConn.missing_scopes ??
+              [...(xConn.missing_posting_scopes ?? []), ...(xConn.missing_read_scopes ?? [])],
             reconnectRequired: xConn.reconnect_required ?? false,
             syncInProgress: false,
             syncStatus: null,

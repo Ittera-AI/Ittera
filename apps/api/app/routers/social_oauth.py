@@ -509,13 +509,19 @@ def _connection_status_payload(conn: SocialConnection) -> dict:
         read_missing = []
     return {
         "platform": conn.platform,
-        "username": conn.platform_username,
+        # Canonical field names (aligned with PlatformStatusResponse). The legacy
+        # aliases below are retained for backward compatibility with older clients.
+        "platform_username": conn.platform_username,
         "connected_at": conn.created_at,
-        "last_synced": conn.last_synced_at,
+        "last_synced_at": conn.last_synced_at,
         "scopes": scopes,
         "missing_scopes": posting_missing,
+        "missing_posting_scopes": posting_missing,
+        "missing_read_scopes": read_missing,
         "posting_ready": not posting_missing,
         "read_sync_ready": not read_missing,
-        "missing_read_scopes": read_missing,
         "reconnect_required": bool(posting_missing),
+        # ── Legacy aliases (deprecated) ──
+        "username": conn.platform_username,
+        "last_synced": conn.last_synced_at,
     }

@@ -60,26 +60,29 @@ Overall: the core flows (connect → sync → persona → generate → publish) 
 
 ## 🟡 Medium
 
-### M1. Thread drafts render as raw JSON in the editor
+### M1. Thread drafts render as raw JSON in the editor — ✅ FIXED
 **Where:** `apps/web/src/app/(product)/create/page.tsx`
 
-**Problem:** Thread drafts are persisted with `content` as a JSON array string (e.g. `'["1/2 ...","2/2 ..."]'`). The draft editor loads `setDraftBody(draft?.content ?? "")` directly, so opening a saved thread draft shows literal JSON in the textarea, and re-saving stores the JSON-of-JSON. The generate path avoids this (it returns the joined content), but loading a previously-saved thread draft is affected.
+**Problem:** Thread drafts are persisted with `content` as a JSON array string (e.g. `'["1/2 ...","2/2 ..."]'`). The draft editor loaded `setDraftBody(draft?.content ?? "")` directly, so opening a saved thread draft showed literal JSON in the textarea, and re-saving stored JSON-of-JSON.
 
-**Recommendation (not yet applied — needs product decision):** When `is_thread(draft.content)`, parse the JSON and either (a) join segments with `\n\n` for editing and re-split on save, or (b) render a dedicated thread editor. Smallest safe fix: detect a JSON-array string on load and display `segments.join("\n\n")`.
+**Fix applied:**
+- Added `apps/web/src/lib/thread.ts` with `parseThreadSegments`, `isThreadContent`, `toEditableText`, `fromEditableText`, and `countSegments`. Threads are shown in the editor as segments joined by a visible `---` separator and re-serialized to a JSON array on save.
+- Create page now loads via `toEditableText(draft.content)` and saves/schedules/publishes via `fromEditableText(draftBody)`.
+- Editor header shows `Thread · N tweets` with a hint about the `---` separator; the platform preview renders each segment as its own tweet card with per-segment char counts; the draft picker preview no longer shows raw JSON and tags threads with `· thread`.
 
-### M2. Right-panel character counter ignores premium tier
-**Where:** `create/page.tsx` — `const limit = platform === "twitter" ? 280 : ...`
+### M2. Right-panel character counter ignores premium tier — ✅ FIXED
+**Where:** `create/page.tsx` + `TwitterContentControls.tsx`
 
-**Problem:** The draft-editor panel hardcodes 280 for Twitter, so a premium user (25,000) sees an incorrect `x/280` counter in the right panel. The left-panel `TwitterContentControls` fetches the real tier and is correct, so this is a duplicated/contradictory display, not a publish blocker (publish uses the backend tier-aware limit).
+**Problem:** The draft-editor panel hardcoded 280 for Twitter, so a premium user (25,000) saw an incorrect `x/280` counter, contradicting the (correct) left-panel control.
 
-**Fix applied:** Documented; recommend deriving the right-panel `limit` from the tier fetched in `TwitterContentControls` (lift tier state up) rather than hardcoding.
+**Fix applied:** `TwitterContentControls` now reports its resolved tier limit via a new `onLimitChange` callback; the create page stores it in `twitterLimit` state and derives the right-panel `limit` from it, so both panels agree.
 
-### M3. `/connect/status` vs `/sync/{platform}/status` field drift
+### M3. `/connect/status` vs `/sync/{platform}/status` field drift — ✅ FIXED
 **Where:** `GET /api/v1/connect/status` (`_connection_status_payload`) vs sync status
 
-**Problem:** Two endpoints describe connection status with different field names (`username`/`last_synced` vs `platform_username`/`last_synced_at`). The settings fallback path handles both, but the inconsistency is a maintenance hazard and a likely source of future mismatches.
+**Problem:** Two endpoints described connection status with different field names (`username`/`last_synced` vs `platform_username`/`last_synced_at`), a maintenance hazard and a likely source of future mismatches.
 
-**Recommendation:** Converge on one status DTO (prefer the `PlatformStatusResponse` field names) and have `/connect/status` reuse it.
+**Fix applied:** `_connection_status_payload` now emits the canonical names (`platform_username`, `connected_at`, `last_synced_at`, `missing_posting_scopes`, `missing_read_scopes`) alongside the legacy aliases (`username`, `last_synced`) for back-compat. The frontend `SocialConnectionStatus` type and the settings fallback now prefer the canonical fields.
 
 ---
 

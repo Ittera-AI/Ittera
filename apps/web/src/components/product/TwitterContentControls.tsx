@@ -62,6 +62,8 @@ interface TwitterContentControlsProps {
   content: string;
   /** Whether Twitter is the currently selected platform */
   isActive: boolean;
+  /** Notifies the parent of the resolved tier-aware character limit (for the editor counter). */
+  onLimitChange?: (maxChars: number) => void;
 }
 
 /**
@@ -70,7 +72,7 @@ interface TwitterContentControlsProps {
  * - Real-time character count with progress bar
  * - Thread preview when content exceeds the tier limit
  */
-export function TwitterContentControls({ content, isActive }: TwitterContentControlsProps) {
+export function TwitterContentControls({ content, isActive, onLimitChange }: TwitterContentControlsProps) {
   const [tierData, setTierData] = useState<TwitterTierResponse | null>(null);
   const [tierLoading, setTierLoading] = useState(false);
   const [tierError, setTierError] = useState<string | null>(null);
@@ -116,6 +118,13 @@ export function TwitterContentControls({ content, isActive }: TwitterContentCont
   const charCount = content.length;
   const isOverLimit = charCount > maxChars;
   const charPercent = Math.min((charCount / maxChars) * 100, 100);
+
+  // Surface the resolved limit to the parent so the editor counter stays in sync (M2).
+  useEffect(() => {
+    if (isActive && onLimitChange) {
+      onLimitChange(maxChars);
+    }
+  }, [isActive, maxChars, onLimitChange]);
 
   // Thread preview (only for free tier when over limit)
   const threadSegments = useMemo(() => {

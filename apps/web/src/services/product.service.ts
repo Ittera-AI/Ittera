@@ -50,15 +50,20 @@ export type RadarResult = Schemas["RadarOutput"];
 
 export interface SocialConnectionStatus {
   platform: string;
-  username?: string | null;
+  // Canonical fields (aligned with PlatformStatusResponse).
+  platform_username?: string | null;
   connected_at?: string | null;
-  last_synced?: string | null;
+  last_synced_at?: string | null;
   scopes?: string[];
   missing_scopes?: string[];
+  missing_posting_scopes?: string[];
   missing_read_scopes?: string[];
   posting_ready?: boolean;
   read_sync_ready?: boolean;
   reconnect_required?: boolean;
+  // Legacy aliases (deprecated) — kept for back-compat with older API builds.
+  username?: string | null;
+  last_synced?: string | null;
 }
 
 export interface PlatformSyncStatusResponse {

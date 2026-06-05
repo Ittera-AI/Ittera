@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { FileText, ImagePlus, Save, Trash2, Sparkles, Loader2 } from "lucide-react";
 
 import { AuthenticatedImage } from "@/components/product/AuthenticatedImage";
@@ -13,6 +13,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useProduct } from "@/hooks/useProduct";
+import {
+  countSegments,
+  fromEditableText,
+  isThreadContent,
+  parseThreadSegments,
+  toEditableText,
+} from "@/lib/thread";
 import type { Suggestion } from "@/services/product.service";
 
 function toDatetimeLocal(value: string) {
@@ -58,7 +65,9 @@ export default function CreatePage() {
 
   const locked = product.brandProfile?.is_confirmed !== true;
   const draft = product.currentDraft;
-  const limit = platform === "twitter" ? 280 : platform === "instagram" ? 2200 : 3000;
+  // Tier-aware limit for Twitter is reported by TwitterContentControls; default to 280.
+  const [twitterLimit, setTwitterLimit] = useState(280);
+  const limit = platform === "twitter" ? twitterLimit : platform === "instagram" ? 2200 : 3000;
 
   // Compute total synced posts from social connections for brand profile progress
   const totalSyncedPosts = useMemo(() => {
@@ -70,9 +79,21 @@ export default function CreatePage() {
 
   const hasBrandProfile = product.brandProfile != null && product.brandProfile.profile != null;
 
+  // True when the loaded draft is stored as a multi-segment thread.
+  const draftIsThread = useMemo(() => isThreadContent(draft?.content), [draft?.content]);
+  // Number of thread segments represented by the current editable text.
+  const segmentCount = useMemo(() => countSegments(draftBody), [draftBody]);
+  // Parsed thread segments for the preview pane (null for single posts).
+  const previewSegments = useMemo(
+    () => parseThreadSegments(fromEditableText(draftBody)),
+    [draftBody],
+  );
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDraftBody(draft?.content ?? "");
+      // Thread drafts are stored as a JSON array; show them as editable text
+      // with visible separators between segments.
+      setDraftBody(toEditableText(draft?.content));
       setScheduleAt(draft?.scheduled_for ? toDatetimeLocal(draft.scheduled_for) : "");
     }, 0);
     return () => window.clearTimeout(timer);
@@ -92,7 +113,7 @@ export default function CreatePage() {
 
   async function saveDraft() {
     if (!draft) return;
-    await product.updateDraft(draft.id, { content: draftBody });
+    await product.updateDraft(draft.id, { content: fromEditableText(draftBody) });
   }
 
   async function uploadImages(files: FileList | null) {
@@ -117,8 +138,9 @@ export default function CreatePage() {
   async function scheduleDraft() {
     const timeToSchedule = scheduleAt || tomorrowMorning();
     if (!draft || !timeToSchedule) return;
-    if (draftBody !== (draft.content ?? "")) {
-      await product.updateDraft(draft.id, { content: draftBody });
+    const stored = fromEditableText(draftBody);
+    if (stored !== (draft.content ?? "")) {
+      await product.updateDraft(draft.id, { content: stored });
     }
     await product.schedule(draft.id, new Date(timeToSchedule).toISOString());
   }
@@ -162,9 +184,10 @@ export default function CreatePage() {
                         setDraftPickerOpen(false);
                       }}
                     >
-                      <p className="line-clamp-2 font-medium">{(d.content ?? "").split("\n")[0] || "Untitled draft"}</p>
+                      <p className="line-clamp-2 font-medium">{toEditableText(d.content).split("\n")[0] || "Untitled draft"}</p>
                       <p className="mt-1 text-xs capitalize text-muted-foreground">
                         {d.platform} · {d.status}
+                        {isThreadContent(d.content) ? " · thread" : ""}
                       </p>
                     </button>
                   ))
@@ -200,7 +223,11 @@ export default function CreatePage() {
               </Tabs>
 
               {/* Twitter tier selector + character counter shown when X is selected */}
-              <TwitterContentControls content={draftBody} isActive={platform === "twitter"} />
+              <TwitterContentControls
+                content={draftBody}
+                isActive={platform === "twitter"}
+                onLimitChange={setTwitterLimit}
+              />
 
               {/* Brand profile progress indicator */}
               <BrandProfileProgress
@@ -271,9 +298,17 @@ export default function CreatePage() {
             <div className="mb-6">
               <h2 className="text-xl font-semibold tracking-tight text-foreground">Draft editor</h2>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                {draft ? `${(draft.content ?? "").length}/${limit} characters` : "Generated content appears here."}
+                {draft
+                  ? segmentCount > 1
+                    ? `Thread · ${segmentCount} tweets`
+                    : `${draftBody.length}/${limit} characters`
+                  : "Generated content appears here."}
               </p>
-              {/* Note: When Twitter is selected, detailed character tracking is in the left panel */}
+              {(draftIsThread || segmentCount > 1) && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Separate tweets with a line containing <code className="rounded bg-muted px-1">---</code>. Each segment publishes as its own tweet in the thread.
+                </p>
+              )}
             </div>
             
             <div className="flex flex-col gap-5">
@@ -372,24 +407,37 @@ export default function CreatePage() {
               {draft ? (
                 <div className="rounded-xl border border-border/50 bg-background/40 p-5 shadow-sm">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Platform preview</p>
-                  <div className="mt-4 rounded-xl border border-border/60 bg-background p-5 shadow-sm">
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{draftBody || "Nothing to preview yet."}</p>
-                    {draft.media?.length ? (
-                      <div className="mt-4 grid grid-cols-2 gap-2">
-                        {draft.media.slice(0, 4).map((media) => (
-                          media.preview_url ? (
-                            <AuthenticatedImage
-                              key={media.id}
-                              mediaId={media.id}
-                              fallbackSrc={media.preview_url}
-                              alt=""
-                              className="aspect-video rounded-lg object-cover border"
-                            />
-                          ) : null
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
+                  {segmentCount > 1 && previewSegments ? (
+                    <div className="mt-4 space-y-2">
+                      {previewSegments.map((segment: string, index: number) => (
+                        <div key={index} className="rounded-xl border border-border/60 bg-background p-4 shadow-sm">
+                          <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{segment}</p>
+                          <p className="mt-1.5 text-[10px] text-muted-foreground text-right">
+                            Tweet {index + 1}/{previewSegments.length} · {segment.length} chars
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-xl border border-border/60 bg-background p-5 shadow-sm">
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{draftBody || "Nothing to preview yet."}</p>
+                      {draft.media?.length ? (
+                        <div className="mt-4 grid grid-cols-2 gap-2">
+                          {draft.media.slice(0, 4).map((media) => (
+                            media.preview_url ? (
+                              <AuthenticatedImage
+                                key={media.id}
+                                mediaId={media.id}
+                                fallbackSrc={media.preview_url}
+                                alt=""
+                                className="aspect-video rounded-lg object-cover border"
+                              />
+                            ) : null
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               ) : null}
 
@@ -422,8 +470,9 @@ export default function CreatePage() {
                   <Button
                     disabled={!draft || product.isLoading}
                     onClick={() => draft && void (async () => {
-                      if (draftBody !== (draft.content ?? "")) {
-                        await product.updateDraft(draft.id, { content: draftBody });
+                      const stored = fromEditableText(draftBody);
+                      if (stored !== (draft.content ?? "")) {
+                        await product.updateDraft(draft.id, { content: stored });
                       }
                       await product.publish(draft.id);
                     })()}
