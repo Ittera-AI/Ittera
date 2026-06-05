@@ -13,14 +13,25 @@ export default function SessionRouteGuard({ children }: { children: ReactNode })
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, hasWorkspaceAccess, sessionLoading } = useAuth();
-  const [likelySession] = useState(() => hasStoredSupabaseSession());
+
+  // Defer session-presence check to a client-side effect to avoid hydration mismatch.
+  // On the server, localStorage isn't available so hasStoredSupabaseSession() would
+  // return false, but on the client it returns true — causing a React hydration error.
+  const [mounted, setMounted] = useState(false);
+  const [likelySession, setLikelySession] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    setLikelySession(hasStoredSupabaseSession());
+  }, []);
 
   const isMarketingRoute = MARKETING_PATHS.some(
     (path) => pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)),
   );
 
+  // Only hide marketing pages after the client has mounted and confirmed a session exists.
   const hideMarketing =
-    isMarketingRoute && (Boolean(user) || (sessionLoading && likelySession));
+    mounted && isMarketingRoute && (Boolean(user) || (sessionLoading && likelySession));
 
   useEffect(() => {
     if (pathname !== ROUTES.home || searchParams.get("access") !== "pending") return;
