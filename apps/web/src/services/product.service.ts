@@ -61,8 +61,48 @@ export interface SocialConnectionStatus {
   reconnect_required?: boolean;
 }
 
+export interface PlatformSyncStatusResponse {
+  platform: string;
+  connected: boolean;
+  // Backend returns `platform_username`; `username` kept optional for back-compat.
+  platform_username: string | null;
+  username?: string | null;
+  last_synced_at: string | null;
+  synced_posts: number;
+  posting_ready: boolean;
+  read_sync_ready: boolean;
+  // Backend splits scopes into posting/read; `missing_scopes` is an optional convenience field.
+  missing_posting_scopes: string[];
+  missing_read_scopes: string[];
+  missing_scopes?: string[];
+  reconnect_required: boolean;
+  sync_status: string | null;
+  sync_error: string | null;
+  sync_started_at?: string | null;
+  message: string | null;
+}
+
+export interface SyncTriggerResponse {
+  task_id: string;
+  platform: string;
+  message: string;
+}
+
 export interface PublishingSettings {
   auto_post_enabled: boolean;
+}
+
+export interface TwitterTierResponse {
+  tier: "free" | "premium";
+  max_chars: number;
+  is_thread_eligible: boolean;
+}
+
+export interface ContentLimitResponse {
+  platform: string;
+  max_chars: number;
+  tier: string | null;
+  is_thread_eligible: boolean;
 }
 
 export interface LinkedInRealSyncResult {
@@ -348,6 +388,10 @@ export const productService = {
     await openConnectPopup(`/api/v1/connect/twitter/start?token=${encodeURIComponent(token)}`, "twitter");
   },
   syncLinkedIn: () => apiFetch<LinkedInRealSyncResult>("/api/v1/linkedin/sync/real", { method: "POST" }),
+  syncPlatform: (platform: string) =>
+    apiFetch<SyncTriggerResponse>(`/api/v1/sync/${encodeURIComponent(platform)}`, { method: "POST" }),
+  getSyncStatus: (platform: string) =>
+    apiFetch<PlatformSyncStatusResponse>(`/api/v1/sync/${encodeURIComponent(platform)}/status`),
   disconnectLinkedIn: () => apiFetch("/api/v1/connect/linkedin", { method: "DELETE" }),
   disconnectTwitter: () => apiFetch("/api/v1/connect/twitter", { method: "DELETE" }),
   getPublishingSettings: () => apiFetch<PublishingSettings>("/api/v1/users/me/publishing-settings"),
@@ -519,4 +563,13 @@ export const productService = {
     }),
   downloadReport: (reportId: string) =>
     apiFetch(`/api/v1/reports/download/${reportId}`),
+
+  // Twitter tier management
+  getTwitterTier: () =>
+    apiFetch<TwitterTierResponse>("/api/v1/social/twitter/tier"),
+  updateTwitterTier: (tier: "free" | "premium") =>
+    apiFetch<TwitterTierResponse>("/api/v1/social/twitter/tier", {
+      method: "PUT",
+      body: JSON.stringify({ tier }),
+    }),
 };

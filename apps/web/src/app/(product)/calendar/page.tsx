@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, Clock, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Linkedin, Twitter, Instagram, X as XIcon } from "lucide-react";
 import { AuthenticatedImage } from "@/components/product/AuthenticatedImage";
 import { ProductShell } from "@/components/product/ProductShell";
 import { useProduct } from "@/hooks/useProduct";
@@ -12,6 +12,25 @@ const PLATFORM_COLORS: Record<string, string> = {
   twitter: "rgba(150,165,145,0.85)",
   instagram: "rgba(196,168,130,0.85)",
 };
+
+const PLATFORM_LABELS: Record<string, string> = {
+  linkedin: "LinkedIn",
+  twitter: "X",
+  instagram: "Instagram",
+};
+
+function PlatformIcon({ platform, size = 10 }: { platform: string; size?: number }) {
+  switch (platform) {
+    case "linkedin":
+      return <Linkedin size={size} />;
+    case "twitter":
+      return <Twitter size={size} />;
+    case "instagram":
+      return <Instagram size={size} />;
+    default:
+      return null;
+  }
+}
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   scheduled: { bg: "rgba(163,138,112,0.18)", text: "var(--bronze)" },
@@ -194,14 +213,15 @@ export default function CalendarPage() {
                           <button
                             key={ev.id}
                             onClick={() => setSelectedEvent(ev)}
-                            className="w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium transition-opacity hover:opacity-80 active:scale-[0.97]"
+                            className="w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium transition-opacity hover:opacity-80 active:scale-[0.97] flex items-center gap-1"
                             style={{
                               background:
                                 PLATFORM_COLORS[ev.platform] ?? "rgba(150,165,145,0.7)",
                               color: "#fff",
                             }}
                           >
-                            {ev.title}
+                            <PlatformIcon platform={ev.platform} size={9} />
+                            <span className="truncate">{ev.title}</span>
                           </button>
                         ))}
                         {events.length > 2 && (
@@ -228,6 +248,16 @@ export default function CalendarPage() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-foreground">{selectedEvent.title}</p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                      style={{
+                        background: PLATFORM_COLORS[selectedEvent.platform] ?? "var(--muted)",
+                        color: "#fff",
+                      }}
+                    >
+                      <PlatformIcon platform={selectedEvent.platform} size={10} />
+                      {PLATFORM_LABELS[selectedEvent.platform] ?? selectedEvent.platform}
+                    </span>
                     <Clock size={11} className="text-muted-foreground" />
                     <p className="text-xs text-muted-foreground">
                       {new Date(selectedEvent.starts_at).toLocaleDateString(undefined, {
@@ -287,7 +317,7 @@ export default function CalendarPage() {
                   onClick={() => setSelectedEvent(null)}
                   className="rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-muted"
                 >
-                  <X size={14} />
+                  <XIcon size={14} />
                 </button>
               </div>
             </div>

@@ -16,3 +16,21 @@ For each target platform, adapt the content to match:
 
 Return a JSON array with: platform, content (adapted text), format
 (e.g., "tweet-thread", "linkedin-post")."""
+
+REPURPOSE_PROMPT_WITH_LIMIT = """Repurpose the following {source_platform} content for {target_platforms}.
+
+IMPORTANT: The target platform has a strict character limit of {max_chars} characters.
+The repurposed content MUST be {max_chars} characters or fewer. Do NOT exceed this limit.
+
+Original content:
+{original_content}
+
+For each target platform, adapt the content to match:
+- Character limit: {max_chars} characters maximum
+- Tone and format expectations
+- Platform-specific features (hashtags, threads, carousels, etc.)
+- Native engagement patterns
+- Preserve the core message while fitting within the character constraint
+
+Return a JSON array with: platform, content (adapted text), format
+(e.g., "tweet", "tweet-thread", "linkedin-post")."""

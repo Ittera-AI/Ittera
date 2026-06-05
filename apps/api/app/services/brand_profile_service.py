@@ -15,6 +15,7 @@ Both paths persist to the same brand_profiles table row.
 from __future__ import annotations
 
 import logging
+from collections import Counter
 
 from sqlalchemy.orm import Session
 
@@ -29,6 +30,9 @@ from app.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
+# Minimum number of posts (across all platforms) before triggering AI analysis
+MIN_POSTS_FOR_ANALYSIS = 5
+
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
@@ -39,20 +43,23 @@ def get_profile(db: Session, user: User) -> dict:
 
 def generate_profile(db: Session, user: User) -> dict:
     """
-    Synchronous generation path — calls BrandProfileEngine with the user's real posts.
-    Falls back to hardcoded mock data if fewer than 3 posts exist or no AI key is set.
+    Synchronous generation path — calls BrandProfileEngine with the user's real posts
+    from ALL connected platforms.
+    Falls back to hardcoded mock data if fewer than MIN_POSTS_FOR_ANALYSIS posts exist
+    or no AI key is set.
     Called by the frontend via POST /brand-profile/generate.
     """
-    posts = db.query(Post).filter(Post.user_id == user.id, Post.platform == "linkedin").all()
+    # Pull posts from all platforms (not just LinkedIn)
+    posts = db.query(Post).filter(Post.user_id == user.id).all()
 
-    if len(posts) >= 3:
+    if len(posts) >= MIN_POSTS_FOR_ANALYSIS:
         try:
             engine_output = _run_engine(user, posts)
             return generate_profile_from_data(db, user, engine_output, posts=posts)
         except Exception:
             logger.exception("generate_profile: BrandProfileEngine failed — using mock user_id=%s", user.id)
 
-    # Fallback: hardcoded mock profile (no posts or engine error)
+    # Fallback: hardcoded mock profile (insufficient posts or engine error)
     return _generate_mock_profile(db, user, posts)
 
 
@@ -68,7 +75,7 @@ def generate_profile_from_data(
     Called by the Celery analyze_brand_profile task after a background sync.
     """
     if posts is None:
-        posts = db.query(Post).filter(Post.user_id == user.id, Post.platform == "linkedin").all()
+        posts = db.query(Post).filter(Post.user_id == user.id).all()
 
     data = BrandProfileData(
         voice_tone=engine_output.voice_tone,
@@ -152,6 +159,15 @@ def ensure_confirmed_profile(db: Session, user: User) -> BrandProfile | None:
     return profile if profile and profile.is_confirmed else None
 
 
+def ready_for_analysis(db: Session, user: User) -> bool:
+    """
+    Check whether a user has enough posts across all platforms to trigger
+    brand profile generation. Returns True if total_posts >= MIN_POSTS_FOR_ANALYSIS.
+    """
+    total_posts = db.query(Post).filter(Post.user_id == user.id).count()
+    return total_posts >= MIN_POSTS_FOR_ANALYSIS
+
+
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _run_engine(user: User, posts: list[Post]):
@@ -160,23 +176,64 @@ def _run_engine(user: User, posts: list[Post]):
     from iterra_ai.brand_profile.schemas import BrandProfileInput
 
     formatted = _format_posts_for_engine(posts)
-    engine_input = BrandProfileInput(niche=user.niche or "content creation", posts=formatted)
+
+    # Add platform-specific style variation notes if posts span multiple platforms
+    platform_notes = _build_platform_style_notes(posts)
+    niche = user.niche or "content creation"
+    if platform_notes:
+        niche = f"{niche}\n\n{platform_notes}"
+
+    engine_input = BrandProfileInput(niche=niche, posts=formatted)
     return BrandProfileEngine().generate(engine_input)
 
 
 def _format_posts_for_engine(posts: list[Post]) -> list[str]:
     """
     Formats posts as annotated strings for the LLM:
-    "Post #N | YYYY-MM-DD | Engagement: X.X%\n{content}"
+    "Post #N | PLATFORM | YYYY-MM-DD | Engagement: X.X%\n{content}"
     """
     sorted_posts = sorted(posts, key=lambda p: p.published_at or utc_now(), reverse=True)
     result = []
     for i, p in enumerate(sorted_posts, 1):
         date_str = p.published_at.strftime("%Y-%m-%d") if p.published_at else "unknown date"
         er_str = f"{p.engagement_rate:.1%}" if p.engagement_rate else "0.0%"
-        header = f"Post #{i} | {date_str} | Engagement: {er_str}"
+        platform_label = p.platform.upper() if p.platform else "UNKNOWN"
+        header = f"Post #{i} | {platform_label} | {date_str} | Engagement: {er_str}"
         result.append(f"{header}\n{p.content or ''}")
     return result
+
+
+def _build_platform_style_notes(posts: list[Post]) -> str:
+    """
+    Build platform-specific style variation notes for the AI engine prompt.
+    Only included when posts span multiple platforms.
+    """
+    platform_counts = Counter(p.platform for p in posts if p.platform)
+    platforms = sorted(platform_counts.keys())
+
+    if len(platforms) <= 1:
+        return ""
+
+    notes_lines = [
+        "Platform-specific style notes (posts are tagged by platform):",
+    ]
+
+    platform_guidance = {
+        "twitter": "TWITTER posts tend to be shorter, punchier, and more conversational. Look for concise hooks, thread structures, and hashtag usage patterns.",
+        "linkedin": "LINKEDIN posts tend to be longer-form, more narrative and professional. Look for storytelling, thought leadership patterns, and structured formatting.",
+        "instagram": "INSTAGRAM posts tend to be visual-first with shorter captions, emoji-heavy, and hashtag-rich. Look for lifestyle tone and call-to-action patterns.",
+    }
+
+    for platform in platforms:
+        count = platform_counts[platform]
+        guidance = platform_guidance.get(platform, f"{platform.upper()} posts may have distinct style conventions.")
+        notes_lines.append(f"- {platform.upper()} ({count} posts): {guidance}")
+
+    notes_lines.append(
+        "Identify cross-platform patterns (consistent voice) AND platform-specific adaptations (format/length differences)."
+    )
+
+    return "\n".join(notes_lines)
 
 
 def _generate_mock_profile(db: Session, user: User, posts: list[Post]) -> dict:

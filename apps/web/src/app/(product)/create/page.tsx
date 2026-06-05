@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { FileText, ImagePlus, Save, Trash2, Sparkles, Loader2 } from "lucide-react";
 
 import { AuthenticatedImage } from "@/components/product/AuthenticatedImage";
 import { ProductShell } from "@/components/product/ProductShell";
+import { TwitterContentControls, BrandProfileProgress } from "@/components/product/TwitterContentControls";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +59,16 @@ export default function CreatePage() {
   const locked = product.brandProfile?.is_confirmed !== true;
   const draft = product.currentDraft;
   const limit = platform === "twitter" ? 280 : platform === "instagram" ? 2200 : 3000;
+
+  // Compute total synced posts from social connections for brand profile progress
+  const totalSyncedPosts = useMemo(() => {
+    const linkedinPosts = product.linkedin?.synced_posts ?? 0;
+    // Sum from analytics posts as a fallback count
+    const analyticsPlatformPosts = product.analytics.length;
+    return Math.max(linkedinPosts, analyticsPlatformPosts);
+  }, [product.linkedin, product.analytics]);
+
+  const hasBrandProfile = product.brandProfile != null && product.brandProfile.profile != null;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -188,6 +199,16 @@ export default function CreatePage() {
                 </TabsList>
               </Tabs>
 
+              {/* Twitter tier selector + character counter shown when X is selected */}
+              <TwitterContentControls content={draftBody} isActive={platform === "twitter"} />
+
+              {/* Brand profile progress indicator */}
+              <BrandProfileProgress
+                syncedPosts={totalSyncedPosts}
+                threshold={5}
+                hasProfile={hasBrandProfile}
+              />
+
               <div className="space-y-3">
                 <label className="text-sm font-medium leading-none text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                   What do you want to write about?
@@ -252,6 +273,7 @@ export default function CreatePage() {
               <p className="mt-1.5 text-sm text-muted-foreground">
                 {draft ? `${(draft.content ?? "").length}/${limit} characters` : "Generated content appears here."}
               </p>
+              {/* Note: When Twitter is selected, detailed character tracking is in the left panel */}
             </div>
             
             <div className="flex flex-col gap-5">
