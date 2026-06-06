@@ -1,8 +1,22 @@
+from pathlib import Path
 from typing import List
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _INSECURE_SECRET = "change-me-in-production"
+
+# Resolve env files by absolute path so they load no matter the working directory
+# (uvicorn is typically launched from apps/api, but the env files live at the repo root).
+# config.py lives at <root>/apps/api/config.py → parents[2] is the repo root.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_API_DIR = Path(__file__).resolve().parent
+# Later files override earlier ones; the user's real config is the root .env.local.
+_ENV_FILES = (
+    _REPO_ROOT / ".env",
+    _API_DIR / ".env",
+    _API_DIR / ".env.local",
+    _REPO_ROOT / ".env.local",
+)
 
 
 class Settings(BaseSettings):
@@ -95,7 +109,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=tuple(str(p) for p in _ENV_FILES),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
