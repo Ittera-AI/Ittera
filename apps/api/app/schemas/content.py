@@ -38,6 +38,8 @@ class GenerateResponse(BaseModel):
     drive_file_id: str | None = None  # set when content is written to Google Drive
     word_count: int
     within_platform_limit: bool
+    thread_segments: list[str] | None = None  # set when content was auto-split into a thread
+    content_limit: dict | None = None  # tier-aware limit metadata (platform, max_chars, tier)
     context_warnings: list[str] = Field(default_factory=list)
     context_summary: dict = Field(default_factory=dict)
     generation_mode: str = "live"
@@ -46,12 +48,23 @@ class GenerateResponse(BaseModel):
 class RepurposeRequest(BaseModel):
     draft_id: str
     target_platform: Literal["instagram", "twitter"]
+    scheduled_for: datetime | None = None  # Allow independent scheduling of repurposed draft
 
 
 class RepurposeResponse(BaseModel):
     draft_id: str
     content: str
     platform: str
+    new_draft_id: str | None = None  # ID of the independently schedulable repurposed draft
+    thread_segments: list[str] | None = None  # Thread segments if auto-split
+    within_platform_limit: bool = True
+    content_limit: dict | None = None  # Tier-aware limit metadata
+
+
+class DraftCreateRequest(BaseModel):
+    platform: Platform
+    content: str | list[str]
+    scheduled_for: datetime | None = None
 
 
 class DraftUpdateRequest(BaseModel):

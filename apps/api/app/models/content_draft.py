@@ -31,6 +31,7 @@ class ContentDraft(Base):
     auto_post_enabled_snapshot = Column(Boolean, nullable=False, default=False)
     persona_fit_score = Column(Integer, nullable=True)
     persona_fit_notes = Column(JSON, nullable=False, default=list)
+    platform_media = Column(JSON, nullable=True, default=dict)  # Platform-specific metadata (e.g., google_calendar_event_id)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 

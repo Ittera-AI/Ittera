@@ -1034,3 +1034,235 @@ def get_post_timing_history(
         }
         for p in posts
     ]
+
+
+# ---------------------------------------------------------------------------
+# Cross-Platform Engagement Comparison
+# ---------------------------------------------------------------------------
+
+
+def cross_platform_engagement_comparison(
+    db: Session,
+    user: User,
+    period_days: int = 30,
+) -> dict[str, Any]:
+    """
+    Compare engagement patterns across connected platforms.
+
+    Provides:
+      - Average engagement rate per platform
+      - Best-performing post types per platform
+      - Platform performance ranking
+      - Comparative insights and recommendations
+
+    Args:
+        db: Database session
+        user: Current user
+        period_days: Lookback period in days (default 30)
+
+    Returns:
+        Dict with cross-platform engagement comparison data
+
+    Requirements: 3.4
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
+
+    # Fetch all user posts within period
+    posts = (
+        db.query(Post)
+        .filter(
+            Post.user_id == user.id,
+            Post.published_at >= cutoff,
+        )
+        .all()
+    )
+
+    if not posts:
+        return {
+            "period_days": period_days,
+            "platforms": [],
+            "best_platform": None,
+            "comparison_insights": [],
+            "message": "No posts found in the selected period for comparison.",
+        }
+
+    # Group posts by platform
+    platform_posts: dict[str, list[Post]] = {}
+    for post in posts:
+        platform_posts.setdefault(post.platform, []).append(post)
+
+    # If only one platform, still return data but note it's not a comparison
+    platform_metrics = []
+    for platform, p_posts in platform_posts.items():
+        metrics = _calculate_platform_metrics(platform, p_posts)
+        platform_metrics.append(metrics)
+
+    # Sort by average engagement rate (descending) to rank platforms
+    platform_metrics.sort(
+        key=lambda m: m["avg_engagement_rate"], reverse=True
+    )
+
+    # Identify best platform
+    best_platform = platform_metrics[0]["platform"] if platform_metrics else None
+
+    # Generate comparison insights
+    comparison_insights = _generate_platform_comparison_insights(
+        platform_metrics, period_days
+    )
+
+    return {
+        "period_days": period_days,
+        "platforms": platform_metrics,
+        "best_platform": best_platform,
+        "comparison_insights": comparison_insights,
+    }
+
+
+def _calculate_platform_metrics(
+    platform: str, posts: list[Post]
+) -> dict[str, Any]:
+    """
+    Calculate engagement metrics for a single platform.
+
+    Returns:
+        Dict with platform-level aggregated metrics
+    """
+    total_posts = len(posts)
+
+    engagement_rates = [p.engagement_rate or 0.0 for p in posts]
+    avg_engagement_rate = (
+        sum(engagement_rates) / total_posts if total_posts > 0 else 0.0
+    )
+
+    total_likes = sum(p.likes or 0 for p in posts)
+    total_comments = sum(p.comments or 0 for p in posts)
+    total_shares = sum(p.shares or 0 for p in posts)
+    total_impressions = sum(p.impressions or 0 for p in posts)
+
+    # Best performing post type
+    content_type_performance = _best_performing_content_types(posts)
+
+    # Best performing post on this platform
+    best_post = max(posts, key=lambda p: p.engagement_rate or 0.0)
+
+    return {
+        "platform": platform,
+        "total_posts": total_posts,
+        "avg_engagement_rate": round(avg_engagement_rate, 4),
+        "total_likes": total_likes,
+        "total_comments": total_comments,
+        "total_shares": total_shares,
+        "total_impressions": total_impressions,
+        "best_content_types": content_type_performance,
+        "best_post": {
+            "id": best_post.id,
+            "content": (
+                best_post.content[:200] + "..."
+                if len(best_post.content) > 200
+                else best_post.content
+            ),
+            "engagement_rate": best_post.engagement_rate or 0.0,
+            "published_at": (
+                best_post.published_at.isoformat()
+                if best_post.published_at
+                else None
+            ),
+        },
+    }
+
+
+def _best_performing_content_types(posts: list[Post]) -> list[dict[str, Any]]:
+    """
+    Determine best-performing content types for a set of posts.
+
+    Groups posts by content_type, calculates average engagement for each,
+    and returns sorted by performance.
+    """
+    from collections import defaultdict
+
+    type_data: dict[str, list[float]] = defaultdict(list)
+    for post in posts:
+        content_type = post.content_type or "text"
+        type_data[content_type].append(post.engagement_rate or 0.0)
+
+    results = []
+    for content_type, rates in type_data.items():
+        avg_rate = sum(rates) / len(rates) if rates else 0.0
+        results.append(
+            {
+                "content_type": content_type,
+                "post_count": len(rates),
+                "avg_engagement_rate": round(avg_rate, 4),
+            }
+        )
+
+    results.sort(key=lambda r: r["avg_engagement_rate"], reverse=True)
+    return results
+
+
+def _generate_platform_comparison_insights(
+    platform_metrics: list[dict[str, Any]],
+    period_days: int,
+) -> list[str]:
+    """
+    Generate actionable insights from cross-platform comparison.
+
+    Compares engagement rates and content type performance across platforms
+    to provide recommendations.
+    """
+    insights: list[str] = []
+
+    if len(platform_metrics) < 2:
+        insights.append(
+            "Connect more platforms to enable cross-platform comparison. "
+            "Currently only one platform has post data."
+        )
+        return insights
+
+    # Compare top vs bottom platform
+    top = platform_metrics[0]
+    bottom = platform_metrics[-1]
+
+    if top["avg_engagement_rate"] > 0 and bottom["avg_engagement_rate"] > 0:
+        ratio = top["avg_engagement_rate"] / bottom["avg_engagement_rate"]
+        if ratio > 1.5:
+            insights.append(
+                f"{top['platform'].capitalize()} outperforms {bottom['platform'].capitalize()} "
+                f"by {ratio:.1f}x in engagement rate. Consider allocating more effort there."
+            )
+        elif ratio > 1.1:
+            insights.append(
+                f"{top['platform'].capitalize()} slightly edges out {bottom['platform'].capitalize()} "
+                f"in engagement. Performance is relatively balanced across platforms."
+            )
+        else:
+            insights.append(
+                "Engagement rates are similar across platforms. "
+                "Your content resonates equally well on all connected platforms."
+            )
+
+    # Content type insights
+    for metrics in platform_metrics:
+        best_types = metrics.get("best_content_types", [])
+        if best_types:
+            best_type = best_types[0]
+            if best_type["avg_engagement_rate"] > 0:
+                insights.append(
+                    f"On {metrics['platform'].capitalize()}, "
+                    f"'{best_type['content_type']}' posts perform best "
+                    f"(avg {best_type['avg_engagement_rate']:.2%} engagement)."
+                )
+
+    # Volume distribution insight
+    total_posts = sum(m["total_posts"] for m in platform_metrics)
+    if total_posts > 0:
+        for metrics in platform_metrics:
+            pct = (metrics["total_posts"] / total_posts) * 100
+            if pct > 70:
+                insights.append(
+                    f"You post predominantly on {metrics['platform'].capitalize()} "
+                    f"({pct:.0f}% of content). Consider diversifying to reach broader audiences."
+                )
+                break
+
+    return insights

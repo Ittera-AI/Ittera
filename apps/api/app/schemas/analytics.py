@@ -148,3 +148,49 @@ class TrendDetectionResult(BaseModel):
     post_volume: PostVolumeTrend | None = None
     anomalies: list[AnomalyDetection] = []
     recommendations: list[str] = []
+
+
+# ---------------------------------------------------------------------------
+# Cross-Platform Engagement Comparison
+# ---------------------------------------------------------------------------
+
+
+class PlatformBestPost(BaseModel):
+    """The best performing post on a platform."""
+
+    id: str
+    content: str
+    engagement_rate: float
+    published_at: str | None = None
+
+
+class ContentTypePerformance(BaseModel):
+    """Performance metrics for a content type."""
+
+    content_type: str
+    post_count: int
+    avg_engagement_rate: float
+
+
+class PlatformEngagementMetrics(BaseModel):
+    """Engagement metrics for a single platform."""
+
+    platform: str
+    total_posts: int
+    avg_engagement_rate: float
+    total_likes: int
+    total_comments: int
+    total_shares: int
+    total_impressions: int
+    best_content_types: list[ContentTypePerformance]
+    best_post: PlatformBestPost
+
+
+class CrossPlatformComparisonResponse(BaseModel):
+    """Cross-platform engagement comparison response."""
+
+    period_days: int
+    platforms: list[PlatformEngagementMetrics]
+    best_platform: str | None = None
+    comparison_insights: list[str]
+    message: str | None = None

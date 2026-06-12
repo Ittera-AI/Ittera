@@ -23,6 +23,7 @@ from app.routers import (
     social,
     social_oauth,
     storage,
+    sync,
     trends,
     users,
     workspaces,
@@ -59,6 +60,7 @@ app.include_router(repurpose.router, prefix="/api/v1/repurpose", tags=["repurpos
 app.include_router(coach.router, prefix="/api/v1/coach", tags=["coach"])
 app.include_router(radar.router, prefix="/api/v1/radar", tags=["radar"])
 app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
+app.include_router(sync.router, prefix="/api/v1/sync", tags=["sync"])
 app.include_router(social_oauth.router, prefix="/api/v1/connect", tags=["connect"])
 app.include_router(persona.router, prefix="/api/v1/persona", tags=["persona"])
 app.include_router(storage.router, prefix="/api/v1/storage", tags=["storage"])

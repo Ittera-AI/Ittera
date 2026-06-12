@@ -7,6 +7,7 @@ from app.models.user import User
 from app.schemas.analytics import (
     AnalyticsSummaryResponse,
     ContentInsightsResponse,
+    CrossPlatformComparisonResponse,
     PostAnalysisResponse,
     PostWithAnalysis,
     TimeSeriesDataPoint,
@@ -151,3 +152,29 @@ async def detect_trends(
         period_days=period_days,
     )
     return result
+
+
+@router.get("/platforms/comparison", response_model=CrossPlatformComparisonResponse)
+async def platform_comparison(
+    period_days: int = Query(default=30, ge=1, le=365),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Compare engagement patterns across connected platforms.
+
+    Returns per-platform engagement metrics including:
+      - Average engagement rate per platform
+      - Best-performing content types per platform
+      - Overall platform ranking by engagement
+      - Cross-platform comparison insights and recommendations
+
+    Args:
+        period_days: Lookback period in days (1-365, default 30)
+
+    Returns:
+        Cross-platform engagement comparison data
+    """
+    return analytics_service.cross_platform_engagement_comparison(
+        db, current_user, period_days
+    )

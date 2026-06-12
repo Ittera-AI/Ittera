@@ -1,4 +1,5 @@
 from datetime import datetime, timezone, timedelta
+import json
 import logging
 import re
 import uuid
@@ -102,13 +103,21 @@ def generate(db: Session, user: User, payload: GenerateRequest) -> dict:
     from iterra_ai.content.engine import ContentGenerationEngine
     from iterra_ai.content.schemas import ContentGenerationInput
     from iterra_ai.content.platform_rules import get_rules
+    from app.services.platform_limits import resolve_content_limit, split_into_thread
+
+    # Resolve tier-aware character limit
+    content_limit = resolve_content_limit(db, user.id, payload.platform)
+
+    # Override platform_rules max_chars with the resolved limit
+    rules = dict(get_rules(payload.platform))
+    rules["max_chars"] = content_limit.max_chars
 
     engine_input = ContentGenerationInput(
         platform=payload.platform,
         prompt=payload.prompt,
         hook=payload.suggestion.hook if payload.suggestion else None,
         system_prompt=ctx.system_prompt,
-        platform_rules=get_rules(payload.platform),
+        platform_rules=rules,
     )
     
     engine = ContentGenerationEngine()
@@ -123,7 +132,7 @@ def generate(db: Session, user: User, payload: GenerateRequest) -> dict:
             ),
             hook=payload.suggestion.hook if payload.suggestion else None,
             system_prompt=ctx.system_prompt,
-            platform_rules=get_rules(payload.platform),
+            platform_rules=rules,
         )
         rewritten = engine.generate(rewrite_input)
         rewritten_score, rewritten_notes = _persona_fit(rewritten.content, ctx)
@@ -132,10 +141,22 @@ def generate(db: Session, user: User, payload: GenerateRequest) -> dict:
             fit_score = rewritten_score
             fit_notes = rewritten_notes
 
+    # Validate output length against platform limit
+    within_limit = output.char_count <= content_limit.max_chars
+
+    # Auto-split into thread if free-tier Twitter and over limit
+    thread_segments = None
+    if not within_limit and content_limit.is_thread_eligible:
+        split_result = split_into_thread(output.content, content_limit.max_chars)
+        thread_segments = split_result.segments
+
+    # Store draft as thread JSON if split, plain text otherwise
+    draft_content = json.dumps(thread_segments) if thread_segments else output.content
+
     draft = ContentDraft(
         user_id=user.id,
         platform=payload.platform,
-        content=output.content,
+        content=draft_content,
         prompt_used=payload.prompt,
         trend_used=payload.trend_used,
         generation_model=output.model,
@@ -148,16 +169,22 @@ def generate(db: Session, user: User, payload: GenerateRequest) -> dict:
 
     # Save to Google Drive if user has Drive connected
     try:
-        _save_draft_to_drive_if_connected(db, user, draft, output.content)
+        _save_draft_to_drive_if_connected(db, user, draft, draft_content)
     except Exception as e:
         # Don't fail the generation if Drive save fails
         logger.warning("Failed to save draft to Drive: %s", e)
     
     return {
         "draft_id": draft.id,
-        "content": draft.content,
+        "content": draft_content,
         "word_count": output.word_count,
-        "within_platform_limit": output.char_count <= get_rules(payload.platform)["max_chars"],
+        "within_platform_limit": within_limit,
+        "thread_segments": thread_segments,
+        "content_limit": {
+            "platform": content_limit.platform,
+            "max_chars": content_limit.max_chars,
+            "tier": content_limit.tier,
+        },
         "context_warnings": ctx.missing_layers,
         "context_summary": {
             "permanent_complete": ctx.permanent.is_complete(),
@@ -176,25 +203,139 @@ def repurpose(db: Session, user: User, payload: RepurposeRequest) -> dict:
     
     from iterra_ai.repurpose.engine import RepurposeEngine
     from iterra_ai.repurpose.schemas import RepurposeInput
+    from app.services.platform_limits import resolve_content_limit, split_into_thread
+
+    # Resolve tier-aware character limit for target platform (Req 6.1)
+    content_limit = resolve_content_limit(db, user.id, payload.target_platform)
+
+    # Assemble brand profile context for voice consistency (Req 6.3, 6.4)
+    ctx = context_service.assemble(db, user, platform=payload.target_platform)
     
     engine_input = RepurposeInput(
         source_platform=draft.platform,
         target_platforms=[payload.target_platform],
-        original_content=draft.content
+        original_content=draft.content,
+        max_chars=content_limit.max_chars,
+        system_prompt=ctx.system_prompt,
     )
     
     engine = RepurposeEngine()
     output = engine.generate(engine_input)
     
-    # We should have one repurposed item for the requested platform
+    # Get repurposed content (engine output or fallback)
     content = output.repurposed[0].content if output.repurposed else _repurposed_content(draft.content, payload.target_platform)
 
+    # Validate and enforce tier-aware limits (Req 6.1)
+    within_limit = len(content) <= content_limit.max_chars
+    thread_segments = None
+
+    # Auto-split into thread if free-tier Twitter and over limit
+    if not within_limit and content_limit.is_thread_eligible:
+        split_result = split_into_thread(content, content_limit.max_chars)
+        thread_segments = split_result.segments
+        within_limit = split_result.all_within_limit
+    elif not within_limit:
+        # For non-thread-eligible platforms, truncate to limit
+        content = content[:content_limit.max_chars]
+        within_limit = True
+
+    # Determine draft content: thread JSON or plain text
+    draft_content = json.dumps(thread_segments) if thread_segments else content
+
+    # Create an independent ContentDraft for the repurposed content (Req 6.2)
+    new_draft = ContentDraft(
+        user_id=user.id,
+        platform=payload.target_platform,
+        content=draft_content,
+        prompt_used=f"Repurposed from {draft.platform} draft {draft.id}",
+        status=DRAFT_STATUS_DRAFT,
+    )
+    # Allow independent scheduling if scheduled_for is provided
+    if payload.scheduled_for is not None:
+        new_draft.scheduled_for = _aware(payload.scheduled_for)
+        new_draft.status = DRAFT_STATUS_SCHEDULED
+    
+    db.add(new_draft)
+
+    # Also update repurposed_versions on source draft for backwards compatibility
     versions = dict(draft.repurposed_versions or {})
     versions[payload.target_platform] = content
     draft.repurposed_versions = versions
     draft.updated_at = datetime.now(timezone.utc)
     db.commit()
-    return {"draft_id": draft.id, "content": content, "platform": payload.target_platform}
+    db.refresh(new_draft)
+
+    return {
+        "draft_id": draft.id,
+        "content": content,
+        "platform": payload.target_platform,
+        "new_draft_id": new_draft.id,
+        "thread_segments": thread_segments,
+        "within_platform_limit": within_limit,
+        "content_limit": {
+            "platform": content_limit.platform,
+            "max_chars": content_limit.max_chars,
+            "tier": content_limit.tier,
+        },
+    }
+
+
+def create_draft(db: Session, user: User, payload) -> ContentDraft:
+    """Create a new content draft, supporting thread content (list of strings) for Twitter.
+
+    When content is a list (thread for Twitter):
+      - Validates each segment is within the platform character limit
+      - Stores as a JSON-serialized array string in content_drafts.content
+    When content is a plain string:
+      - Stores as-is (existing behavior)
+    """
+    import json
+    from app.services.platform_limits import resolve_content_limit
+
+    content_limit = resolve_content_limit(db, user.id, payload.platform)
+
+    if isinstance(payload.content, list):
+        # Thread content — validate each segment
+        segments = payload.content
+        if len(segments) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Thread content must contain at least one segment.",
+            )
+        for i, segment in enumerate(segments):
+            if not isinstance(segment, str) or not segment.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Thread segment {i + 1} must be a non-empty string.",
+                )
+            if len(segment) > content_limit.max_chars:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"Thread segment {i + 1} exceeds the {content_limit.max_chars}-character "
+                        f"limit for {payload.platform} ({len(segment)} characters)."
+                    ),
+                )
+        # Store as JSON array string
+        draft_content = json.dumps(segments)
+    else:
+        # Plain string content — store as-is
+        draft_content = payload.content
+
+    draft = ContentDraft(
+        user_id=user.id,
+        platform=payload.platform,
+        content=draft_content,
+        status=DRAFT_STATUS_DRAFT,
+    )
+    if payload.scheduled_for is not None:
+        draft.scheduled_for = _aware(payload.scheduled_for)
+        draft.status = DRAFT_STATUS_SCHEDULED
+
+    db.add(draft)
+    db.commit()
+    db.refresh(draft)
+    return draft
 
 
 def list_drafts(db: Session, user: User, status_filter: str | None = None) -> list[ContentDraft]:

@@ -10,6 +10,7 @@ from app.config import settings
 from app.models.user import User
 from app.schemas.content import (
     CalendarEventResponse,
+    DraftCreateRequest,
     DraftMediaResponse,
     DraftResponse,
     DraftUpdateRequest,
@@ -42,6 +43,15 @@ async def generate(payload: GenerateRequest, current_user: User = Depends(get_cu
 @router.post("/repurpose", response_model=RepurposeResponse)
 async def repurpose(payload: RepurposeRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return content_service.repurpose(db, current_user, payload)
+
+
+@router.post("/drafts", response_model=DraftResponse, status_code=status.HTTP_201_CREATED)
+async def create_draft(
+    payload: DraftCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return content_service.create_draft(db, current_user, payload)
 
 
 @router.get("/drafts", response_model=list[DraftResponse])

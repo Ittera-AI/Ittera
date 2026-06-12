@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
 import { ProductShell } from "@/components/product/ProductShell";
+import { PlatformSyncStatusCard, type PlatformSyncStatus } from "@/components/product/PlatformSyncStatusCard";
 import { useAuth } from "@/context/AuthContext";
 import { useProduct } from "@/hooks/useProduct";
-import type { BrandProfileData } from "@/services/product.service";
+import { productService } from "@/services/product.service";
+import type { BrandProfileData, PlatformSyncStatusResponse } from "@/services/product.service";
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -150,10 +152,137 @@ export default function SettingsPage() {
   const loadDashboard = product.loadDashboard;
   const loadPublishingSettings = product.loadPublishingSettings;
 
+  const [platformStatuses, setPlatformStatuses] = useState<PlatformSyncStatus[]>([]);
+  const [statusLoading, setStatusLoading] = useState(false);
+
   useEffect(() => {
     void loadDashboard().catch(() => undefined);
     void loadPublishingSettings().catch(() => undefined);
   }, [loadDashboard, loadPublishingSettings]);
+
+  // Map backend response to PlatformSyncStatus interface
+  const mapResponseToStatus = useCallback((resp: PlatformSyncStatusResponse): PlatformSyncStatus => ({
+    platform: resp.platform,
+    connected: resp.connected,
+    username: resp.platform_username ?? resp.username ?? null,
+    lastSyncedAt: resp.last_synced_at,
+    syncedPosts: resp.synced_posts,
+    postingReady: resp.posting_ready,
+    readSyncReady: resp.read_sync_ready,
+    missingScopes:
+      resp.missing_scopes ??
+      [...(resp.missing_posting_scopes ?? []), ...(resp.missing_read_scopes ?? [])],
+    reconnectRequired: resp.reconnect_required,
+    syncInProgress: resp.sync_status === "initiated" || resp.sync_status === "in_progress",
+    syncStatus: resp.sync_status,
+    syncError: resp.sync_error,
+    message: resp.message,
+  }), []);
+
+  // Load platform sync statuses
+  const loadPlatformStatuses = useCallback(async () => {
+    setStatusLoading(true);
+    try {
+      const platforms = ["linkedin", "twitter"];
+      const results = await Promise.allSettled(
+        platforms.map((p) => productService.getSyncStatus(p))
+      );
+      const statuses: PlatformSyncStatus[] = [];
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          statuses.push(mapResponseToStatus(result.value));
+        }
+      }
+      // Fall back to existing connection data if sync status endpoint not available
+      if (statuses.length === 0) {
+        // Build status from existing store data
+        if (product.linkedin) {
+          statuses.push({
+            platform: "linkedin",
+            connected: product.linkedin.connected ?? false,
+            username: product.linkedin.platform_username ?? null,
+            lastSyncedAt: null,
+            syncedPosts: product.linkedin.synced_posts ?? 0,
+            postingReady: product.linkedin.posting_ready ?? false,
+            readSyncReady: product.linkedin.read_sync_ready ?? false,
+            missingScopes: [
+              ...(product.linkedin.missing_posting_scopes ?? []),
+              ...(product.linkedin.missing_read_scopes ?? []),
+            ],
+            reconnectRequired: product.linkedin.reconnect_required ?? false,
+            syncInProgress: false,
+            syncStatus: null,
+            syncError: null,
+            message: product.linkedin.message ?? null,
+          });
+        }
+        const xConn = product.socialConnections.find((c) => c.platform === "twitter");
+        if (xConn) {
+          statuses.push({
+            platform: "twitter",
+            connected: true,
+            username: xConn.platform_username ?? xConn.username ?? null,
+            lastSyncedAt: xConn.last_synced_at ?? xConn.last_synced ?? null,
+            syncedPosts: 0,
+            postingReady: xConn.posting_ready ?? false,
+            readSyncReady: xConn.read_sync_ready ?? true,
+            missingScopes:
+              xConn.missing_scopes ??
+              [...(xConn.missing_posting_scopes ?? []), ...(xConn.missing_read_scopes ?? [])],
+            reconnectRequired: xConn.reconnect_required ?? false,
+            syncInProgress: false,
+            syncStatus: null,
+            syncError: null,
+            message: null,
+          });
+        }
+      }
+      setPlatformStatuses(statuses);
+    } catch {
+      // Silently fall back to store data
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [product.linkedin, product.socialConnections, mapResponseToStatus]);
+
+  useEffect(() => {
+    void loadPlatformStatuses();
+  }, [loadPlatformStatuses]);
+
+  const handleSyncNow = useCallback(async (platform: string) => {
+    try {
+      await productService.syncPlatform(platform);
+      // Refresh status after triggering sync
+      await loadPlatformStatuses();
+    } catch (error) {
+      // Update status to show failure
+      setPlatformStatuses((prev) =>
+        prev.map((s) =>
+          s.platform === platform
+            ? { ...s, syncStatus: "failed", syncError: error instanceof Error ? error.message : "Sync failed" }
+            : s
+        )
+      );
+    }
+  }, [loadPlatformStatuses]);
+
+  const handleConnect = useCallback(async (platform: string) => {
+    if (platform === "linkedin") {
+      await product.connectLinkedIn();
+    } else if (platform === "twitter") {
+      await product.connectTwitter();
+    }
+    await loadPlatformStatuses();
+  }, [product, loadPlatformStatuses]);
+
+  const handleDisconnect = useCallback(async (platform: string) => {
+    if (platform === "linkedin") {
+      await product.disconnectLinkedIn();
+    } else if (platform === "twitter") {
+      await product.disconnectTwitter();
+    }
+    await loadPlatformStatuses();
+  }, [product, loadPlatformStatuses]);
 
   const profile = product.brandProfile?.profile;
   const isConfirmed = product.brandProfile?.is_confirmed ?? false;
@@ -162,10 +291,7 @@ export default function SettingsPage() {
     [product.brandProfile],
   );
   const version = product.brandProfile?.version ?? 0;
-  const xConnection = product.socialConnections.find((connection) => connection.platform === "twitter");
   const autoPostEnabled = product.publishingSettings?.auto_post_enabled ?? false;
-  const linkedinNeedsReconnect = !!product.linkedin?.reconnect_required;
-  const xNeedsReconnect = !!xConnection?.reconnect_required;
 
   return (
     <ProductShell>
@@ -195,138 +321,70 @@ export default function SettingsPage() {
           </div>
         </Section>
 
-        <Section title="Connected Accounts" description="Manage your social media integrations and posting status.">
-          <div className="space-y-6">
-            <FieldRow label="LinkedIn">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{product.linkedin?.platform_username ?? "Not connected"}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {product.linkedin?.synced_posts
-                        ? `${product.linkedin.synced_posts} posts synced`
-                        : "No posts synced yet"}
-                    </p>
-                  </div>
-                  <span
-                    className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-                    style={{
-                      background: product.linkedin?.connected ? "rgba(150,165,145,0.15)" : "var(--muted)",
-                      color: product.linkedin?.connected ? "var(--olive)" : "var(--text-muted)",
-                    }}
-                  >
-                    {product.linkedin?.connected ? "Connected" : "Offline"}
-                  </span>
-                </div>
-                {product.linkedin?.connected ? (
-                  <div className="flex flex-wrap gap-2">
-                    <span
-                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                      style={{
-                        background: product.linkedin.posting_ready ? "rgba(150,165,145,0.15)" : "rgba(196,168,130,0.18)",
-                        color: product.linkedin.posting_ready ? "var(--olive)" : "var(--bronze)",
-                      }}
-                    >
-                      {product.linkedin.posting_ready ? "Posting ready" : "Reconnect for posting"}
-                    </span>
-                    <span
-                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                      style={{
-                        background: product.linkedin.read_sync_ready ? "rgba(150,165,145,0.15)" : "var(--muted)",
-                        color: product.linkedin.read_sync_ready ? "var(--olive)" : "var(--text-muted)",
-                      }}
-                    >
-                      {product.linkedin.read_sync_ready ? "Read sync ready" : "Read sync pending approval"}
-                    </span>
-                  </div>
-                ) : null}
-                <div className="flex flex-wrap items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => void product.connectLinkedIn()}
-                    disabled={product.isLoading || (!!product.linkedin?.connected && !linkedinNeedsReconnect)}
-                    className="flex items-center justify-center rounded-lg border border-border bg-background px-5 py-2.5 h-10 text-sm font-medium text-foreground transition-all hover:bg-muted active:scale-[0.97] disabled:opacity-40 shadow-sm"
-                  >
-                    {linkedinNeedsReconnect ? "Reconnect LinkedIn" : "Connect LinkedIn"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void product.syncLinkedIn()}
-                    disabled={product.isLoading || !product.linkedin?.connected || !product.linkedin?.read_sync_ready}
-                    className="flex items-center justify-center rounded-lg border border-border bg-background px-5 py-2.5 h-10 text-sm font-medium text-foreground transition-all hover:bg-muted active:scale-[0.97] disabled:opacity-40 shadow-sm"
-                  >
-                    Sync Posts
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void product.disconnectLinkedIn()}
-                    disabled={product.isLoading || !product.linkedin?.connected}
-                    className="flex items-center justify-center rounded-lg border border-destructive/30 bg-destructive/5 px-5 py-2.5 h-10 text-sm font-medium text-destructive transition-all hover:bg-destructive/10 active:scale-[0.97] disabled:opacity-40 shadow-sm"
-                  >
-                    Disconnect
-                  </button>
-                </div>
-                {product.linkedin?.message ? <p className="text-xs text-muted-foreground">{product.linkedin.message}</p> : null}
-                {product.linkedin?.missing_posting_scopes?.length ? (
-                  <p className="text-xs text-destructive">Missing posting scopes: {product.linkedin.missing_posting_scopes.join(", ")}</p>
-                ) : null}
+        <Section title="Connected Accounts" description="Manage your social media integrations, sync status, and posting readiness.">
+          <div className="space-y-4">
+            {statusLoading && platformStatuses.length === 0 ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 size={20} className="animate-spin text-muted-foreground" />
               </div>
-            </FieldRow>
-            
-            <div className="h-px bg-border" />
-            
-            <FieldRow label="X (Twitter)">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-foreground">
-                    {xConnection ? `@${xConnection.username}` : "Not connected"}
-                  </p>
-                  <span
-                    className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-                    style={{
-                      background: xConnection ? "rgba(150,165,145,0.15)" : "var(--muted)",
-                      color: xConnection ? "var(--olive)" : "var(--text-muted)",
-                    }}
-                  >
-                    {xConnection ? "Connected" : "Offline"}
-                  </span>
-                </div>
-                {xConnection ? (
-                  <div className="flex flex-wrap gap-2">
-                    <span
-                      className="rounded-full px-2.5 py-0.5 text-[10px] font-semibold"
-                      style={{
-                        background: xConnection.posting_ready ? "rgba(150,165,145,0.15)" : "rgba(196,168,130,0.18)",
-                        color: xConnection.posting_ready ? "var(--olive)" : "var(--bronze)",
-                      }}
-                    >
-                      {xConnection.posting_ready ? "Posting ready" : "Reconnect required"}
-                    </span>
-                  </div>
-                ) : null}
-                <div className="flex flex-wrap items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => void product.connectTwitter()}
-                    disabled={product.isLoading || (!!xConnection && !xNeedsReconnect)}
-                    className="flex items-center justify-center rounded-lg border border-border bg-background px-5 py-2.5 h-10 text-sm font-medium text-foreground transition-all hover:bg-muted active:scale-[0.97] disabled:opacity-40 shadow-sm"
-                  >
-                    {xNeedsReconnect ? "Reconnect X" : "Connect X"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void product.disconnectTwitter()}
-                    disabled={product.isLoading || !xConnection}
-                    className="flex items-center justify-center rounded-lg border border-destructive/30 bg-destructive/5 px-5 py-2.5 h-10 text-sm font-medium text-destructive transition-all hover:bg-destructive/10 active:scale-[0.97] disabled:opacity-40 shadow-sm"
-                  >
-                    Disconnect X
-                  </button>
-                </div>
-                {xConnection?.missing_scopes?.length ? (
-                  <p className="mt-2 text-xs text-destructive">Missing X scopes: {xConnection.missing_scopes.join(", ")}</p>
-                ) : null}
+            ) : platformStatuses.length > 0 ? (
+              platformStatuses.map((status) => (
+                <PlatformSyncStatusCard
+                  key={status.platform}
+                  status={status}
+                  onSyncNow={handleSyncNow}
+                  onConnect={handleConnect}
+                  onDisconnect={handleDisconnect}
+                />
+              ))
+            ) : (
+              <div className="space-y-4">
+                {/* Fallback: show connect buttons when no status data */}
+                <PlatformSyncStatusCard
+                  status={{
+                    platform: "linkedin",
+                    connected: product.linkedin?.connected ?? false,
+                    username: product.linkedin?.platform_username ?? null,
+                    lastSyncedAt: null,
+                    syncedPosts: product.linkedin?.synced_posts ?? 0,
+                    postingReady: product.linkedin?.posting_ready ?? false,
+                    readSyncReady: product.linkedin?.read_sync_ready ?? false,
+                    missingScopes: [
+                      ...(product.linkedin?.missing_posting_scopes ?? []),
+                      ...(product.linkedin?.missing_read_scopes ?? []),
+                    ],
+                    reconnectRequired: product.linkedin?.reconnect_required ?? false,
+                    syncInProgress: false,
+                    syncStatus: null,
+                    syncError: null,
+                    message: product.linkedin?.message ?? null,
+                  }}
+                  onSyncNow={handleSyncNow}
+                  onConnect={handleConnect}
+                  onDisconnect={handleDisconnect}
+                />
+                <PlatformSyncStatusCard
+                  status={{
+                    platform: "twitter",
+                    connected: false,
+                    username: null,
+                    lastSyncedAt: null,
+                    syncedPosts: 0,
+                    postingReady: false,
+                    readSyncReady: false,
+                    missingScopes: [],
+                    reconnectRequired: false,
+                    syncInProgress: false,
+                    syncStatus: null,
+                    syncError: null,
+                    message: null,
+                  }}
+                  onSyncNow={handleSyncNow}
+                  onConnect={handleConnect}
+                  onDisconnect={handleDisconnect}
+                />
               </div>
-            </FieldRow>
+            )}
             {product.error ? <p className="mt-2 text-xs text-destructive">{product.error}</p> : null}
           </div>
         </Section>

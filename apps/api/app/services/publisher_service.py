@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import asyncio
 from pathlib import Path
@@ -188,6 +189,16 @@ async def _create_linkedin_image_post(access_token: str, owner_urn: str, text: s
 
 
 async def _publish_x(db: Session, conn: SocialConnection, draft: ContentDraft) -> dict[str, Any]:
+    from app.services.platform_limits import resolve_content_limit, is_thread
+
+    # Resolve tier-aware character limit for this user's Twitter connection
+    content_limit = resolve_content_limit(db, conn.user_id, "twitter")
+
+    # Check if this is a thread (JSON array) and route to thread publisher
+    if is_thread(draft.content):
+        return await _publish_x_thread(db, conn, draft, content_limit.max_chars)
+
+    # Single tweet — enforce tier-aware limit
     required = set(X_POSTING_SCOPES)
     if draft.media:
         required |= X_MEDIA_SCOPES
@@ -197,7 +208,7 @@ async def _publish_x(db: Session, conn: SocialConnection, draft: ContentDraft) -
         media_ids = []
         for item in draft.media:
             media_ids.append(await _upload_x_image(conn.access_token, item))
-        body: dict[str, Any] = {"text": (draft.content or "")[:280]}
+        body: dict[str, Any] = {"text": (draft.content or "")[:content_limit.max_chars]}
         if media_ids:
             body["media"] = {"media_ids": media_ids}
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
@@ -218,6 +229,132 @@ async def _publish_x(db: Session, conn: SocialConnection, draft: ContentDraft) -
         if isinstance(exc, PublishError):
             raise
         raise PublishError("X publish failed. Try again later.", code="platform_error") from exc
+
+
+async def _publish_x_thread(
+    db: Session, conn: SocialConnection, draft: ContentDraft, max_chars: int = 280
+) -> dict[str, Any]:
+    """Publish a multi-tweet thread sequentially, chaining reply_to.
+
+    Each segment is posted as a reply to the previous tweet, forming a thread.
+    On partial failure, successfully published tweet IDs are stored and the draft
+    is marked as "failed" with partial data.
+
+    Returns dict with platform_post_id (first tweet ID) and thread_ids (all IDs).
+    """
+    required = set(X_POSTING_SCOPES)
+    _require_scopes(conn, required, "X")
+    await _refresh_x_token_if_needed(db, conn)
+
+    # Parse thread segments from draft content (stored as JSON array)
+    try:
+        segments = json.loads(draft.content)
+        if not isinstance(segments, list) or len(segments) < 2:
+            raise ValueError("Thread content must be a JSON array with at least 2 segments")
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise PublishError(
+            "Invalid thread content format. Expected a JSON array of strings.",
+            code="invalid_thread_content",
+            status_code=400,
+        ) from exc
+
+    # Validate each segment is within the character limit before publishing
+    for i, segment in enumerate(segments):
+        if not isinstance(segment, str) or not segment.strip():
+            raise PublishError(
+                f"Thread segment {i + 1} is empty or not a string.",
+                code="invalid_thread_segment",
+                status_code=400,
+            )
+        if len(segment) > max_chars:
+            raise PublishError(
+                f"Thread segment {i + 1} exceeds {max_chars} character limit ({len(segment)} chars).",
+                code="segment_over_limit",
+                status_code=400,
+            )
+
+    tweet_ids: list[str] = []
+    reply_to: str | None = None
+
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+            for i, segment in enumerate(segments):
+                body: dict[str, Any] = {"text": segment}
+                if reply_to:
+                    body["reply"] = {"in_reply_to_tweet_id": reply_to}
+
+                res = await _request_with_retries(
+                    client,
+                    "POST",
+                    "https://api.x.com/2/tweets",
+                    platform="twitter",
+                    action="create_thread_tweet",
+                    headers={
+                        "Authorization": f"Bearer {conn.access_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json=body,
+                )
+
+                if res.is_error:
+                    # Partial failure — some tweets published, this one failed
+                    if tweet_ids:
+                        _handle_thread_partial_failure(db, draft, tweet_ids, i, len(segments))
+                    raise _platform_http_error("twitter", "create_thread_tweet", res)
+
+                data = res.json()
+                new_tweet_id = data.get("data", {}).get("id", "")
+                if not new_tweet_id:
+                    # API returned success but no tweet ID — treat as failure
+                    if tweet_ids:
+                        _handle_thread_partial_failure(db, draft, tweet_ids, i, len(segments))
+                    raise PublishError(
+                        "X returned an empty tweet ID during thread publishing.",
+                        code="platform_error",
+                    )
+
+                tweet_ids.append(new_tweet_id)
+                reply_to = new_tweet_id
+
+    except PublishError:
+        raise
+    except Exception as exc:
+        # Unexpected error mid-thread — handle partial failure
+        if tweet_ids:
+            _handle_thread_partial_failure(db, draft, tweet_ids, len(tweet_ids), len(segments))
+        raise PublishError(
+            "X thread publish failed. Try again later.",
+            code="platform_error",
+        ) from exc
+
+    return {"platform_post_id": tweet_ids[0], "thread_ids": tweet_ids}
+
+
+def _handle_thread_partial_failure(
+    db: Session,
+    draft: ContentDraft,
+    published_ids: list[str],
+    failed_at_index: int,
+    total_segments: int,
+) -> None:
+    """Store partial publish data and mark draft as failed."""
+    draft.status = "failed"
+    draft.publish_error = (
+        f"Thread partially published ({len(published_ids)} of {total_segments} tweets). "
+        f"Failed at segment {failed_at_index + 1}. "
+        f"Published tweet IDs: {', '.join(published_ids)}"
+    )
+    # Store the successfully published IDs in platform_media for recovery
+    platform_media = dict(draft.platform_media or {})
+    platform_media["partial_thread_ids"] = published_ids
+    platform_media["thread_failed_at_index"] = failed_at_index
+    draft.platform_media = platform_media
+    db.commit()
+    logger.warning(
+        f"Thread partial failure for draft {draft.id}: "
+        f"{len(published_ids)}/{total_segments} tweets published. "
+        f"IDs: {published_ids}"
+    )
 
 
 async def _upload_x_image(access_token: str, media: ContentDraftMedia) -> str:

@@ -265,6 +265,16 @@ async def twitter_callback(
 
         me = me_res.json().get("data", {})
 
+    # Preserve existing subscription_tier on reconnect
+    existing_conn = (
+        db.query(SocialConnection)
+        .filter_by(user_id=user_id, platform="twitter")
+        .first()
+    )
+    existing_tier = "free"
+    if existing_conn and existing_conn.connection_metadata:
+        existing_tier = existing_conn.connection_metadata.get("subscription_tier", "free")
+
     _upsert_connection(
         db,
         user_id=user_id,
@@ -275,8 +285,26 @@ async def twitter_callback(
         refresh_token=refresh_token,
         scopes=scopes,
         token_expires_at=token_expires_at,
-        metadata={"name": me.get("name", ""), "profile_image": me.get("profile_image_url", "")},
+        metadata={
+            "name": me.get("name", ""),
+            "profile_image": me.get("profile_image_url", ""),
+            "subscription_tier": existing_tier,
+        },
     )
+
+    # ── Auto-trigger Twitter content sync immediately after OAuth completes ──
+    # This fires in the background (Celery) — the user sees "Connected" right away.
+    try:
+        from app.services.twitter_service import queue_twitter_sync_task
+        queue_twitter_sync_task(user_id)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "twitter_callback: could not enqueue sync task for user_id=%s — "
+            "Celery may not be running. User can trigger sync manually.",
+            user_id,
+        )
+
     return _popup_response("twitter", "connected", username=me.get("username", ""))
 
 
@@ -481,13 +509,19 @@ def _connection_status_payload(conn: SocialConnection) -> dict:
         read_missing = []
     return {
         "platform": conn.platform,
-        "username": conn.platform_username,
+        # Canonical field names (aligned with PlatformStatusResponse). The legacy
+        # aliases below are retained for backward compatibility with older clients.
+        "platform_username": conn.platform_username,
         "connected_at": conn.created_at,
-        "last_synced": conn.last_synced_at,
+        "last_synced_at": conn.last_synced_at,
         "scopes": scopes,
         "missing_scopes": posting_missing,
+        "missing_posting_scopes": posting_missing,
+        "missing_read_scopes": read_missing,
         "posting_ready": not posting_missing,
         "read_sync_ready": not read_missing,
-        "missing_read_scopes": read_missing,
         "reconnect_required": bool(posting_missing),
+        # ── Legacy aliases (deprecated) ──
+        "username": conn.platform_username,
+        "last_synced": conn.last_synced_at,
     }
