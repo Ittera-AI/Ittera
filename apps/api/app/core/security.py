@@ -14,6 +14,10 @@ from cryptography.fernet import Fernet
 from app.config import settings
 
 
+class TokenDecryptionError(Exception):
+    """Raised when a stored token value cannot be decrypted."""
+
+
 def _get_fernet() -> Fernet:
     """Derives a 32-byte Fernet key from SECRET_KEY via SHA-256."""
     key = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
@@ -34,3 +38,18 @@ def decrypt_value(encrypted: str) -> str:
         return _get_fernet().decrypt(encrypted.encode()).decode()
     except Exception:
         return ""
+
+
+def decrypt_token(encrypted: str) -> str:
+    """
+    Decrypt a stored OAuth token before use in an API call.
+
+    Unlike decrypt_value, which returns "" on any failure, this raises
+    TokenDecryptionError when a non-empty stored value cannot be decrypted,
+    so callers can flag the connection as requiring reconnection rather than
+    using an unusable token.
+    """
+    plaintext = decrypt_value(encrypted)
+    if plaintext == "" and encrypted != "":
+        raise TokenDecryptionError("stored token could not be decrypted")
+    return plaintext
