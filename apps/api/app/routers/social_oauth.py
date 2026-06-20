@@ -15,7 +15,7 @@ import json
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -24,10 +24,12 @@ from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.core.security import encrypt_value
 from app.dependencies.auth import get_current_user, _decode_supabase_jwt, _decode_legacy_jwt, _fetch_supabase_user
 from app.dependencies.db import get_db
 from app.models.social_connection import SocialConnection
 from app.models.user import User
+from app.services.pkce_store import VerifierStoreError, put_verifier, take_verifier
 from app.services.publishing_state import (
     LINKEDIN_POSTING_SCOPES,
     LINKEDIN_READ_SCOPES,
@@ -59,8 +61,19 @@ async def _get_user_id_from_token(token: str) -> Tuple[Optional[str], str]:
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
+def _frontend_origin() -> str:
+    """Scheme://host[:port] derived from settings.FRONTEND_URL.
+
+    Used as the postMessage target origin so the OAuth popup posts its result
+    only to the configured frontend, never to a wildcard ("*") origin.
+    """
+    parsed = urlparse(settings.FRONTEND_URL)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
 def _popup_response(platform: str, status_str: str, username: str = "", error: str = "") -> HTMLResponse:
     """Returns an HTML page that postMessages to the opener and closes itself."""
+    target_origin = _frontend_origin()
     payload = json.dumps({
         "type": "ittera_oauth",
         "platform": platform,
@@ -74,7 +87,7 @@ def _popup_response(platform: str, status_str: str, username: str = "", error: s
 <body>
 <script>
   try {{
-    window.opener.postMessage({payload}, "*");
+    window.opener.postMessage({payload}, {json.dumps(target_origin)});
   }} catch(e) {{}}
   window.close();
 </script>
@@ -113,6 +126,18 @@ def _upsert_connection(
     metadata: dict = {},
     token_expires_at: datetime | None = None,
 ) -> SocialConnection:
+    # Encrypt tokens at rest only when a refresh token is present. This scopes
+    # encryption to the X confidential-client flow (offline.access yields a
+    # refresh token) while leaving the shared LinkedIn/Instagram flows — which
+    # persist no refresh token — storing plaintext, so their read sites that do
+    # not decrypt keep working (requirements 5.1, 5.2).
+    if refresh_token:
+        stored_access_token = encrypt_value(access_token)
+        stored_refresh_token = encrypt_value(refresh_token)
+    else:
+        stored_access_token = access_token
+        stored_refresh_token = refresh_token
+
     conn = (
         db.query(SocialConnection)
         .filter_by(user_id=user_id, platform=platform)
@@ -121,8 +146,8 @@ def _upsert_connection(
     if conn:
         conn.platform_user_id = platform_user_id
         conn.platform_username = platform_username
-        conn.access_token = access_token
-        conn.refresh_token = refresh_token
+        conn.access_token = stored_access_token
+        conn.refresh_token = stored_refresh_token
         conn.token_expires_at = token_expires_at
         conn.scopes = scopes
         conn.connection_metadata = metadata
@@ -134,8 +159,8 @@ def _upsert_connection(
             platform=platform,
             platform_user_id=platform_user_id,
             platform_username=platform_username,
-            access_token=access_token,
-            refresh_token=refresh_token,
+            access_token=stored_access_token,
+            refresh_token=stored_refresh_token,
             token_expires_at=token_expires_at,
             scopes=scopes,
             connection_metadata=metadata,
@@ -176,16 +201,27 @@ TWITTER_ME_URL = "https://api.twitter.com/2/users/me"
 TWITTER_SCOPES = "tweet.read users.read tweet.write media.write offline.access"
 
 
+def _x_token_auth() -> Optional[Tuple[str, str]]:
+    """Return HTTP Basic credentials when a client secret is configured.
+
+    When ``settings.TWITTER_CLIENT_SECRET`` is set, the X app is a confidential
+    client and every token-endpoint request authenticates via HTTP Basic auth
+    (``client_id:client_secret``). Returns ``None`` only when no secret is
+    configured (public-client fallback). Both the connect and refresh flows
+    obtain their client authentication from this single helper so they cannot
+    drift apart.
+    """
+    if settings.TWITTER_CLIENT_SECRET:
+        return (settings.TWITTER_CLIENT_ID, settings.TWITTER_CLIENT_SECRET)
+    return None
+
+
 def _pkce_pair():
     verifier = secrets.token_urlsafe(43)
     challenge = base64.urlsafe_b64encode(
         hashlib.sha256(verifier.encode()).digest()
     ).rstrip(b"=").decode()
     return verifier, challenge
-
-
-# In-memory PKCE verifier store (production: use Redis)
-_pkce_store: dict[str, str] = {}
 
 
 @router.get("/twitter/start")
@@ -203,7 +239,14 @@ async def twitter_start(
 
     verifier, challenge = _pkce_pair()
     state = _make_connect_state(user_id, "twitter")
-    _pkce_store[state] = verifier  # store verifier keyed by state
+    try:
+        put_verifier(state, verifier)  # store verifier keyed by state (TTL 10m)
+    except VerifierStoreError:
+        return _popup_response(
+            "twitter",
+            "error",
+            error="Could not reach the verifier store. Please try connecting again.",
+        )
 
     params = urlencode({
         "response_type": "code",
@@ -229,20 +272,38 @@ async def twitter_callback(
         return _popup_response("twitter", "error", error="Invalid OAuth state.")
 
     user_id = decoded["sub"]
-    verifier = _pkce_store.pop(state, None)
+    try:
+        verifier = take_verifier(state)
+    except VerifierStoreError:
+        return _popup_response(
+            "twitter",
+            "error",
+            error="Could not reach the verifier store. Please try connecting again.",
+        )
     if not verifier:
-        return _popup_response("twitter", "error", error="PKCE verifier not found.")
+        return _popup_response(
+            "twitter",
+            "error",
+            error="PKCE verifier is missing or expired. Please start the connection again.",
+        )
+
+    auth = _x_token_auth()
+    token_data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": settings.TWITTER_REDIRECT_URI,
+        "code_verifier": verifier,
+    }
+    # When Basic auth is used the client is identified by the Authorization
+    # header, so client_id must not also be sent in the form body.
+    if auth is None:
+        token_data["client_id"] = settings.TWITTER_CLIENT_ID
 
     async with httpx.AsyncClient(timeout=15) as client:
         token_res = await client.post(
             TWITTER_TOKEN_URL,
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": settings.TWITTER_REDIRECT_URI,
-                "client_id": settings.TWITTER_CLIENT_ID,
-                "code_verifier": verifier,
-            },
+            data=token_data,
+            auth=auth,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         if token_res.is_error:

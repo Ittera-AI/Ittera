@@ -21,8 +21,10 @@ from typing import Any
 import httpx
 from celery import Celery
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.datetime_helpers import utc_now
+from app.core.security import TokenDecryptionError, decrypt_token
 from app.models.post import Post
 from app.models.social_connection import SocialConnection
 from app.models.user import User
@@ -41,6 +43,15 @@ HTTP_TIMEOUT_SECONDS = 30
 
 # Twitter read scopes required for content sync
 TWITTER_READ_SCOPES = {"tweet.read", "users.read", "offline.access"}
+
+# ── Sync progress state constants ─────────────────────────────────────────────
+# Mirrors the linkedin_service layout, with an extra rate_limited state for the
+# distinct, non-silent rate-limit outcome surfaced during tweet sync.
+SYNC_STATUS_INITIATED = "initiated"
+SYNC_STATUS_IN_PROGRESS = "in_progress"
+SYNC_STATUS_COMPLETED = "completed"
+SYNC_STATUS_FAILED = "failed"
+SYNC_STATUS_RATE_LIMITED = "rate_limited"
 
 # ── Celery task dispatch helpers ──────────────────────────────────────────────
 
@@ -125,27 +136,38 @@ class TwitterSyncService:
             _update_sync_status(db, connection, "failed")
             return self._sync_unavailable(db, user, "Twitter user ID not found. Please reconnect.")
 
+        # Decrypt the stored access token before use; if it cannot be decrypted,
+        # flag the connection for reconnection and stop rather than using an
+        # unusable token (requirements 5.3, 5.6).
         try:
-            tweets = await self._fetch_tweets(connection.access_token, twitter_user_id)
+            access_token = decrypt_token(connection.access_token or "")
+        except TokenDecryptionError:
+            logger.warning("sync_posts: access token could not be decrypted user_id=%s", user.id)
+            _update_sync_progress(
+                db,
+                connection,
+                SYNC_STATUS_FAILED,
+                error="Twitter token could not be read. Please reconnect your Twitter account.",
+                reconnect_required=True,
+            )
+            return self._sync_unavailable(
+                db, user, "Twitter token could not be read. Please reconnect your Twitter account."
+            )
+
+        try:
+            tweets = await self._fetch_tweets(access_token, twitter_user_id)
+        except RateLimitInterruption as rl:
+            # Retain and persist the tweets fetched before the rate limit, then
+            # surface a distinct, non-silent rate-limited outcome (requirements
+            # 6.1, 6.2, 6.3, 6.5).
+            return self._sync_rate_limited(db, user, connection, rl.partial_tweets)
         except Exception as e:
             logger.exception("sync_posts: failed to fetch tweets user_id=%s", user.id)
             _update_sync_status(db, connection, "failed")
             return self._sync_unavailable(db, user, f"Failed to fetch tweets: {e}")
 
-        # Detect threads
-        threads = self.detect_threads(tweets)
-
-        # Map tweets to post dicts
-        posts_data = []
-        for tweet in tweets:
-            mapped = self.map_post(tweet)
-            if mapped is None:
-                continue
-            # Mark thread tweets
-            conv_id = tweet.get("conversation_id")
-            if conv_id and conv_id in threads and len(threads[conv_id]) > 1:
-                mapped["content_type"] = "thread"
-            posts_data.append(mapped)
+        # Map tweets to post dicts (tags thread members)
+        posts_data = self._build_posts_data(tweets)
 
         # Upsert posts
         synced = _upsert_posts(db, user, posts_data)
@@ -183,6 +205,17 @@ class TwitterSyncService:
         missing_read = missing_scopes(scopes, TWITTER_READ_SCOPES)
         connected = connection is not None and connection.is_active
 
+        # Extract structured sync progress from connection_metadata so the status
+        # endpoints surface sync_status, sync_error, and sync_started_at uniformly
+        # with LinkedIn (requirements 3.5, 3.7).
+        sync_progress = _get_sync_progress(connection)
+        sync_status = sync_progress.get("sync_status")
+        sync_error = sync_progress.get("sync_error")
+        sync_started_at_str = sync_progress.get("sync_started_at")
+        sync_started_at = (
+            datetime.fromisoformat(sync_started_at_str) if sync_started_at_str else None
+        )
+
         return PlatformStatus(
             connected=connected,
             platform_username=connection.platform_username if connection else None,
@@ -195,6 +228,9 @@ class TwitterSyncService:
             missing_read_scopes=missing_read,
             reconnect_required=connected and bool(missing_posting),
             message=_status_message(connected, missing_posting, missing_read),
+            sync_status=sync_status,
+            sync_error=sync_error,
+            sync_started_at=sync_started_at,
         )
 
     def map_post(self, raw: dict) -> dict | None:
@@ -232,6 +268,25 @@ class TwitterSyncService:
         """
         return _detect_threads(tweets)
 
+    def _build_posts_data(self, tweets: list[dict]) -> list[dict]:
+        """
+        Map a list of raw tweets to post dicts, tagging thread members.
+
+        Shared by the normal sync path and the rate-limit retention path so both
+        persist tweets identically.
+        """
+        threads = self.detect_threads(tweets)
+        posts_data: list[dict] = []
+        for tweet in tweets:
+            mapped = self.map_post(tweet)
+            if mapped is None:
+                continue
+            conv_id = tweet.get("conversation_id")
+            if conv_id and conv_id in threads and len(threads[conv_id]) > 1:
+                mapped["content_type"] = "thread"
+            posts_data.append(mapped)
+        return posts_data
+
     # ── Internal methods ──────────────────────────────────────────────────────
 
     async def _fetch_tweets(self, access_token: str, twitter_user_id: str) -> list[dict]:
@@ -261,8 +316,11 @@ class TwitterSyncService:
                 if response.status_code == 401:
                     raise TokenRefreshError("Twitter access token is invalid or expired.")
                 if response.status_code == 429:
-                    logger.warning("_fetch_tweets: rate limited (429)")
-                    break
+                    logger.warning(
+                        "_fetch_tweets: rate limited (429) after fetching %d tweets",
+                        len(all_tweets),
+                    )
+                    raise RateLimitInterruption(all_tweets[:MAX_RESULTS])
                 response.raise_for_status()
 
                 data = response.json()
@@ -276,6 +334,54 @@ class TwitterSyncService:
                     break
 
         return all_tweets[:MAX_RESULTS]
+
+    def _sync_rate_limited(
+        self,
+        db: Session,
+        user: User,
+        connection: SocialConnection,
+        partial_tweets: list[dict],
+    ) -> SyncResult:
+        """
+        Persist tweets fetched before a rate limit and report a distinct outcome.
+
+        Retains and upserts the partial tweets (requirements 6.1, 6.3), records
+        rate-limited sync progress with a descriptive message (requirement 6.2),
+        and returns a non-silent SyncResult that is distinct from an unqualified
+        success or an "unavailable" fallback (requirement 6.5).
+        """
+        posts_data = self._build_posts_data(partial_tweets)
+        synced = _upsert_posts(db, user, posts_data)
+        _update_last_synced(db, connection)
+
+        post_count = db.query(Post).filter(Post.user_id == user.id, Post.platform == "twitter").count()
+
+        message = (
+            "X rate limit reached during sync. "
+            f"Synced {synced} tweets fetched before the limit; try again later."
+        )
+        _update_sync_progress(
+            db,
+            connection,
+            SYNC_STATUS_RATE_LIMITED,
+            error=message,
+            posts_fetched=synced,
+        )
+
+        logger.warning(
+            "sync_posts: rate limited; retained %d tweets (total %d) user_id=%s",
+            synced,
+            post_count,
+            user.id,
+        )
+        return SyncResult(
+            synced_posts=synced,
+            total_posts=post_count,
+            last_synced_at=utc_now(),
+            message=message,
+            ready_for_analysis=post_count >= MIN_POSTS_FOR_ANALYSIS,
+            sync_path="oauth_api",
+        )
 
     def _sync_unavailable(self, db: Session, user: User, message: str) -> SyncResult:
         """Helper returning a SyncResult when sync is not possible."""
@@ -301,6 +407,20 @@ class TokenRefreshError(Exception):
     """Raised when token refresh fails."""
 
     pass
+
+
+class RateLimitInterruption(Exception):
+    """
+    Raised when the X API returns HTTP 429 during tweet retrieval.
+
+    Carries the tweets fetched before the rate limit was hit so the sync can
+    retain and persist partial results instead of failing silently
+    (requirements 6.1, 6.3).
+    """
+
+    def __init__(self, partial_tweets: list[dict]):
+        self.partial_tweets = partial_tweets
+        super().__init__("X rate limit reached during tweet retrieval.")
 
 
 # ── Tweet mapping function ────────────────────────────────────────────────────
@@ -477,6 +597,82 @@ def _update_sync_status(db: Session, connection: SocialConnection, status: str) 
     meta["sync_status_updated_at"] = utc_now().isoformat()
     connection.connection_metadata = meta
     db.commit()
+
+
+def _update_sync_progress(
+    db: Session,
+    connection: SocialConnection,
+    status: str,
+    *,
+    error: str | None = None,
+    posts_fetched: int | None = None,
+    reconnect_required: bool = False,
+) -> None:
+    """
+    Update structured sync progress in connection_metadata.
+
+    Stores sync state under the "sync_progress" key using the same layout the
+    LinkedIn sync service writes (requirement 3.6), so get_status and the status
+    endpoints can surface sync_status, sync_error, and sync_started_at uniformly.
+
+    Recognised statuses: "initiated", "in_progress", "completed", "failed",
+    "rate_limited". The rate_limited state behaves like a terminal outcome that
+    records a descriptive error while remaining distinct from "failed".
+
+    If persisting the progress fails, the change is rolled back so the previously
+    recorded sync_progress is left unchanged (requirement 3.4).
+    """
+    meta = dict(connection.connection_metadata or {})
+    now = utc_now()
+
+    progress = dict(meta.get("sync_progress", {}))
+    progress["sync_status"] = status
+
+    if status == SYNC_STATUS_INITIATED:
+        progress["sync_started_at"] = now.isoformat()
+        progress["sync_completed_at"] = None
+        progress["sync_error"] = None
+        progress["sync_posts_fetched"] = None
+        progress["reconnect_required"] = False
+    elif status == SYNC_STATUS_IN_PROGRESS:
+        # Keep sync_started_at from the initiated phase
+        progress["sync_error"] = None
+        progress["reconnect_required"] = False
+    elif status == SYNC_STATUS_COMPLETED:
+        progress["sync_completed_at"] = now.isoformat()
+        progress["sync_error"] = None
+        progress["reconnect_required"] = False
+        if posts_fetched is not None:
+            progress["sync_posts_fetched"] = posts_fetched
+    elif status in (SYNC_STATUS_FAILED, SYNC_STATUS_RATE_LIMITED):
+        progress["sync_completed_at"] = now.isoformat()
+        progress["sync_error"] = error
+        progress["reconnect_required"] = reconnect_required
+        if posts_fetched is not None:
+            progress["sync_posts_fetched"] = posts_fetched
+
+    meta["sync_progress"] = progress
+    connection.connection_metadata = meta
+    flag_modified(connection, "connection_metadata")
+    try:
+        db.commit()
+    except Exception:
+        # Leave the previously recorded progress untouched on persistence failure.
+        logger.exception("_update_sync_progress: failed to persist sync progress")
+        db.rollback()
+        raise
+
+
+def _get_sync_progress(connection: SocialConnection | None) -> dict:
+    """
+    Read current structured sync progress from connection_metadata.
+
+    Returns an empty dict if no progress has been recorded.
+    """
+    if connection is None:
+        return {}
+    meta = connection.connection_metadata or {}
+    return meta.get("sync_progress", {})
 
 
 def _connection(db: Session, user: User) -> SocialConnection | None:

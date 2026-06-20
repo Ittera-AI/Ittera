@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.linkedin_client import LinkedInClient
+from app.core.security import TokenDecryptionError, decrypt_token, encrypt_value
 from app.models.content_draft import ContentDraft, ContentDraftMedia
 from app.models.social_connection import SocialConnection
 from app.models.user import User
@@ -70,6 +71,36 @@ def _connection(db: Session, user: User, platform: str) -> SocialConnection | No
         )
         .first()
     )
+
+
+def _mark_reconnect_required(db: Session, conn: SocialConnection) -> None:
+    """Flag a connection as requiring reconnection.
+
+    Used when a stored token cannot be decrypted so the connection is not used
+    with an unusable token (requirement 5.6). Reassigns connection_metadata with
+    a new dict so SQLAlchemy detects the change, mirroring _upsert_connection.
+    """
+    meta = dict(conn.connection_metadata or {})
+    meta["reconnect_required"] = True
+    conn.connection_metadata = meta
+    db.commit()
+
+
+def _decrypt_x_access_token(db: Session, conn: SocialConnection) -> str:
+    """Decrypt the stored X access token before use in an API call.
+
+    On TokenDecryptionError, flags the connection for reconnection and raises a
+    PublishError rather than using the unusable value (requirements 5.3, 5.6).
+    """
+    try:
+        return decrypt_token(conn.access_token or "")
+    except TokenDecryptionError as exc:
+        _mark_reconnect_required(db, conn)
+        raise PublishError(
+            "X token could not be read. Reconnect X before publishing.",
+            code="token_expired",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        ) from exc
 
 
 async def _publish_linkedin(conn: SocialConnection, draft: ContentDraft) -> dict[str, Any]:
@@ -204,10 +235,11 @@ async def _publish_x(db: Session, conn: SocialConnection, draft: ContentDraft) -
         required |= X_MEDIA_SCOPES
     _require_scopes(conn, required, "X")
     await _refresh_x_token_if_needed(db, conn)
+    access_token = _decrypt_x_access_token(db, conn)
     try:
         media_ids = []
         for item in draft.media:
-            media_ids.append(await _upload_x_image(conn.access_token, item))
+            media_ids.append(await _upload_x_image(access_token, item))
         body: dict[str, Any] = {"text": (draft.content or "")[:content_limit.max_chars]}
         if media_ids:
             body["media"] = {"media_ids": media_ids}
@@ -218,7 +250,7 @@ async def _publish_x(db: Session, conn: SocialConnection, draft: ContentDraft) -
                 "https://api.x.com/2/tweets",
                 platform="twitter",
                 action="create_post",
-                headers={"Authorization": f"Bearer {conn.access_token}", "Content-Type": "application/json"},
+                headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
                 json=body,
             )
             if res.is_error:
@@ -245,6 +277,7 @@ async def _publish_x_thread(
     required = set(X_POSTING_SCOPES)
     _require_scopes(conn, required, "X")
     await _refresh_x_token_if_needed(db, conn)
+    access_token = _decrypt_x_access_token(db, conn)
 
     # Parse thread segments from draft content (stored as JSON array)
     try:
@@ -290,7 +323,7 @@ async def _publish_x_thread(
                     platform="twitter",
                     action="create_thread_tweet",
                     headers={
-                        "Authorization": f"Bearer {conn.access_token}",
+                        "Authorization": f"Bearer {access_token}",
                         "Content-Type": "application/json",
                     },
                     json=body,
@@ -411,15 +444,29 @@ async def _refresh_x_token_if_needed(db: Session, conn: SocialConnection) -> Non
     if expires_at > datetime.now(timezone.utc) + timedelta(minutes=5):
         return
 
+    # Decrypt the stored refresh token before use; flag reconnect on failure
+    # rather than sending an unusable value to the token endpoint (req 5.3, 5.6).
+    try:
+        refresh_token = decrypt_token(conn.refresh_token or "")
+    except TokenDecryptionError as exc:
+        _mark_reconnect_required(db, conn)
+        raise PublishError(
+            "X token could not be read. Reconnect X before publishing.",
+            code="token_expired",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        ) from exc
+
     data = {
         "grant_type": "refresh_token",
-        "refresh_token": conn.refresh_token,
+        "refresh_token": refresh_token,
         "client_id": settings.TWITTER_CLIENT_ID,
     }
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    auth = None
-    if settings.TWITTER_CLIENT_SECRET:
-        auth = (settings.TWITTER_CLIENT_ID, settings.TWITTER_CLIENT_SECRET)
+    # Share the confidential-client auth decision with the connect flow so the
+    # two cannot drift apart. Imported locally to avoid a router/service import cycle.
+    from app.routers.social_oauth import _x_token_auth
+
+    auth = _x_token_auth()
 
     async with httpx.AsyncClient(timeout=15) as client:
         res = await _request_with_retries(
@@ -435,8 +482,14 @@ async def _refresh_x_token_if_needed(db: Session, conn: SocialConnection) -> Non
     if res.is_error:
         raise PublishError("X token expired. Reconnect X before publishing.", code="token_expired", status_code=status.HTTP_401_UNAUTHORIZED)
     tokens = res.json()
-    conn.access_token = tokens.get("access_token") or conn.access_token
-    conn.refresh_token = tokens.get("refresh_token") or conn.refresh_token
+    # Re-encrypt rotated tokens at rest; leave existing ciphertext untouched when
+    # the endpoint returns no new value (requirements 5.1, 5.2).
+    new_access_token = tokens.get("access_token")
+    if new_access_token:
+        conn.access_token = encrypt_value(new_access_token)
+    new_refresh_token = tokens.get("refresh_token")
+    if new_refresh_token:
+        conn.refresh_token = encrypt_value(new_refresh_token)
     if tokens.get("scope"):
         conn.scopes = str(tokens["scope"]).split()
     if tokens.get("expires_in"):
