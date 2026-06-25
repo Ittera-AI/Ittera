@@ -53,7 +53,7 @@ from app.core.linkedin_client import (
     ScopeMissingError,
     TokenExpiredError,
 )
-from app.core.security import decrypt_value
+from app.core.security import decrypt_token_lenient, decrypt_value
 from app.db.datetime_helpers import utc_now
 from app.models.post import Post
 from app.models.social_connection import SocialConnection
@@ -129,7 +129,7 @@ class LinkedInSyncService:
             logger.warning("sync_posts: LinkedIn connection is disconnected user_id=%s", user.id)
             return self._sync_unavailable(db, user, "LinkedIn is disconnected. Reconnect before syncing.")
 
-        token = connection.access_token or ""
+        token = decrypt_token_lenient(connection.access_token or "")
 
         if token == "mock-linkedin-token":
             logger.warning("sync_posts: mock token cannot be used for real sync user_id=%s", user.id)
@@ -248,7 +248,7 @@ class LinkedInSyncService:
         On token expiry: preserves any already-fetched data and marks
         reconnect_required in sync progress (requirement 1.2).
         """
-        token = connection.access_token
+        token = decrypt_token_lenient(connection.access_token or "")
         member_urn = connection.platform_user_id
 
         # Normalise the member URN

@@ -52,6 +52,7 @@ class User(Base):
         order_by="UserContext.version",
     )
     persona_profile = relationship("PersonaProfile", back_populates="user", cascade="all, delete-orphan")
+    learned_insights = relationship("LearnedInsight", back_populates="user", cascade="all, delete-orphan")
     
     # Analytics relationships
     analytics_snapshots = relationship(

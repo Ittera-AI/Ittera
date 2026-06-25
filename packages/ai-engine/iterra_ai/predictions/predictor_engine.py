@@ -31,6 +31,7 @@ from iterra_ai.predictions.schemas import (
     PredictionMetrics,
 )
 from iterra_ai.predictions.prompts import build_predictor_prompt
+from iterra_ai.core.cost_tracker import CostTracker
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class PredictorEngine:
     """
     AI engine for predicting content performance metrics.
     
-    Uses Claude to analyze content and predict:
+    Uses the configured AIML LLM to analyze content and predict:
     - Likes, comments, shares, impressions
     - Engagement rate with confidence intervals
     - Feature importance (what drives performance)
@@ -60,6 +61,7 @@ class PredictorEngine:
         )
         self.model = model or os.getenv("AIML_MODEL", "gpt-4o-mini")
         self.max_tokens = 4096
+        self.cost_tracker = CostTracker()
         
     def _compute_content_hash(self, content: str, context: dict) -> str:
         """
@@ -104,6 +106,9 @@ class PredictorEngine:
                 "input_tokens": getattr(response.usage, "prompt_tokens", 0),
                 "output_tokens": getattr(response.usage, "completion_tokens", 0),
             }
+            self.cost_tracker.log(
+                "predictor", usage["input_tokens"], usage["output_tokens"]
+            )
             return content or "", usage
         except Exception as e:
             logger.error(f"LLM call failed: {e}")

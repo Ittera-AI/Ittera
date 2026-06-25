@@ -303,3 +303,119 @@ def send_post_review_email(email: str, name: str | None, draft_id: str, title: s
             server.send_message(message)
     except Exception:
         logger.exception("Failed to send scheduled post review email to %s", email)
+
+
+def send_weekly_insight_email(
+    email: str,
+    name: str | None,
+    platform_insights: list[dict],
+) -> None:
+    """
+    Email a weekly learning digest summarizing what Ittera learned per platform.
+
+    ``platform_insights`` is a list of per-platform dicts derived from the active
+    ``LearnedInsight`` rows, each shaped like::
+
+        {"platform": "linkedin", "summary": "...",
+         "why_wins": ["..."], "recommendations": ["..."],
+         "confidence": 0.8, "based_on_posts": 7}
+
+    Mirrors the smtplib/EmailMessage send pattern used by the other senders and
+    early-returns when mail is not configured or there is nothing to report.
+    """
+    if not _mail_is_configured():
+        return
+    if not platform_insights:
+        return
+
+    first = _first_name(name, email)
+    subject = "Your weekly Ittera learning digest"
+
+    # ── plain text ──────────────────────────────────────────────────────────
+    text_sections: list[str] = []
+    for pi in platform_insights:
+        platform = str(pi.get("platform") or "").strip() or "your channel"
+        lines = [f"{platform.upper()}"]
+        summary = (pi.get("summary") or "").strip()
+        if summary:
+            lines.append(summary)
+        wins = [str(w) for w in (pi.get("why_wins") or []) if str(w).strip()][:3]
+        if wins:
+            lines.append("What's working:")
+            lines.extend(f"  - {w}" for w in wins)
+        recs = [str(r) for r in (pi.get("recommendations") or []) if str(r).strip()][:3]
+        if recs:
+            lines.append("Do next:")
+            lines.extend(f"  - {r}" for r in recs)
+        text_sections.append("\n".join(lines))
+
+    text_body = (
+        f"Hey {first},\n\n"
+        "Here's what Ittera learned about your content this week.\n\n"
+        + "\n\n".join(text_sections)
+        + "\n\nKeep posting — every post sharpens the next one.\n"
+        "Open Ittera: https://ittera.in\n\n"
+        "— The Ittera team\n"
+    )
+
+    # ── html ────────────────────────────────────────────────────────────────
+    html_sections: list[str] = []
+    for pi in platform_insights:
+        platform = escape(str(pi.get("platform") or "").strip() or "your channel")
+        summary = escape((pi.get("summary") or "").strip())
+        wins = [escape(str(w)) for w in (pi.get("why_wins") or []) if str(w).strip()][:3]
+        recs = [escape(str(r)) for r in (pi.get("recommendations") or []) if str(r).strip()][:3]
+
+        win_html = ""
+        if wins:
+            items = "".join(f"<li style=\"margin:4px 0;\">{w}</li>" for w in wins)
+            win_html = (
+                "<p style=\"margin:14px 0 4px;font-size:11px;letter-spacing:.12em;"
+                "text-transform:uppercase;color:#7A8B76;\">What's working</p>"
+                f"<ul style=\"margin:0;padding-left:18px;color:#5F5A54;font-size:14px;line-height:1.6;\">{items}</ul>"
+            )
+        rec_html = ""
+        if recs:
+            items = "".join(f"<li style=\"margin:4px 0;\">{r}</li>" for r in recs)
+            rec_html = (
+                "<p style=\"margin:14px 0 4px;font-size:11px;letter-spacing:.12em;"
+                "text-transform:uppercase;color:#8B6F52;\">Do next</p>"
+                f"<ul style=\"margin:0;padding-left:18px;color:#5F5A54;font-size:14px;line-height:1.6;\">{items}</ul>"
+            )
+        summary_html = (
+            f"<p style=\"margin:8px 0 0;color:#2B241E;font-size:15px;line-height:1.7;\">{summary}</p>"
+            if summary
+            else ""
+        )
+        html_sections.append(
+            "<div style=\"background:#F8F4EE;border:1px solid #EDE5D8;border-radius:16px;"
+            "padding:20px 22px;margin-top:16px;\">"
+            f"<p style=\"margin:0;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#A38A70;\">{platform}</p>"
+            f"{summary_html}{win_html}{rec_html}"
+            "</div>"
+        )
+
+    html_body = f"""<!doctype html>
+<html><body style="font-family:Arial,Helvetica,sans-serif;background:#F4EFE8;padding:24px;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #E8E0D6;border-radius:20px;padding:28px;">
+    <p style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#A38A70;">Weekly learning digest</p>
+    <h1 style="font-family:Georgia,serif;color:#1A1614;">Hey {escape(first)}, here's what we learned.</h1>
+    {''.join(html_sections)}
+    <p style="margin-top:24px;"><a href="https://ittera.in" style="display:inline-block;background:#1A1614;color:#F4EFE8;text-decoration:none;border-radius:999px;padding:12px 20px;">Open Ittera &#8594;</a></p>
+  </div>
+</body></html>"""
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = settings.MAIL_FROM
+    message["To"] = email
+    if settings.REPLY_TO_EMAIL:
+        message["Reply-To"] = settings.REPLY_TO_EMAIL
+    message.set_content(text_body)
+    message.add_alternative(html_body, subtype="html")
+    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as server:
+        if settings.SMTP_USE_TLS:
+            server.starttls()
+        if settings.SMTP_USERNAME:
+            server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD.replace(" ", ""))
+        server.send_message(message)

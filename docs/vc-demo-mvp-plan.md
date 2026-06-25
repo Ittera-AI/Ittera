@@ -218,7 +218,7 @@ Use deterministic mock output **only** when API keys fail or scrape errors. Demo
 **Pre-demo checklist:**
 
 - Pre-approve presenter email in admin
-- Set `OPENAI_API_KEY`, `SUPABASE_JWT_SECRET`, `TWITTER_*` OAuth vars
+- Set `AIML_API_KEY` (active LLM provider), `SUPABASE_JWT_SECRET`, `TWITTER_*` OAuth vars
 - Seed `optimal_post_times.linkedin: "17:00"` in permanent context if promotion not built
 - Rehearse X-only if LinkedIn/Instagram scrape not ready
 
@@ -592,9 +592,13 @@ See also [features/maturity-matrix.md](features/maturity-matrix.md) for CI-focus
 
 ```bash
 SUPABASE_JWT_SECRET=
+SUPABASE_ANON_KEY=                 # backend Supabase REST fallback (apikey header)
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-OPENAI_API_KEY=
+# LLM: the ACTIVE provider is AIML (OpenAI-compatible), NOT OpenAI/Anthropic directly.
+AIML_API_KEY=
+AIML_BASE_URL=https://api.aimlapi.com/v1
+AIML_MODEL=gpt-4o-mini
 DATABASE_URL=
 SECRET_KEY=
 ```
@@ -621,7 +625,10 @@ GOOGLE_DRIVE_REDIRECT_URI=
 ### Optional LLM paths
 
 ```bash
+# Anthropic is latent/optional only — engines default to the AIML client above.
+# (get_anthropic_client in iterra_ai/core/client.py is currently unused.)
 ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-sonnet-4-5
 USE_ITERRA_AI_CALENDAR=true
 ADMIN_EMAILS=you@example.com,cofounder@example.com
 ```

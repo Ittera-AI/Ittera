@@ -33,6 +33,64 @@ def _session():
     return sessionmaker(autocommit=False, autoflush=False, bind=engine)()
 
 
+def _bridge_and_enqueue_learning_loop(db, user, draft, publish_result) -> None:
+    """
+    Bridge a freshly-published draft to a Post and enqueue the learning loop.
+
+    Best-effort and isolated from the publish flow: any failure here is logged and
+    swallowed so it can never break publishing (Requirement 1.8). The bridge commits
+    its own Post/linkage, so if the enqueue ultimately fails the Post and
+    ``draft.post_id`` linkage are retained.
+
+    Imports are local to avoid import cycles and to keep publishing resilient if the
+    bridge/orchestrator modules can't be imported in this context (Requirement 1.6).
+    """
+    try:
+        from app.services.post_bridge_service import bridge_draft_to_post
+
+        post = bridge_draft_to_post(db, user, draft, publish_result)
+        if post is None:
+            return
+
+        try:
+            from workers.celery.tasks.learning_loop import on_post_published
+        except ImportError:
+            logger.warning(
+                "learning_loop task not importable; skipping enqueue for post_id=%s",
+                post.id,
+            )
+            return
+
+        if not _enqueue_with_retry(on_post_published, post.id):
+            logger.error(
+                "Failed to enqueue on_post_published for post_id=%s after retries; "
+                "Post and draft linkage retained",
+                post.id,
+            )
+    except Exception:
+        logger.exception(
+            "Learning-loop bridge/enqueue failed for draft_id=%s",
+            getattr(draft, "id", None),
+        )
+
+
+def _enqueue_with_retry(task, post_id: str, attempts: int = 3) -> bool:
+    """
+    Enqueue a Celery task by post id, retrying transient broker failures.
+
+    Returns ``True`` on a successful enqueue, ``False`` if all attempts fail.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            task.delay(post_id)
+            return True
+        except Exception:
+            logger.warning(
+                "Enqueue attempt %d/%d failed for post_id=%s", attempt, attempts, post_id
+            )
+    return False
+
+
 @celery_app.task(name="workers.celery.tasks.publisher.process_publishing_queue", bind=True)
 def process_publishing_queue(self) -> dict:
     from app.models.content_draft import ContentDraft
@@ -119,6 +177,13 @@ def process_publishing_queue(self) -> dict:
                 draft.published_at = now
                 draft.publish_error = None
                 result["published"] += 1
+                db.commit()
+
+                # Self-learning loop wiring: bridge the published draft to a
+                # learnable Post and enqueue the orchestrator. Runs only after a
+                # successful publish + commit and never raises out of here so a
+                # bridge/enqueue failure can't fail the publish (Requirements 1.6, 1.8).
+                _bridge_and_enqueue_learning_loop(db, user, draft, published)
             except (PublishingValidationError, PublishError, Exception) as exc:
                 error_category = getattr(exc, "code", "unknown_error")
                 error_detail = getattr(exc, "detail", "An unexpected error occurred during publishing.")

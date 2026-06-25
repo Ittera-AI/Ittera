@@ -20,12 +20,17 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from pydantic import BaseModel
 from sqlalchemy import create_engine, distinct
 from sqlalchemy.orm import sessionmaker
 
 from workers.celery.app import celery_app
+
+if TYPE_CHECKING:  # pragma: no cover - typing-only imports, resolved lazily at runtime
+    from app.models.post import Post
+    from app.models.social_connection import SocialConnection
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +39,219 @@ SYNC_BATCH_SIZE = 10  # Posts to sync per API batch
 MAX_POSTS_PER_USER = 50  # Max posts to sync per run (prioritize recent)
 SYNC_CUTOFF_DAYS = 90  # Only sync posts from last 90 days
 RATE_LIMIT_PAUSE = 60  # Seconds to pause on rate limit
+
+
+# ── Platform-agnostic metrics layer (design B.4) ──────────────────────────────
+
+
+class PostMetrics(BaseModel):
+    """
+    Normalized raw metrics pulled from a platform for a single post.
+
+    ``impressions`` is ``None`` when the platform did not report it. Callers must
+    distinguish ``None`` (not reported -> preserve prior value) from ``0``
+    (reported as zero), so the engagement-rate math never hardcodes a denominator.
+    """
+
+    likes: int = 0
+    comments: int = 0
+    shares: int = 0
+    impressions: int | None = None  # None = platform did not report it
+
+
+@runtime_checkable
+class MetricsProvider(Protocol):
+    """
+    Protocol for a platform-specific metrics fetcher.
+
+    Implementations route a post to the correct platform API and return a
+    :class:`PostMetrics`, or ``None`` when metrics could not be retrieved.
+    """
+
+    platform: str
+
+    async def fetch(
+        self, conn: "SocialConnection", post: "Post"
+    ) -> PostMetrics | None: ...
+
+
+class LinkedInMetricsProvider:
+    """
+    Metrics provider for LinkedIn. Wraps the existing
+    ``LinkedInClient.get_social_actions`` call.
+
+    LinkedIn's social-actions endpoint reports likes/comments/shares but usually
+    omits impressions, so impressions are returned as ``None`` (never hardcoded to
+    ``0``) and the prior stored value is preserved by the caller.
+    """
+
+    platform = "linkedin"
+
+    async def fetch(
+        self, conn: "SocialConnection", post: "Post"
+    ) -> PostMetrics | None:
+        from app.core.linkedin_client import LinkedInClient
+        from app.core.security import decrypt_token_lenient
+
+        client = LinkedInClient(access_token=decrypt_token_lenient(conn.access_token or ""))
+        try:
+            raw_result = await client.get_social_actions(post.platform_post_id)
+        finally:
+            await client.close()
+
+        if not raw_result:
+            return None
+
+        raw = raw_result.get("raw", {}) or {}
+        likes = (
+            raw.get("likesSummary", {}).get("totalLikes", 0)
+            if raw
+            else raw_result.get("likes", 0)
+        ) or 0
+        comments = (
+            raw.get("commentsSummary", {}).get("totalComments", 0)
+            if raw
+            else raw_result.get("comments", 0)
+        ) or 0
+        shares = (
+            raw.get("sharesSummary", {}).get("totalShares", 0)
+            if raw
+            else raw_result.get("shares", 0)
+        ) or 0
+
+        # LinkedIn does not report impressions here -> leave as None.
+        return PostMetrics(likes=likes, comments=comments, shares=shares, impressions=None)
+
+
+class TwitterMetricsProvider:
+    """
+    Metrics provider for Twitter/X. Reads engagement from the v2 tweet lookup
+    endpoint (``GET /2/tweets/:id?tweet.fields=public_metrics``).
+
+    Maps ``public_metrics`` to the normalized shape:
+      - likes  -> like_count
+      - shares -> retweet_count + quote_count
+      - comments -> reply_count
+      - impressions -> impression_count (None when not present)
+    """
+
+    platform = "twitter"
+
+    TWEET_LOOKUP_URL = "https://api.twitter.com/2/tweets/{tweet_id}"
+    TWEET_FIELDS = "public_metrics,non_public_metrics"
+
+    async def fetch(
+        self, conn: "SocialConnection", post: "Post"
+    ) -> PostMetrics | None:
+        import httpx
+
+        from app.core.security import TokenDecryptionError, decrypt_token
+
+        try:
+            access_token = decrypt_token(conn.access_token or "")
+        except TokenDecryptionError:
+            logger.warning(
+                "TwitterMetricsProvider: access token could not be decrypted for post %s",
+                getattr(post, "id", "?"),
+            )
+            return None
+
+        url = self.TWEET_LOOKUP_URL.format(tweet_id=post.platform_post_id)
+        headers = {"Authorization": f"Bearer {access_token}"}
+        params = {"tweet.fields": self.TWEET_FIELDS}
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(url, headers=headers, params=params)
+            # non_public_metrics requires an elevated API tier and tweet ownership.
+            # If the app's access level rejects it (400/403), degrade to public-only
+            # metrics rather than failing the post entirely.
+            if (
+                response.status_code in (400, 403)
+                and "non_public_metrics" in params["tweet.fields"]
+            ):
+                logger.info(
+                    "TwitterMetricsProvider: non_public_metrics unavailable (%s) for "
+                    "tweet %s; retrying with public_metrics only",
+                    response.status_code,
+                    post.platform_post_id,
+                )
+                params = {"tweet.fields": "public_metrics"}
+                response = await client.get(url, headers=headers, params=params)
+            # A deleted/unavailable tweet (404) or a rate-limit (429) should skip this
+            # one post instead of aborting the whole sync batch.
+            if response.status_code in (404, 429):
+                logger.warning(
+                    "TwitterMetricsProvider: tweet %s returned %s; skipping",
+                    post.platform_post_id,
+                    response.status_code,
+                )
+                return None
+            response.raise_for_status()
+            payload = response.json()
+
+        data = (payload or {}).get("data") or {}
+        public = data.get("public_metrics", {}) or {}
+        non_public = data.get("non_public_metrics", {}) or {}
+        if not public and not non_public:
+            return None
+
+        likes = public.get("like_count", 0) or 0
+        comments = public.get("reply_count", 0) or 0
+        shares = (public.get("retweet_count", 0) or 0) + (public.get("quote_count", 0) or 0)
+
+        # impression_count lives in public_metrics (v2) or non_public_metrics.
+        impressions = public.get("impression_count")
+        if impressions is None:
+            impressions = non_public.get("impression_count")
+
+        return PostMetrics(
+            likes=likes,
+            comments=comments,
+            shares=shares,
+            impressions=impressions,
+        )
+
+
+# Registry keyed by platform; consumed by the sync task to route per-post fetches.
+PROVIDERS: dict[str, MetricsProvider] = {
+    p.platform: p for p in (LinkedInMetricsProvider(), TwitterMetricsProvider())
+}
+
+
+def compute_engagement_rate(m: PostMetrics, followers: int | None) -> float:
+    """
+    Compute a platform-correct engagement rate.
+
+    Denominator selection (design B.4):
+      - the reported impressions value when it is greater than 0, otherwise
+      - the follower/reach proxy when available, otherwise
+      - no denominator -> an engagement rate of 0.0.
+
+    The result is always a finite value in the closed interval [0.0, 1.0]: it is
+    never NaN, infinite, negative, or greater than 1.0 for any combination of metric
+    values and denominator (requirement 7.1). The upper bound matters because a small
+    follower/reach proxy (or a tiny impressions count) can be smaller than the
+    interaction count, which would otherwise yield a nonsensical >100% rate.
+    """
+    interactions = (m.likes or 0) + (m.comments or 0) + (m.shares or 0)
+    if interactions < 0:
+        interactions = 0
+
+    # Prefer reported impressions; fall back to the follower/reach proxy.
+    denom = m.impressions if (m.impressions and m.impressions > 0) else followers
+    if not denom or denom <= 0:
+        return 0.0
+
+    rate = round(interactions / denom, 4)
+
+    # Defensive guard: never emit NaN, +/-inf, or a negative value.
+    if rate != rate or rate in (float("inf"), float("-inf")) or rate < 0.0:
+        return 0.0
+    # Upper bound: an engagement rate is a fraction of its denominator, so clamp to
+    # 1.0 when interactions exceed the chosen denominator.
+    if rate > 1.0:
+        return 1.0
+    return rate
 
 
 @dataclass
@@ -200,7 +418,12 @@ def _sync_user_posts(
     posts: list,
 ) -> SyncResult:
     """
-    Sync posts for a single user.
+    Sync posts for a single user across any supported platform.
+
+    The per-post fetch is routed through the :data:`PROVIDERS` registry keyed by
+    ``post.platform`` (see :func:`_sync_single_post`). Each post's social
+    connection is resolved by platform and reused across posts of the same
+    platform within this run.
 
     Args:
         db: Database session
@@ -211,7 +434,6 @@ def _sync_user_posts(
         SyncResult for this user
     """
     from app.core.linkedin_client import (
-        LinkedInClient,
         LinkedInClientError,
         RateLimitError,
         TokenExpiredError,
@@ -220,38 +442,59 @@ def _sync_user_posts(
 
     result = SyncResult()
 
-    # Get user's LinkedIn connection
-    connection = (
-        db.query(SocialConnection)
-        .filter(
-            SocialConnection.user_id == user_id,
-            SocialConnection.platform == "linkedin",
-            SocialConnection.is_active == True,
-        )
-        .first()
-    )
+    # Cache of platform -> active SocialConnection (or None when absent), so we
+    # resolve each platform's connection at most once per run.
+    connections: dict[str, "SocialConnection | None"] = {}
 
-    if not connection or not connection.access_token:
-        logger.debug("No LinkedIn connection for user %s, skipping %d posts", user_id, len(posts))
-        return result
+    def _get_connection(platform: str) -> "SocialConnection | None":
+        if platform not in connections:
+            connections[platform] = (
+                db.query(SocialConnection)
+                .filter(
+                    SocialConnection.user_id == user_id,
+                    SocialConnection.platform == platform,
+                    SocialConnection.is_active == True,
+                )
+                .first()
+            )
+        return connections[platform]
 
-    # Skip mock/cookie tokens
-    if connection.access_token in ("mock-linkedin-token", "linkedin-cookie-auth"):
-        logger.debug("Skipping mock/cookie connection for user %s", user_id)
-        return result
-
-    # Initialize client
-    client = LinkedInClient(access_token=connection.access_token)
-
-    # Process posts in batches
+    # Process posts, routing each through the provider for its platform.
     for post in posts:
+        provider = PROVIDERS.get(post.platform)
+
+        # Resolve the connection only for platforms we can actually sync; an
+        # unsupported platform still flows into _sync_single_post (conn=None) so
+        # the unsupported-platform error is recorded there.
+        connection = _get_connection(post.platform) if provider is not None else None
+
+        if provider is not None:
+            if not connection or not connection.access_token:
+                logger.debug(
+                    "No active %s connection for user %s, skipping post %s",
+                    post.platform,
+                    user_id,
+                    post.id,
+                )
+                continue
+
+            # Skip mock/cookie tokens
+            if connection.access_token in ("mock-linkedin-token", "linkedin-cookie-auth"):
+                logger.debug("Skipping mock/cookie connection for user %s", user_id)
+                continue
+
         try:
-            sync_success = _sync_single_post(client, post)
+            sync_success = _sync_single_post(db, connection, post)
 
             if sync_success:
                 result.posts_checked += 1
-                # Check if actually updated
-                if post.synced_at and (datetime.now(timezone.utc) - post.synced_at).seconds < 60:
+                # Check if actually updated. synced_at is a naive DateTime column,
+                # so normalize to aware-UTC before subtracting to avoid an
+                # offset-naive/aware TypeError once the row is reloaded from Postgres.
+                synced_at = post.synced_at
+                if synced_at is not None and synced_at.tzinfo is None:
+                    synced_at = synced_at.replace(tzinfo=timezone.utc)
+                if synced_at and (datetime.now(timezone.utc) - synced_at).total_seconds() < 60:
                     result.posts_updated += 1
                 else:
                     result.posts_unchanged += 1
@@ -266,66 +509,109 @@ def _sync_user_posts(
         except TokenExpiredError as e:
             logger.warning("Token expired for user %s: %s", user_id, e)
             # Mark connection for refresh
-            connection.connection_metadata = {
-                **(connection.connection_metadata or {}),
-                "token_expired": True,
-                "token_error_at": datetime.now(timezone.utc).isoformat(),
-            }
+            if connection is not None:
+                connection.connection_metadata = {
+                    **(connection.connection_metadata or {}),
+                    "token_expired": True,
+                    "token_error_at": datetime.now(timezone.utc).isoformat(),
+                }
             result.errors += 1
             break
 
         except LinkedInClientError as e:
-            logger.warning("LinkedIn API error for post %s: %s", post.id, e)
+            logger.warning("Platform API error for post %s: %s", post.id, e)
             result.errors += 1
 
         except Exception as e:
             logger.exception("Unexpected error syncing post %s: %s", post.id, e)
             result.errors += 1
 
-    # Close client
-    asyncio.run(client.close())
-
     return result
 
 
-def _sync_single_post(client, post) -> bool:
+def _sync_single_post(db, conn, post) -> bool:
     """
-    Sync metrics for a single post.
+    Sync metrics for a single post by routing through the provider that matches
+    the post's platform.
+
+    Provider selection (requirement 7.5): the provider is looked up in
+    :data:`PROVIDERS` by ``post.platform``. When no provider matches
+    (requirement 7.6), metrics retrieval is skipped, an unsupported-platform
+    error is recorded, and the post's existing metric values are left unchanged.
 
     Args:
-        client: LinkedInClient instance
+        db: Database session (used to record the unsupported-platform error).
+        conn: SocialConnection for the post's platform (``None`` when the
+            platform is unsupported).
         post: Post model instance
 
     Returns:
-        True if successful, False otherwise
+        True if metrics were retrieved and applied, False otherwise (including
+        the unsupported-platform case, which is counted as an error by the
+        caller).
     """
+    provider = PROVIDERS.get(post.platform)
+    if provider is None:
+        # Requirement 7.6: unsupported platform -> skip retrieval, record an
+        # error, and leave the post's existing metric values unchanged.
+        _record_unsupported_platform(db, post)
+        return False
+
+    from app.core.linkedin_client import (
+        LinkedInClientError,
+        RateLimitError,
+        TokenExpiredError,
+    )
+
     try:
-        # Fetch metrics
-        metrics = _fetch_post_metrics(client, post.platform_post_id)
+        # Fetch metrics via the platform-specific provider.
+        metrics = _fetch_post_metrics(provider, conn, post)
+    except (RateLimitError, TokenExpiredError, LinkedInClientError):
+        # Let the caller handle platform control-flow errors (rate limit /
+        # token expiry) so it can pause or mark the connection for refresh.
+        raise
+    except Exception as e:
+        logger.exception("Error fetching metrics for post %s: %s", post.id, e)
+        return False
 
-        if not metrics:
-            return False
+    if metrics is None:
+        return False
 
+    try:
         # Check if metrics changed
         changed = _metrics_changed(post, metrics)
 
         if changed:
             # Update post
-            post.likes = metrics.get("likes", post.likes) or 0
-            post.comments = metrics.get("comments", post.comments) or 0
-            post.shares = metrics.get("shares", post.shares) or 0
-            post.impressions = metrics.get("impressions", post.impressions) or 0
+            post.likes = metrics.likes or 0
+            post.comments = metrics.comments or 0
+            post.shares = metrics.shares or 0
 
-            # Recalculate engagement rate
-            if post.impressions > 0:
-                total_engagement = (post.likes or 0) + (post.comments or 0) + (post.shares or 0)
-                post.engagement_rate = round(total_engagement / post.impressions, 4)
+            # Impressions: write ONLY when the provider actually reported a value.
+            # A None impressions value means "not reported" -> preserve the prior
+            # stored value instead of overwriting it with zero (requirements 7.3, 7.4).
+            if metrics.impressions is not None:
+                post.impressions = metrics.impressions
+
+            # Recompute engagement rate via the platform-agnostic helper. Only
+            # update when a positive denominator exists, otherwise preserve the
+            # prior engagement rate rather than zeroing a meaningful value.
+            current_impressions = post.impressions if post.impressions and post.impressions > 0 else None
+            post_metrics = PostMetrics(
+                likes=post.likes or 0,
+                comments=post.comments or 0,
+                shares=post.shares or 0,
+                impressions=current_impressions,
+            )
+            if current_impressions:
+                post.engagement_rate = compute_engagement_rate(post_metrics, followers=None)
 
             post.synced_at = datetime.now(timezone.utc)
 
             logger.debug(
-                "Updated post %s: likes=%d, comments=%d, shares=%d, engagement=%.4f",
+                "Updated post %s (%s): likes=%d, comments=%d, shares=%d, engagement=%.4f",
                 post.id,
+                post.platform,
                 post.likes,
                 post.comments,
                 post.shares,
@@ -338,63 +624,76 @@ def _sync_single_post(client, post) -> bool:
         return True
 
     except Exception as e:
-        logger.exception("Error syncing post %s: %s", post.id, e)
+        logger.exception("Error updating post %s: %s", post.id, e)
         return False
 
 
-def _metrics_changed(post, metrics: dict) -> bool:
-    """Check if post metrics have changed."""
+def _metrics_changed(post, metrics: PostMetrics) -> bool:
+    """Check if post metrics have changed beyond the significance threshold."""
     threshold = 5  # Minimum change to consider significant
 
-    like_diff = abs((metrics.get("likes") or 0) - (post.likes or 0))
-    comment_diff = abs((metrics.get("comments") or 0) - (post.comments or 0))
-    share_diff = abs((metrics.get("shares") or 0) - (post.shares or 0))
+    like_diff = abs((metrics.likes or 0) - (post.likes or 0))
+    comment_diff = abs((metrics.comments or 0) - (post.comments or 0))
+    share_diff = abs((metrics.shares or 0) - (post.shares or 0))
 
     return like_diff >= threshold or comment_diff >= threshold or share_diff >= threshold
 
 
-def _fetch_post_metrics(client, platform_post_id: str) -> dict | None:
+def _fetch_post_metrics(provider: MetricsProvider, conn, post) -> PostMetrics | None:
     """
-    Fetch metrics for a specific post from LinkedIn API.
+    Fetch normalized metrics for a post through its platform provider.
+
+    Runs the provider's async ``fetch`` in a fresh event loop (Celery workers
+    run synchronously). Platform control-flow errors (rate limit / token
+    expiry) are allowed to propagate so the caller can react.
 
     Args:
-        client: LinkedInClient instance
-        platform_post_id: LinkedIn post URN
+        provider: The MetricsProvider matching the post's platform.
+        conn: SocialConnection providing platform credentials.
+        post: Post model instance.
 
     Returns:
-        Dict with metrics or None if failed
+        A :class:`PostMetrics` instance, or ``None`` when metrics could not be
+        retrieved.
     """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        # Run async call in sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(
-                client.get_social_actions(platform_post_id)
+        return loop.run_until_complete(provider.fetch(conn, post))
+    finally:
+        loop.close()
+
+
+def _record_unsupported_platform(db, post) -> None:
+    """
+    Record an unsupported-platform error for a post whose platform has no
+    registered :class:`MetricsProvider` (requirement 7.6).
+
+    Retrieval is skipped by the caller and the post's existing metric values are
+    left unchanged. The event is added to the session and persisted by the
+    caller's commit; recording is best-effort and must never abort the sync.
+    """
+    logger.warning(
+        "Unsupported platform '%s' for post %s; skipping metrics retrieval and "
+        "leaving existing metrics unchanged",
+        post.platform,
+        post.id,
+    )
+    try:
+        from app.models.analytics_snapshot import AnalyticsEvent
+
+        db.add(
+            AnalyticsEvent(
+                user_id=post.user_id,
+                event_type="metrics_sync_unsupported",
+                post_id=post.id,
+                metrics={"platform": post.platform, "reason": "unsupported_platform"},
             )
-        finally:
-            loop.close()
-
-        if not result:
-            return None
-
-        # Parse LinkedIn social actions response
-        raw = result.get("raw", {})
-
-        likes = raw.get("likesSummary", {}).get("totalLikes", 0) if raw else result.get("likes", 0)
-        comments = raw.get("commentsSummary", {}).get("totalComments", 0) if raw else result.get("comments", 0)
-        shares = raw.get("sharesSummary", {}).get("totalShares", 0) if raw else result.get("shares", 0)
-
-        return {
-            "likes": likes,
-            "comments": comments,
-            "shares": shares,
-            "impressions": 0,  # LinkedIn may not provide this directly
-        }
-
-    except Exception as e:
-        logger.warning("Failed to fetch metrics for post %s: %s", platform_post_id, e)
-        return None
+        )
+    except Exception:  # pragma: no cover - defensive: error recording must not break sync
+        logger.exception(
+            "Failed to record unsupported-platform event for post %s", post.id
+        )
 
 
 @celery_app.task(

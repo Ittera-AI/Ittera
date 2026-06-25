@@ -4,7 +4,7 @@ EngagementCoach — AI-powered post analysis for engagement optimization.
 Production-grade implementation with:
   - Sophisticated prompt engineering (few-shot, rubric-based)
   - Robust error handling with graceful degradation
-  - Multi-provider LLM support (Anthropic Claude primary)
+  - LLM access via the shared BaseEngine client (AIML OpenAI-compatible gateway)
   - Token usage tracking and cost optimization
   - Response validation and repair
 """
@@ -39,7 +39,7 @@ class EngagementCoach(BaseEngine[CoachInput, CoachOutput]):
     Production-grade AI coach for social media post analysis.
 
     Features:
-        - Uses Anthropic Claude 3.5 Sonnet for high-quality analysis
+        - Uses the configured AIML model (default gpt-4o-mini) for analysis
         - Sophisticated prompt engineering with few-shot examples
         - Robust JSON parsing with extraction fallback
         - Heuristic fallback when API unavailable
@@ -64,7 +64,7 @@ class EngagementCoach(BaseEngine[CoachInput, CoachOutput]):
         Initialize the EngagementCoach.
 
         Args:
-            model: LLM model to use (defaults to Claude 3.5 Sonnet)
+            model: LLM model to use (defaults to DEFAULT_MODEL, gpt-4o-mini)
             use_v2_prompts: Use advanced V2 prompts with few-shot examples
         """
         super().__init__()

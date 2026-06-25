@@ -441,7 +441,77 @@ async def publish_now(db: Session, user: User, draft_id: str) -> dict:
     draft.publish_error = None
     draft.updated_at = published_at
     db.commit()
+
+    # Self-learning loop wiring: bridge the published draft to a learnable Post and
+    # enqueue the orchestrator. Runs only after a successful publish + commit and
+    # never raises out of here — publishing must succeed regardless of the outcome
+    # (Requirements 1.6, 1.8).
+    _bridge_and_enqueue_learning_loop(db, user, draft, result)
+
     return {"platform_post_id": draft.platform_post_id, "published_at": published_at}
+
+
+def _bridge_and_enqueue_learning_loop(
+    db: Session, user: User, draft: ContentDraft, publish_result: dict
+) -> None:
+    """
+    Bridge a freshly-published draft to a Post and enqueue the learning loop.
+
+    Best-effort and isolated from the publish flow: any failure here is logged and
+    swallowed so it can never break publishing (Requirement 1.8). The bridge commits
+    its own Post/linkage, so if the enqueue ultimately fails the Post and
+    ``draft.post_id`` linkage are retained.
+
+    Imports the bridge service and the Celery task locally to avoid import cycles and
+    to keep the API importable when the worker/celery stack isn't available in this
+    context (Requirement 1.6 guard).
+    """
+    try:
+        from app.services.post_bridge_service import bridge_draft_to_post
+
+        post = bridge_draft_to_post(db, user, draft, publish_result)
+        if post is None:
+            return
+
+        try:
+            from workers.celery.tasks.learning_loop import on_post_published
+        except ImportError:
+            # Celery/worker package not importable in this context — the Post and
+            # linkage are already committed and the beat cadence will pick it up.
+            logger.warning(
+                "learning_loop task not importable; skipping enqueue for post_id=%s",
+                post.id,
+            )
+            return
+
+        if not _enqueue_with_retry(on_post_published, post.id):
+            logger.error(
+                "Failed to enqueue on_post_published for post_id=%s after retries; "
+                "Post and draft linkage retained",
+                post.id,
+            )
+    except Exception:
+        # Never let bridge/enqueue failures break a successful publish.
+        logger.exception(
+            "Learning-loop bridge/enqueue failed for draft_id=%s", draft.id
+        )
+
+
+def _enqueue_with_retry(task, post_id: str, attempts: int = 3) -> bool:
+    """
+    Enqueue a Celery task by post id, retrying transient broker failures.
+
+    Returns ``True`` on a successful enqueue, ``False`` if all attempts fail.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            task.delay(post_id)
+            return True
+        except Exception:
+            logger.warning(
+                "Enqueue attempt %d/%d failed for post_id=%s", attempt, attempts, post_id
+            )
+    return False
 
 
 def schedule_post(db: Session, user: User, payload: ScheduleRequest) -> dict:

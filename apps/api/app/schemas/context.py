@@ -94,6 +94,15 @@ class ReportContext(BaseModel):
     posts_analysed: int = 0
     period_days: int = 30                      # Window this report covers
 
+    # ── Learnings (from LearnedInsight + recent PostAnalysis aggregates) ──────
+    # All optional / empty by default so behavior is unchanged until a
+    # LearnedInsight exists for the (user, platform).
+    learned_summary: str | None = None         # Summarized "what we learned" memory
+    why_wins: list[str] = Field(default_factory=list)        # Patterns that drive success
+    recommendations: list[str] = Field(default_factory=list)  # Do-next guidance for generation
+    avg_hook_score: float | None = None        # Avg hook score across recent analyses (2dp)
+    recurring_improvement: str | None = None   # Most frequent top_improvement to avoid repeating
+
 
 # ── Assembled Context (output of ContextAssembler) ───────────────────────────
 

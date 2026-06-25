@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -36,12 +38,17 @@ app = FastAPI(
     description="AI Content Strategy Platform API",
 )
 
+# In production, restrict the allowed methods/headers to what the API actually
+# uses instead of the permissive "*" wildcard. Origins are always the configured
+# allowlist (never "*"), which is required when allow_credentials is True.
+_IS_PRODUCTION = os.getenv("ENVIRONMENT", "development") == "production"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"] if _IS_PRODUCTION else ["*"],
+    allow_headers=["Authorization", "Content-Type"] if _IS_PRODUCTION else ["*"],
 )
 
 

@@ -16,6 +16,14 @@ celery_app = Celery(
         "workers.celery.tasks.twitter_sync",
         "workers.celery.tasks.brand_profile",
         "workers.celery.tasks.publisher",
+        "workers.celery.tasks.learning_loop",
+        # Beat-referenced + on-demand tasks that were previously unregistered,
+        # so the worker would not dispatch them (compute_analytics / smart_scheduler
+        # are scheduled in beat_schedule.py; data_cleanup / storage_sync run on demand).
+        "workers.celery.tasks.compute_analytics",
+        "workers.celery.tasks.smart_scheduler",
+        "workers.celery.tasks.data_cleanup",
+        "workers.celery.tasks.storage_sync",
     ],
 )
 

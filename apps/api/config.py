@@ -47,6 +47,10 @@ class Settings(BaseSettings):
         return v
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     ALGORITHM: str = "HS256"
+    # Dedicated key for encrypting OAuth tokens / credentials at rest. When unset,
+    # encryption falls back to the SECRET_KEY-derived key (see app.core.security).
+    # Setting this lets token encryption use a separate secret from JWT signing.
+    TOKEN_ENCRYPTION_KEY: str = ""
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
@@ -102,6 +106,13 @@ class Settings(BaseSettings):
     # When true and an AI provider key is configured, calendar generation uses CalendarEngine (LLM).
     # Otherwise the API returns a deterministic mock plan for demos and offline tests.
     USE_ITERRA_AI_CALENDAR: bool = False
+
+    # Self-learning content loop (orchestrator gating + post-publish pull cadence).
+    # Disabled by default in dev; enabled in prod via env. The pull delays are the
+    # fixed positive post-publish windows (seconds) at which metrics are pulled and
+    # the post is auto-analyzed — defaults to 1h / 24h / 72h.
+    ENABLE_LEARNING_LOOP: bool = False
+    LEARNING_LOOP_PULL_DELAYS: List[int] = [3600, 86400, 259200]
 
     # App
     ENVIRONMENT: str = "development"

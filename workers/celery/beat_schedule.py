@@ -17,6 +17,7 @@ from celery.schedules import crontab
 _enable_placeholder_tasks = os.getenv("ENABLE_PLACEHOLDER_TASKS", "false").lower() == "true"
 _enable_linkedin_sync = os.getenv("ENABLE_LINKEDIN_SYNC", "false").lower() == "true"
 _enable_analytics_tasks = os.getenv("ENABLE_ANALYTICS_TASKS", "true").lower() == "true"
+_enable_learning_loop = os.getenv("ENABLE_LEARNING_LOOP", "false").lower() == "true"
 
 # ── Placeholder / demo tasks ──────────────────────────────────────────────────
 _placeholder_tasks: dict = (
@@ -88,7 +89,29 @@ _scheduler_tasks: dict = (
     else {}
 )
 
-BEAT_SCHEDULE = {**_placeholder_tasks, **_linkedin_tasks, **_analytics_tasks, **_scheduler_tasks}
+# ── Self-Learning Content Loop cadence ──────────────────────────────────────────
+# Beat-scheduled heartbeat that fans out insight synthesis for every active
+# user+platform, in case event-driven runs were missed. Runs at 5am UTC so it
+# lands after the 1am analytics snapshot, 2am performance sync, and 3am LinkedIn
+# sync. Only enabled when ENABLE_LEARNING_LOOP=true.
+_learning_loop_tasks: dict = (
+    {
+        "insight-cycle-daily": {
+            "task": "workers.celery.tasks.learning_loop.run_insight_cycle_all_users",
+            "schedule": crontab(hour=5, minute=0),  # 5am UTC daily
+        },
+    }
+    if _enable_learning_loop
+    else {}
+)
+
+BEAT_SCHEDULE = {
+    **_placeholder_tasks,
+    **_linkedin_tasks,
+    **_analytics_tasks,
+    **_scheduler_tasks,
+    **_learning_loop_tasks,
+}
 BEAT_SCHEDULE["publishing-queue-every-five-minutes"] = {
     "task": "workers.celery.tasks.publisher.process_publishing_queue",
     "schedule": crontab(minute="*/5"),

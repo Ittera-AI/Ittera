@@ -29,6 +29,11 @@ from app.dependencies.auth import get_current_user, _decode_supabase_jwt, _decod
 from app.dependencies.db import get_db
 from app.models.social_connection import SocialConnection
 from app.models.user import User
+from app.services.connect_token_store import (
+    ConnectTokenStoreError,
+    mint_connect_token,
+    take_connect_token,
+)
 from app.services.pkce_store import VerifierStoreError, put_verifier, take_verifier
 from app.services.publishing_state import (
     LINKEDIN_POSTING_SCOPES,
@@ -58,6 +63,26 @@ async def _get_user_id_from_token(token: str) -> Tuple[Optional[str], str]:
         return None, f"Supabase auth API returned: {payload}"
     except Exception as e:
         return None, f"Supabase auth API exception: {str(e)}"
+
+
+async def _resolve_start_user(ct: Optional[str], token: Optional[str]) -> Tuple[Optional[str], str]:
+    """Resolve the connecting user for a ``/start`` request.
+
+    Prefers the single-use ``ct`` (minted by ``POST /connect/session``), which keeps
+    the bearer JWT out of the URL. Falls back to a raw ``token`` query param only for
+    backward compatibility; new clients should always use ``ct``.
+    """
+    if ct:
+        try:
+            user_id = take_connect_token(ct)
+        except ConnectTokenStoreError as exc:
+            return None, f"Could not reach the connect-token store: {exc}"
+        if user_id:
+            return user_id, ""
+        return None, "Connect token is missing, expired, or already used."
+    if token:
+        return await _get_user_id_from_token(token)
+    return None, "No connect token provided."
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -126,17 +151,11 @@ def _upsert_connection(
     metadata: dict = {},
     token_expires_at: datetime | None = None,
 ) -> SocialConnection:
-    # Encrypt tokens at rest only when a refresh token is present. This scopes
-    # encryption to the X confidential-client flow (offline.access yields a
-    # refresh token) while leaving the shared LinkedIn/Instagram flows — which
-    # persist no refresh token — storing plaintext, so their read sites that do
-    # not decrypt keep working (requirements 5.1, 5.2).
-    if refresh_token:
-        stored_access_token = encrypt_value(access_token)
-        stored_refresh_token = encrypt_value(refresh_token)
-    else:
-        stored_access_token = access_token
-        stored_refresh_token = refresh_token
+    # Encrypt all OAuth tokens at rest (requirement 5.1/5.2). Read sites use
+    # decrypt_token (X) or decrypt_token_lenient (LinkedIn/Instagram, which may
+    # still hold legacy plaintext rows) so this is safe across the migration.
+    stored_access_token = encrypt_value(access_token) if access_token else access_token
+    stored_refresh_token = encrypt_value(refresh_token) if refresh_token else refresh_token
 
     conn = (
         db.query(SocialConnection)
@@ -178,6 +197,24 @@ def connection_status(current_user: User = Depends(get_current_user), db: Sessio
     """Return all active social connections for the current user."""
     conns = db.query(SocialConnection).filter_by(user_id=current_user.id, is_active=True).all()
     return [_connection_status_payload(c) for c in conns]
+
+
+@router.post("/session")
+def create_connect_session(current_user: User = Depends(get_current_user)):
+    """Mint a single-use connect token for the authenticated user.
+
+    The frontend calls this (Bearer auth) and passes the returned token to
+    ``/connect/{platform}/start`` as ``?ct=...`` instead of the raw Supabase JWT,
+    so no bearer credential ends up in the OAuth start URL.
+    """
+    try:
+        connect_token = mint_connect_token(current_user.id)
+    except ConnectTokenStoreError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not reach the connect-token store. Please try again.",
+        )
+    return {"connect_token": connect_token}
 
 
 @router.delete("/{platform}")
@@ -226,14 +263,15 @@ def _pkce_pair():
 
 @router.get("/twitter/start")
 async def twitter_start(
-    token: str = Query(..., description="Ittera JWT — identifies the connecting user"),
+    ct: Optional[str] = Query(None, description="Single-use connect token from POST /connect/session"),
+    token: Optional[str] = Query(None, description="Deprecated: raw JWT (use ct instead)"),
     db: Session = Depends(get_db),
 ):
     """Open this in a popup. Redirects to Twitter OAuth."""
     if not settings.TWITTER_CLIENT_ID:
         return _popup_response("twitter", "error", error="Twitter OAuth is not configured.")
 
-    user_id, err_reason = await _get_user_id_from_token(token)
+    user_id, err_reason = await _resolve_start_user(ct, token)
     if not user_id:
         return _popup_response("twitter", "error", error=f"Invalid session token. Reason: {err_reason}")
 
@@ -376,13 +414,14 @@ LINKEDIN_CONNECT_SCOPES = "openid profile email w_member_social"
 
 @router.get("/linkedin/start")
 async def linkedin_start(
-    token: str = Query(...),
+    ct: Optional[str] = Query(None, description="Single-use connect token from POST /connect/session"),
+    token: Optional[str] = Query(None, description="Deprecated: raw JWT (use ct instead)"),
     db: Session = Depends(get_db),
 ):
     if not settings.LINKEDIN_CLIENT_ID:
         return _popup_response("linkedin", "error", error="LinkedIn OAuth is not configured.")
 
-    user_id, err_reason = await _get_user_id_from_token(token)
+    user_id, err_reason = await _resolve_start_user(ct, token)
     if not user_id:
         return _popup_response("linkedin", "error", error=f"Invalid session token. Reason: {err_reason}")
 
@@ -485,13 +524,14 @@ INSTAGRAM_SCOPES = "user_profile,user_media"
 
 @router.get("/instagram/start")
 async def instagram_start(
-    token: str = Query(...),
+    ct: Optional[str] = Query(None, description="Single-use connect token from POST /connect/session"),
+    token: Optional[str] = Query(None, description="Deprecated: raw JWT (use ct instead)"),
     db: Session = Depends(get_db),
 ):
     if not settings.INSTAGRAM_APP_ID:
         return _popup_response("instagram", "error", error="Instagram OAuth is not configured.")
 
-    user_id, err_reason = await _get_user_id_from_token(token)
+    user_id, err_reason = await _resolve_start_user(ct, token)
     if not user_id:
         return _popup_response("instagram", "error", error=f"Invalid session token. Reason: {err_reason}")
 

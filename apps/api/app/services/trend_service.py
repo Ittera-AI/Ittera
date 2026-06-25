@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.db.datetime_helpers import utc_now
+from app.db.datetime_helpers import ensure_aware, utc_now
 from app.models.trend_snapshot import TrendSnapshot
 from app.models.user import User
 from app.services.mock_data import topics_for_niche
@@ -47,9 +47,7 @@ def _mock_trends(niche: str | None) -> list[dict]:
 
 
 def _response(snapshot: TrendSnapshot) -> dict:
-    fetched_at = snapshot.fetched_at or utc_now()
-    if fetched_at.tzinfo is None:
-        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+    fetched_at = ensure_aware(snapshot.fetched_at) or utc_now()
     now = datetime.now(timezone.utc)
     return {
         "niche": snapshot.niche,

@@ -130,9 +130,6 @@ export default function PersonaOnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState<WizardStep>("welcome");
 
-  // Auth token for backend OAuth start URLs
-  const [authToken, setAuthToken] = useState<string | null>(null);
-
   // Connected accounts: platformId -> username
   const [connected, setConnected] = useState<Partial<Record<PlatformId, string>>>({});
   // Which platform is currently in OAuth popup
@@ -147,13 +144,6 @@ export default function PersonaOnboardingPage() {
 
   // Results
   const [persona, setPersona] = useState<PersonaProfile | null>(null);
-
-  // Get auth token on mount
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.access_token) setAuthToken(session.access_token);
-    });
-  }, []);
 
   // Load existing connections on mount
   useEffect(() => {
@@ -200,25 +190,33 @@ export default function PersonaOnboardingPage() {
   const connectedCount = Object.keys(connected).length;
 
   function handleConnect(platformId: PlatformId) {
-    if (!authToken) {
-      setConnectError("Please wait — fetching your session...");
-      return;
-    }
     setConnectError(null);
     setConnecting(platformId);
-    const url = api.connect.startUrl(platformId, authToken);
-    const popup = openOAuthPopup(url);
+    // Open the popup synchronously within the click gesture (avoids popup
+    // blockers), then navigate it once we have a single-use connect token. The
+    // raw Supabase JWT is never placed in the start URL.
+    const popup = openOAuthPopup("about:blank");
     if (!popup) {
       setConnecting(null);
       setConnectError("Popup was blocked. Please allow popups for this site.");
-    } else {
-      const timer = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(timer);
-          setConnecting((prev) => (prev === platformId ? null : prev));
-        }
-      }, 500);
+      return;
     }
+    api.connect
+      .createSession()
+      .then(({ connect_token }) => {
+        popup.location.href = api.connect.startUrl(platformId, connect_token);
+        const timer = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(timer);
+            setConnecting((prev) => (prev === platformId ? null : prev));
+          }
+        }, 500);
+      })
+      .catch((err: unknown) => {
+        popup.close();
+        setConnecting(null);
+        setConnectError(getErrorMessage(err) || "Could not start the connection. Please try again.");
+      });
   }
 
   async function handleDisconnect(platformId: PlatformId) {
