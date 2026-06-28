@@ -22,6 +22,7 @@ from app.services.publishing_state import (
     DRAFT_STATUS_PUBLISHED,
     DRAFT_STATUS_PUBLISHING,
     DRAFT_STATUS_SCHEDULED,
+    IMMUTABLE_PUBLISH_STATUSES,
     REVIEW_STATUS_APPROVED,
     REVIEW_STATUS_DRAFT,
     REVIEW_STATUS_REJECTED,
@@ -50,6 +51,21 @@ IMAGE_EXTENSIONS = {
     "image/png": {".png"},
     "image/webp": {".webp"},
 }
+
+
+def _ensure_draft_mutable(draft: ContentDraft, action: str = "edited") -> None:
+    """Reject content/media/schedule changes on an immutable draft (Requirement 8.2).
+
+    A draft that is mid-publish (``publishing``) or already ``published`` is frozen:
+    its content, media, and schedule can no longer change. Drafts in any other state
+    (``draft``, ``scheduled``, ``failed``) remain editable. Raises HTTP 409 with a
+    category-level message that never leaks internal detail.
+    """
+    if draft.status in IMMUTABLE_PUBLISH_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Published or publishing drafts cannot be {action}.",
+        )
 
 
 def suggest(db: Session, user: User, payload: SuggestRequest) -> dict:
@@ -370,8 +386,7 @@ def get_draft(db: Session, user: User, draft_id: str) -> ContentDraft:
 
 def update_draft(db: Session, user: User, draft_id: str, payload) -> ContentDraft:
     draft = _draft(db, user, draft_id)
-    if draft.status in {DRAFT_STATUS_PUBLISHED, DRAFT_STATUS_PUBLISHING}:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Published or publishing drafts cannot be edited.")
+    _ensure_draft_mutable(draft, "edited")
         
     content_changed = False
     if getattr(payload, "content", None) is not None:
@@ -393,6 +408,38 @@ def update_draft(db: Session, user: User, draft_id: str, payload) -> ContentDraf
     return draft
 
 
+def _already_published_platform_post_id(db: Session, draft: ContentDraft) -> str | None:
+    """Return the platform post id when this draft was already published.
+
+    Natural-key idempotency guard (R8.5): a retry after a partial success must not
+    re-post to the platform. A publish is treated as already done when either the
+    draft itself already carries a ``platform_post_id``, or a ``Post`` already exists
+    for this draft under the natural key ``(user_id, platform, platform_post_id)`` —
+    located via the draft's ``post_id`` linkage written by the publication bridge.
+
+    Returns the existing platform post id, or ``None`` when no prior publish is found
+    and the platform call should proceed.
+    """
+    from app.models.post import Post
+
+    if draft.platform_post_id:
+        return draft.platform_post_id
+
+    if draft.post_id:
+        existing = (
+            db.query(Post)
+            .filter(
+                Post.id == draft.post_id,
+                Post.user_id == draft.user_id,
+                Post.platform == draft.platform,
+            )
+            .first()
+        )
+        if existing and existing.platform_post_id:
+            return existing.platform_post_id
+    return None
+
+
 async def publish_now(db: Session, user: User, draft_id: str) -> dict:
     draft = _lock_draft(db, user, draft_id)
     now = datetime.now(timezone.utc)
@@ -409,8 +456,27 @@ async def publish_now(db: Session, user: User, draft_id: str) -> dict:
     draft.status = DRAFT_STATUS_PUBLISHING
     draft.publish_error = None
     draft.updated_at = now
+    if not draft.publish_idempotency_key:
+        draft.publish_idempotency_key = uuid.uuid4().hex
     db.commit()
     db.refresh(draft)
+
+    # Natural-key idempotency guard (R8.5): if a prior attempt already posted to the
+    # platform (the draft carries a platform_post_id, or a published Post exists for
+    # this draft under the natural key (user_id, platform, platform_post_id)), do not
+    # re-post on retry — finalize the draft as published instead.
+    already_post_id = _already_published_platform_post_id(db, draft)
+    if already_post_id:
+        published_at = draft.published_at or datetime.now(timezone.utc)
+        draft.status = DRAFT_STATUS_PUBLISHED
+        draft.review_status = REVIEW_STATUS_APPROVED
+        draft.platform_post_id = already_post_id
+        draft.published_at = published_at
+        draft.publish_error = None
+        draft.updated_at = published_at
+        db.commit()
+        return {"platform_post_id": draft.platform_post_id, "published_at": published_at}
+
     try:
         result = await publish_draft(db, user, draft)
     except PublishError as exc:
@@ -519,8 +585,7 @@ def schedule_post(db: Session, user: User, payload: ScheduleRequest) -> dict:
     if scheduled_for <= datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Schedule time must be in the future")
     draft = _draft(db, user, payload.draft_id)
-    if draft.status in {DRAFT_STATUS_PUBLISHED, DRAFT_STATUS_PUBLISHING}:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Draft is already {draft.status}.")
+    _ensure_draft_mutable(draft, "rescheduled")
     if not (draft.content or "").strip():
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Draft content is empty")
     try:
@@ -571,8 +636,7 @@ def schedule_post(db: Session, user: User, payload: ScheduleRequest) -> dict:
 
 def cancel_schedule(db: Session, user: User, draft_id: str) -> dict:
     draft = _draft(db, user, draft_id)
-    if draft.status == DRAFT_STATUS_PUBLISHED:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Published drafts cannot be cancelled.")
+    _ensure_draft_mutable(draft, "cancelled")
     draft.status = DRAFT_STATUS_CANCELLED
     draft.review_status = REVIEW_STATUS_REJECTED
     draft.celery_task_id = None
@@ -619,7 +683,8 @@ def add_media_to_draft(
     content: bytes,
 ) -> ContentDraftMedia:
     draft = _draft(db, user, draft_id)
-    if draft.status in {DRAFT_STATUS_PUBLISHED, DRAFT_STATUS_PUBLISHING, DRAFT_STATUS_CANCELLED}:
+    _ensure_draft_mutable(draft, "given new media")
+    if draft.status == DRAFT_STATUS_CANCELLED:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Cannot change media while draft is {draft.status}.")
     canonical_mime = _validate_image_upload(filename, mime_type, content)
     existing = (
@@ -679,7 +744,8 @@ def delete_media(db: Session, user: User, draft_id: str, media_id: str) -> dict:
     )
     if media is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
-    if draft.status in {DRAFT_STATUS_PUBLISHED, DRAFT_STATUS_PUBLISHING, DRAFT_STATUS_CANCELLED}:
+    _ensure_draft_mutable(draft, "stripped of media")
+    if draft.status == DRAFT_STATUS_CANCELLED:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Cannot change media while draft is {draft.status}.")
     path = Path(media.local_path)
     media.status = "deleted"

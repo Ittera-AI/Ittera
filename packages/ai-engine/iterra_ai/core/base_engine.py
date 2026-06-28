@@ -5,7 +5,7 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel
 
-from iterra_ai.core.cost_tracker import CostTracker
+from iterra_ai.core.cost_tracker import CostTracker, get_request_id
 from iterra_ai.core.exceptions import EngineError, ParseError
 
 InputT = TypeVar("InputT", bound=BaseModel)
@@ -63,13 +63,18 @@ class BaseEngine(ABC, Generic[InputT, OutputT]):
                     messages=[{"role": "user", "content": user}],
                 )
                 usage = getattr(response, "usage", None)
-                response_text = response.content[0].text if getattr(response, "content", None) else ""
+                response_text = (
+                    response.content[0].text
+                    if getattr(response, "content", None)
+                    else ""
+                )
                 input_tokens = getattr(usage, "input_tokens", 0)
                 output_tokens = getattr(usage, "output_tokens", 0)
             self._tracker.log(
                 engine=self.__class__.__name__,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                request_id=get_request_id(),
             )
             return response_text
         except Exception as exc:

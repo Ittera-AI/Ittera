@@ -20,6 +20,20 @@ from uuid import uuid4
 # Separate logger for audit events
 audit_logger = logging.getLogger("iterra.audit")
 
+# Canonical set of substrings that mark a key as carrying sensitive data.
+# A key is considered sensitive when any of these substrings appears in its
+# lowercased name (e.g. "user_access_token" matches "access_token").
+#
+# This is the single source of truth for secret redaction across the app: the
+# structured logging layer (see ``app.core.logging``) imports this set so log
+# output and audit details redact the same keys.
+SENSITIVE_KEYS = frozenset(
+    {
+        "password", "token", "access_token", "refresh_token",
+        "api_key", "secret", "credential", "auth",
+    }
+)
+
 
 class AuditAction(str, Enum):
     """Types of audit actions."""
@@ -102,10 +116,7 @@ class AuditLogger:
             return {}
 
         sanitized = {}
-        sensitive_keys = {
-            "password", "token", "access_token", "refresh_token",
-            "api_key", "secret", "credential", "auth",
-        }
+        sensitive_keys = SENSITIVE_KEYS
 
         for key, value in details.items():
             lower_key = key.lower()

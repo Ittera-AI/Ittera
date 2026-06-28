@@ -22,6 +22,9 @@ class SocialConnection(Base):
     scopes = Column(JSON, nullable=False, default=list)
     last_synced_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    # Set when a stored token cannot be refreshed/decrypted and the user must
+    # re-authorize the connection (R4.3).
+    requires_reconnect = Column(Boolean, nullable=False, default=False, server_default="0")
     # Platform-specific extras: Drive folder IDs, encrypted LinkedIn creds, etc.
     # Renamed from 'metadata' to avoid SQL reserved keyword conflict
     connection_metadata = Column(JSON, nullable=True, default=dict)

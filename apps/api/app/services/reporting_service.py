@@ -18,12 +18,12 @@ import base64
 import io
 import json
 import logging
-from datetime import datetime, timedelta
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.orm import Session
 
+from app.db.datetime_helpers import utc_now
 from app.models.organization import Organization, Workspace
 from app.models.user import User
 
@@ -560,7 +560,7 @@ def generate_analytics_report(
     html_content = html_content.replace('{{ report_title }}', 'Content Performance Report')
     html_content = html_content.replace('{{ client_name }}', brand.get('client_name', 'Client'))
     html_content = html_content.replace('{{ report_period }}', report_period)
-    html_content = html_content.replace('{{ generated_at }}', datetime.now().strftime('%B %d, %Y'))
+    html_content = html_content.replace('{{ generated_at }}', utc_now().strftime('%B %d, %Y'))
     html_content = html_content.replace('{{ brand_color }}', brand.get('brand_color', '#6366F1'))
     html_content = html_content.replace('{{ logo_url }}', brand.get('logo_url') or '')
     html_content = html_content.replace('{{ footer_text }}', brand.get('footer_text', 'Analytics Report'))
@@ -682,8 +682,8 @@ def generate_competitive_report(
     html_content = template.replace('{{ content }}', '\n'.join(content_parts))
     
     html_content = html_content.replace('{{ report_title }}', 'Competitive Intelligence Report')
-    html_content = html_content.replace('{{ report_period }}', datetime.now().strftime('%B %Y'))
-    html_content = html_content.replace('{{ generated_at }}', datetime.now().strftime('%B %d, %Y'))
+    html_content = html_content.replace('{{ report_period }}', utc_now().strftime('%B %Y'))
+    html_content = html_content.replace('{{ generated_at }}', utc_now().strftime('%B %d, %Y'))
     html_content = html_content.replace('{{ brand_color }}', brand.get('brand_color', '#6366F1'))
     html_content = html_content.replace('{{ logo_url }}', brand.get('logo_url') or '')
     
@@ -765,7 +765,7 @@ def generate_custom_report(
     html_content = html_content.replace('{{ report_title }}', title)
     html_content = html_content.replace('{{ client_name }}', brand.get('client_name', 'Client'))
     html_content = html_content.replace('{{ report_period }}', 'Custom Report')
-    html_content = html_content.replace('{{ generated_at }}', datetime.now().strftime('%B %d, %Y'))
+    html_content = html_content.replace('{{ generated_at }}', utc_now().strftime('%B %d, %Y'))
     html_content = html_content.replace('{{ brand_color }}', brand.get('brand_color', '#6366F1'))
     html_content = html_content.replace('{{ logo_url }}', brand.get('logo_url') or '')
     html_content = html_content.replace('{{ footer_text }}', brand.get('footer_text', 'Custom Report'))
@@ -795,5 +795,5 @@ def get_report_metadata(
         "size_kb": round(len(pdf_bytes) / 1024, 1),
         "report_type": report_type,
         "workspace_id": workspace.id if workspace else None,
-        "generated_at": datetime.now().isoformat(),
+        "generated_at": utc_now().isoformat(),
     }

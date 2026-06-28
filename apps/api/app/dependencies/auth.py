@@ -12,6 +12,8 @@ Both paths resolve to a local `User` row. If the user doesn't exist locally yet
 (e.g. first Supabase OAuth login), we create a minimal profile on the fly.
 """
 
+import logging
+
 from fastapi import Cookie, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -21,9 +23,15 @@ from app.config import settings
 from app.dependencies.db import get_db
 from app.models.user import User
 
+logger = logging.getLogger(__name__)
+
 bearer_scheme = HTTPBearer(auto_error=False)
 
 _SUPABASE_AUDIENCE = "authenticated"
+
+# Bounded timeout (seconds) for the Supabase REST fallback validation call so a
+# slow or unresponsive Supabase Auth endpoint cannot hang request handling (R1.5).
+_SUPABASE_FALLBACK_TIMEOUT_SECONDS = 5.0
 
 
 def _decode_supabase_jwt(token: str) -> dict | None:
@@ -51,6 +59,42 @@ def _decode_legacy_jwt(token: str) -> dict | None:
         return None
 
 
+def _is_email_verified(payload: dict) -> bool:
+    """
+    Determine whether a Supabase token asserts a *verified* email.
+
+    Supabase places the verification flag in different locations depending on
+    the token version and provider. We treat the email as verified only when
+    one of the recognised claims is explicitly truthy:
+      - top-level `email_verified`
+      - top-level `email_confirmed_at` (set by the Supabase REST user endpoint)
+      - `user_metadata.email_verified`
+      - `user_metadata.email_confirmed_at` (set when the email is confirmed)
+    Any missing/false/empty value is treated as *unverified* (fail closed).
+    """
+
+    def _truthy(value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in {"true", "1", "yes"}
+        return bool(value)
+
+    if "email_verified" in payload:
+        return _truthy(payload.get("email_verified"))
+
+    if payload.get("email_confirmed_at"):
+        return True
+
+    meta = payload.get("user_metadata") or {}
+    if "email_verified" in meta:
+        return _truthy(meta.get("email_verified"))
+    if meta.get("email_confirmed_at"):
+        return True
+
+    return False
+
+
 def _get_or_create_user_from_supabase(db: Session, payload: dict) -> User:
     """
     Resolve (or create) a local User row from a decoded Supabase JWT payload.
@@ -67,10 +111,18 @@ def _get_or_create_user_from_supabase(db: Session, payload: dict) -> User:
             detail="Supabase token missing sub or email claim",
         )
 
-    # Look up by email first (handles edge case where user already exists via
-    # the legacy email/password flow with the same address)
+    # Account-linking gate (R1.1): an existing local account (e.g. created via
+    # the legacy email/password flow) is linked to this Supabase identity ONLY
+    # when the Supabase token asserts a *verified* email. An unverified email
+    # that collides with an existing account is rejected with 401 and no user
+    # record is created or mutated — we never silently merge identities.
     user = db.query(User).filter(User.email == email).first()
     if user is not None:
+        if not _is_email_verified(payload):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Email not verified for account linking",
+            )
         return user
 
     # First time we're seeing this Supabase user — create a local profile
@@ -97,17 +149,32 @@ def _get_or_create_user_from_supabase(db: Session, payload: dict) -> User:
 async def _fetch_supabase_user(token: str) -> dict | None:
     """
     Fallback: call the Supabase REST API to validate an opaque or mismatched token.
-    Returns a dict with at least {'sub': <uuid>} on success, or None on failure.
+
+    Returns a dict with at least {'sub': <uuid>} on success, or None on any
+    failure so the caller responds with HTTP 401 (R1.5). Hardening applied:
+
+    - A bounded request timeout (``_SUPABASE_FALLBACK_TIMEOUT_SECONDS``) is
+      applied so a slow/unresponsive Supabase endpoint cannot hang request
+      handling.
+    - The returned identity is re-checked: the audience claim must equal
+      ``authenticated`` and the email must be verified. An identity that is not
+      verified is never trusted.
+    - Errors and non-2xx responses are not swallowed silently — they are logged
+      at the category level (no token or secret values) and result in ``None``.
+
     Requires SUPABASE_URL, a public Supabase key, and a valid Supabase access token.
     """
     import httpx
 
-    url = (settings.SUPABASE_URL or settings.NEXT_PUBLIC_SUPABASE_URL).rstrip("/")
+    url = (settings.SUPABASE_URL or settings.NEXT_PUBLIC_SUPABASE_URL or "").rstrip("/")
     api_key = settings.SUPABASE_ANON_KEY or settings.NEXT_PUBLIC_SUPABASE_ANON_KEY
     if not url or not api_key or not token:
         return None
+
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
+        async with httpx.AsyncClient(
+            timeout=_SUPABASE_FALLBACK_TIMEOUT_SECONDS
+        ) as client:
             resp = await client.get(
                 f"{url}/auth/v1/user",
                 headers={
@@ -115,15 +182,52 @@ async def _fetch_supabase_user(token: str) -> dict | None:
                     "apikey": api_key,
                 },
             )
-            if resp.is_error:
-                return None
-            data = resp.json()
-            # Supabase returns { id, email, ... } — normalise to { sub, email }
-            if "id" in data:
-                data["sub"] = data["id"]
-            return data
-    except Exception:
+    except httpx.HTTPError as exc:
+        # Do not swallow silently: log the error category (never the token) and
+        # fail closed so the caller returns 401.
+        logger.warning(
+            "Supabase REST fallback validation failed: %s", type(exc).__name__
+        )
         return None
+
+    # Any non-2xx result is treated as an unresolved identity (R1.5).
+    if resp.is_error:
+        logger.warning(
+            "Supabase REST fallback returned non-success status %s", resp.status_code
+        )
+        return None
+
+    try:
+        data = resp.json()
+    except ValueError:
+        logger.warning("Supabase REST fallback returned a non-JSON body")
+        return None
+
+    if not isinstance(data, dict):
+        logger.warning("Supabase REST fallback returned an unexpected payload shape")
+        return None
+
+    # Re-check the audience claim on the returned identity. The Supabase user
+    # object carries `aud` ("authenticated" for a normally signed-in user). The
+    # value may be a string or a list of audiences.
+    aud = data.get("aud")
+    aud_ok = (
+        aud == _SUPABASE_AUDIENCE
+        or (isinstance(aud, (list, tuple)) and _SUPABASE_AUDIENCE in aud)
+    )
+    if not aud_ok:
+        logger.warning("Supabase REST fallback identity has unexpected audience")
+        return None
+
+    # Re-check verified status — never trust an unverified identity (R1.5).
+    if not _is_email_verified(data):
+        logger.warning("Supabase REST fallback identity is not email-verified")
+        return None
+
+    # Supabase returns { id, email, ... } — normalise to { sub, email }
+    if "id" in data:
+        data["sub"] = data["id"]
+    return data
 
 
 async def get_current_user(
@@ -137,19 +241,16 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
         )
 
-    # --- Try Supabase JWT first ---
+    # --- Try Supabase JWT first (local verification, no network) ---
     supabase_payload = _decode_supabase_jwt(token)
     if supabase_payload is not None:
         return _get_or_create_user_from_supabase(db, supabase_payload)
 
-    # --- Fall back to Supabase Auth API validation ---
-    # Useful when local JWT verification is not configured, or when the project
-    # uses signing keys that this service cannot verify locally.
-    supabase_payload = await _fetch_supabase_user(token)
-    if supabase_payload is not None:
-        return _get_or_create_user_from_supabase(db, supabase_payload)
-
-    # --- Fall back to legacy Iterra JWT ---
+    # --- Then the legacy Iterra JWT (also local, no network) ---
+    # Verify any locally-verifiable token before making a network round-trip.
+    # A legacy-signed token never validates as a Supabase JWT (different secret),
+    # so resolving it here avoids a pointless Supabase REST call on every
+    # email/password request — and keeps the path deterministic and offline.
     legacy_payload = _decode_legacy_jwt(token)
     if legacy_payload is not None:
         user_id: str = legacy_payload.get("sub")
@@ -163,6 +264,14 @@ async def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
             )
         return user
+
+    # --- Last resort: Supabase Auth REST validation (network call) ---
+    # Used only when the token is neither a locally-verifiable Supabase JWT nor a
+    # legacy Iterra JWT (e.g. an opaque token, or a project using signing keys
+    # this service cannot verify locally).
+    supabase_payload = await _fetch_supabase_user(token)
+    if supabase_payload is not None:
+        return _get_or_create_user_from_supabase(db, supabase_payload)
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"

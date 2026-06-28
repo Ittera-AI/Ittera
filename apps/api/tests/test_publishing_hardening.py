@@ -154,11 +154,11 @@ def test_linkedin_multi_image_blocks_schedule_and_publish_now(client, db):
     scheduled_for = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=12).isoformat()
     schedule = client.post("/api/v1/content/schedule", headers=headers, json={"draft_id": draft.id, "scheduled_for": scheduled_for})
     assert schedule.status_code == 422
-    assert "LinkedIn publishing currently supports 1 image" in schedule.json()["detail"]
+    assert "LinkedIn publishing currently supports 1 image" in schedule.json()["error"]["message"]
 
     publish = client.post(f"/api/v1/content/drafts/{draft.id}/publish-now", headers=headers)
     assert publish.status_code == 422
-    assert "LinkedIn publishing currently supports 1 image" in publish.json()["detail"]
+    assert "LinkedIn publishing currently supports 1 image" in publish.json()["error"]["message"]
 
 
 def test_publish_now_is_idempotent_after_success(client, db, monkeypatch):
@@ -251,7 +251,7 @@ def test_published_drafts_reject_edits(client, db):
 
     edit = client.patch(f"/api/v1/content/drafts/{draft.id}", headers=headers, json={"content": "Edited body"})
     assert edit.status_code == 409
-    assert "cannot be edited" in edit.json()["detail"]
+    assert "cannot be edited" in edit.json()["error"]["message"]
 
 
 def test_connection_status_reports_scope_readiness(client, db):
@@ -290,7 +290,7 @@ def test_x_old_scopes_show_reconnect_and_publish_fails_before_platform(client, d
 
     publish = client.post(f"/api/v1/content/drafts/{draft.id}/publish-now", headers=headers)
     assert publish.status_code == 400
-    assert "X reconnect required before publishing" in publish.json()["detail"]
+    assert "X reconnect required before publishing" in publish.json()["error"]["message"]
 
 
 def test_mocked_queue_publish_is_idempotent(client, db, monkeypatch):

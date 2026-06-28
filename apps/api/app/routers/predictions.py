@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.permissions import Permission
+from app.db.datetime_helpers import ensure_aware, utc_now
 from app.dependencies.auth import get_current_user
 from app.dependencies.db import get_db
 from app.dependencies.workspace import can_use_ai_predict, get_current_workspace
@@ -237,9 +238,8 @@ async def predict_performance(
         )
         
         if cached:
-            # Check not expired
-            from datetime import datetime
-            if cached.expires_at is None or cached.expires_at > datetime.utcnow():
+            # Check not expired (normalize stored value to aware UTC before compare)
+            if cached.expires_at is None or ensure_aware(cached.expires_at) > utc_now():
                 # Return cached result
                 return cached.prediction_data
     
@@ -328,8 +328,7 @@ async def predict_viral_potential(
         )
         
         if cached:
-            from datetime import datetime
-            if cached.expires_at is None or cached.expires_at > datetime.utcnow():
+            if cached.expires_at is None or ensure_aware(cached.expires_at) > utc_now():
                 return cached.prediction_data
     
     # Generate viral analysis
@@ -388,7 +387,7 @@ async def predict_optimal_timing(
     if request.use_cache and workspace:
         import hashlib
         import json
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         
         cache_key_input = {
             "content": request.content.strip().lower()[:200],
@@ -405,7 +404,7 @@ async def predict_optimal_timing(
                 Prediction.workspace_id == workspace.id,
                 Prediction.input_hash == input_hash,
                 Prediction.prediction_type == "timing",
-                Prediction.created_at > (datetime.utcnow() - timedelta(days=7)),
+                Prediction.created_at > (utc_now() - timedelta(days=7)),
             )
             .first()
         )
@@ -427,7 +426,7 @@ async def predict_optimal_timing(
     
     # Cache with weekly expiration
     if workspace:
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         
         cache_entry = Prediction(
             workspace_id=workspace.id,
@@ -437,7 +436,7 @@ async def predict_optimal_timing(
             prediction_data=result.model_dump(),
             confidence_score=result.confidence_score,
             model_used=result.model_version,
-            expires_at=datetime.utcnow() + timedelta(days=7),
+            expires_at=utc_now() + timedelta(days=7),
         )
         db.add(cache_entry)
         db.commit()

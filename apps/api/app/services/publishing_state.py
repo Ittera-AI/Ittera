@@ -23,6 +23,16 @@ TERMINAL_PUBLISH_STATUSES = {
     DRAFT_STATUS_CANCELLED,
 }
 
+# A draft in one of these states is mid-publish or already published, so its
+# content, media, and schedule are immutable (Requirement 8.2). Drafts in any
+# other state (draft, scheduled, failed) remain editable.
+IMMUTABLE_PUBLISH_STATUSES = frozenset(
+    {
+        DRAFT_STATUS_PUBLISHING,
+        DRAFT_STATUS_PUBLISHED,
+    }
+)
+
 LINKEDIN_POSTING_SCOPES = {"openid", "profile", "email", "w_member_social"}
 LINKEDIN_READ_SCOPES = {"r_member_social"}
 X_POSTING_SCOPES = {"tweet.read", "tweet.write", "users.read", "offline.access"}

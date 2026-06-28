@@ -81,10 +81,14 @@ def _connection(db: Session, user: User, platform: str) -> SocialConnection | No
 def _mark_reconnect_required(db: Session, conn: SocialConnection) -> None:
     """Flag a connection as requiring reconnection.
 
-    Used when a stored token cannot be decrypted so the connection is not used
-    with an unusable token (requirement 5.6). Reassigns connection_metadata with
-    a new dict so SQLAlchemy detects the change, mirroring _upsert_connection.
+    Used when a stored token cannot be decrypted or refreshed so the connection
+    is not used with an unusable token (requirements 4.3, 5.6). Sets the
+    dedicated ``SocialConnection.requires_reconnect`` column and also keeps the
+    legacy ``connection_metadata["reconnect_required"]`` flag for backward
+    compatibility. Reassigns connection_metadata with a new dict so SQLAlchemy
+    detects the change, mirroring _upsert_connection.
     """
+    conn.requires_reconnect = True
     meta = dict(conn.connection_metadata or {})
     meta["reconnect_required"] = True
     conn.connection_metadata = meta
@@ -440,15 +444,36 @@ def _require_scopes(conn: SocialConnection, required: set[str], platform_label: 
 
 
 async def _refresh_x_token_if_needed(db: Session, conn: SocialConnection) -> None:
-    if not conn.refresh_token or not conn.token_expires_at:
-        return
+    """Refresh an expired X credential, or flag the connection for reconnect.
+
+    Decision (requirement 4.3 / Property 8): when the stored credential is at or
+    near expiry, refresh it if a refresh token is available; otherwise mark the
+    connection as requiring reconnection and surface a category-level error
+    instead of letting an unusable token reach the platform call.
+    """
     from datetime import datetime, timedelta, timezone
+
+    # No expiry information is stored — nothing can be decided here. A token that
+    # is in fact expired is still caught by the platform 401 handler downstream.
+    if not conn.token_expires_at:
+        return
 
     expires_at = conn.token_expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
+    # Still comfortably valid → keep using the stored token.
     if expires_at > datetime.now(timezone.utc) + timedelta(minutes=5):
         return
+
+    # Credential is expired/near-expiry. Refresh only when a refresh token exists;
+    # otherwise the user must re-authorize the connection.
+    if not conn.refresh_token:
+        _mark_reconnect_required(db, conn)
+        raise PublishError(
+            "X token expired and cannot be refreshed. Reconnect X before publishing.",
+            code="token_expired",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
 
     # Decrypt the stored refresh token before use; flag reconnect on failure
     # rather than sending an unusable value to the token endpoint (req 5.3, 5.6).
@@ -486,6 +511,9 @@ async def _refresh_x_token_if_needed(db: Session, conn: SocialConnection) -> Non
             auth=auth,
         )
     if res.is_error:
+        # The refresh token is no longer usable — require reconnection rather than
+        # leaving the connection in a silently-broken state.
+        _mark_reconnect_required(db, conn)
         raise PublishError("X token expired. Reconnect X before publishing.", code="token_expired", status_code=status.HTTP_401_UNAUTHORIZED)
     tokens = res.json()
     # Re-encrypt rotated tokens at rest; leave existing ciphertext untouched when
@@ -500,6 +528,8 @@ async def _refresh_x_token_if_needed(db: Session, conn: SocialConnection) -> Non
         conn.scopes = str(tokens["scope"]).split()
     if tokens.get("expires_in"):
         conn.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(tokens["expires_in"]))
+    # A successful refresh restores a usable credential — clear any stale flag.
+    conn.requires_reconnect = False
     db.commit()
 
 

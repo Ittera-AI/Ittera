@@ -10,11 +10,11 @@ Flow:
 
 import base64
 import hashlib
-import html
 import json
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Tuple
 from urllib.parse import urlencode, urlparse
 
 import httpx
@@ -24,11 +24,17 @@ from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.core.logging import redact_text
 from app.core.security import encrypt_value
-from app.dependencies.auth import get_current_user, _decode_supabase_jwt, _decode_legacy_jwt, _fetch_supabase_user
+from app.dependencies.auth import get_current_user
 from app.dependencies.db import get_db
 from app.models.social_connection import SocialConnection
 from app.models.user import User
+from app.services.connect_state_store import (
+    ConnectStateStoreError,
+    bind_connect_state,
+    take_connect_state,
+)
 from app.services.connect_token_store import (
     ConnectTokenStoreError,
     mint_connect_token,
@@ -45,44 +51,30 @@ from app.services.publishing_state import (
 
 router = APIRouter()
 
-from typing import Optional, Tuple
-
-async def _get_user_id_from_token(token: str) -> Tuple[Optional[str], str]:
-    if not token:
-        return None, "Token is empty"
-    payload = _decode_supabase_jwt(token)
-    if payload and "sub" in payload:
-        return payload["sub"], ""
-    payload = _decode_legacy_jwt(token)
-    if payload and "sub" in payload:
-        return payload["sub"], ""
-    try:
-        payload = await _fetch_supabase_user(token)
-        if payload and "sub" in payload:
-            return payload["sub"], ""
-        return None, f"Supabase auth API returned: {payload}"
-    except Exception as e:
-        return None, f"Supabase auth API exception: {str(e)}"
+logger = logging.getLogger(__name__)
 
 
-async def _resolve_start_user(ct: Optional[str], token: Optional[str]) -> Tuple[Optional[str], str]:
+async def _resolve_start_user(ct: Optional[str]) -> Tuple[Optional[str], str]:
     """Resolve the connecting user for a ``/start`` request.
 
-    Prefers the single-use ``ct`` (minted by ``POST /connect/session``), which keeps
-    the bearer JWT out of the URL. Falls back to a raw ``token`` query param only for
-    backward compatibility; new clients should always use ``ct``.
+    The connecting identity is accepted only through the single-use ``ct`` token
+    minted by ``POST /connect/session`` (a server-side exchange). This keeps the
+    bearer JWT out of the OAuth start URL entirely; a raw bearer JWT supplied as
+    a ``?token=`` query parameter is no longer accepted. (R4.2)
+
+    The returned reason is always a category-level message — it never embeds a
+    raw token value or an upstream payload. (R4.5)
     """
-    if ct:
-        try:
-            user_id = take_connect_token(ct)
-        except ConnectTokenStoreError as exc:
-            return None, f"Could not reach the connect-token store: {exc}"
-        if user_id:
-            return user_id, ""
-        return None, "Connect token is missing, expired, or already used."
-    if token:
-        return await _get_user_id_from_token(token)
-    return None, "No connect token provided."
+    if not ct:
+        return None, "No connect token provided."
+    try:
+        user_id = take_connect_token(ct)
+    except ConnectTokenStoreError:
+        logger.warning("connect-token store unavailable during OAuth /start")
+        return None, "Could not reach the connect-token store. Please try again."
+    if user_id:
+        return user_id, ""
+    return None, "Connect token is missing, expired, or already used."
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -171,6 +163,8 @@ def _upsert_connection(
         conn.scopes = scopes
         conn.connection_metadata = metadata
         conn.is_active = True
+        # A fresh authorization clears any prior reconnect requirement (R4.3).
+        conn.requires_reconnect = False
         conn.last_synced_at = datetime.now(timezone.utc)
     else:
         conn = SocialConnection(
@@ -264,16 +258,15 @@ def _pkce_pair():
 @router.get("/twitter/start")
 async def twitter_start(
     ct: Optional[str] = Query(None, description="Single-use connect token from POST /connect/session"),
-    token: Optional[str] = Query(None, description="Deprecated: raw JWT (use ct instead)"),
     db: Session = Depends(get_db),
 ):
     """Open this in a popup. Redirects to Twitter OAuth."""
     if not settings.TWITTER_CLIENT_ID:
         return _popup_response("twitter", "error", error="Twitter OAuth is not configured.")
 
-    user_id, err_reason = await _resolve_start_user(ct, token)
+    user_id, err_reason = await _resolve_start_user(ct)
     if not user_id:
-        return _popup_response("twitter", "error", error=f"Invalid session token. Reason: {err_reason}")
+        return _popup_response("twitter", "error", error=err_reason)
 
     verifier, challenge = _pkce_pair()
     state = _make_connect_state(user_id, "twitter")
@@ -345,6 +338,8 @@ async def twitter_callback(
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         if token_res.is_error:
+            # Never log the raw upstream response body or tokens — status only. (R4.4)
+            logger.warning("twitter token exchange failed (status=%s)", token_res.status_code)
             return _popup_response("twitter", "error", error="Token exchange failed.")
 
         tokens = token_res.json()
@@ -360,6 +355,7 @@ async def twitter_callback(
             headers={"Authorization": f"Bearer {access_token}"},
         )
         if me_res.is_error:
+            logger.warning("twitter profile fetch failed (status=%s)", me_res.status_code)
             return _popup_response("twitter", "error", error="Could not fetch Twitter profile.")
 
         me = me_res.json().get("data", {})
@@ -397,8 +393,7 @@ async def twitter_callback(
         from app.services.twitter_service import queue_twitter_sync_task
         queue_twitter_sync_task(user_id)
     except Exception:
-        import logging
-        logging.getLogger(__name__).warning(
+        logger.warning(
             "twitter_callback: could not enqueue sync task for user_id=%s — "
             "Celery may not be running. User can trigger sync manually.",
             user_id,
@@ -415,17 +410,24 @@ LINKEDIN_CONNECT_SCOPES = "openid profile email w_member_social"
 @router.get("/linkedin/start")
 async def linkedin_start(
     ct: Optional[str] = Query(None, description="Single-use connect token from POST /connect/session"),
-    token: Optional[str] = Query(None, description="Deprecated: raw JWT (use ct instead)"),
     db: Session = Depends(get_db),
 ):
     if not settings.LINKEDIN_CLIENT_ID:
         return _popup_response("linkedin", "error", error="LinkedIn OAuth is not configured.")
 
-    user_id, err_reason = await _resolve_start_user(ct, token)
+    user_id, err_reason = await _resolve_start_user(ct)
     if not user_id:
-        return _popup_response("linkedin", "error", error=f"Invalid session token. Reason: {err_reason}")
+        return _popup_response("linkedin", "error", error=err_reason)
 
     state = _make_connect_state(user_id, "linkedin")
+    try:
+        bind_connect_state(state, user_id)  # single-use, session-bound (TTL 10m)
+    except ConnectStateStoreError:
+        return _popup_response(
+            "linkedin",
+            "error",
+            error="Could not reach the connection store. Please try connecting again.",
+        )
     params = urlencode({
         "response_type": "code",
         "client_id": settings.LINKEDIN_CLIENT_ID,
@@ -446,8 +448,18 @@ async def linkedin_callback(
     db: Session = Depends(get_db),
 ):
     if error:
-        message = html.unescape(error_description or error)
-        return _popup_response("linkedin", "error", error=message)
+        # Do not echo the upstream ``error_description`` back to the browser or
+        # logs — it may carry raw provider payload. Log a redacted, category-only
+        # record and return a category-level message. (R4.4, R4.5)
+        logger.warning(
+            "linkedin oauth callback returned an error: %s",
+            redact_text(str(error)),
+        )
+        return _popup_response(
+            "linkedin",
+            "error",
+            error="LinkedIn authorization failed. Please try connecting again.",
+        )
     if not code or not state:
         return _popup_response("linkedin", "error", error="LinkedIn did not return an authorization code.")
 
@@ -456,6 +468,24 @@ async def linkedin_callback(
         return _popup_response("linkedin", "error", error="Invalid OAuth state.")
 
     user_id = decoded["sub"]
+
+    # Single-use/binding check: the state must have been recorded at /start, must
+    # not be expired, and must not have been consumed already. Rejects missing,
+    # expired, reused, and unbound states (mirrors the X PKCE verifier guarantee).
+    try:
+        bound_user_id = take_connect_state(state)
+    except ConnectStateStoreError:
+        return _popup_response(
+            "linkedin",
+            "error",
+            error="Could not reach the connection store. Please try connecting again.",
+        )
+    if not bound_user_id or bound_user_id != user_id:
+        return _popup_response(
+            "linkedin",
+            "error",
+            error="OAuth state is missing, expired, or already used. Please start the connection again.",
+        )
 
     async with httpx.AsyncClient(timeout=15) as client:
         token_res = await client.post(
@@ -470,6 +500,7 @@ async def linkedin_callback(
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         if token_res.is_error:
+            logger.warning("linkedin token exchange failed (status=%s)", token_res.status_code)
             return _popup_response("linkedin", "error", error="Token exchange failed.")
 
         tokens = token_res.json()
@@ -481,6 +512,7 @@ async def linkedin_callback(
             headers={"Authorization": f"Bearer {access_token}"},
         )
         if profile_res.is_error:
+            logger.warning("linkedin profile fetch failed (status=%s)", profile_res.status_code)
             return _popup_response("linkedin", "error", error="Could not fetch LinkedIn profile.")
 
         profile = profile_res.json()
@@ -504,8 +536,7 @@ async def linkedin_callback(
         if "r_member_social" in scopes:
             linkedin_service.queue_scrape_task(user_id)
     except Exception:
-        import logging
-        logging.getLogger(__name__).warning(
+        logger.warning(
             "linkedin_callback: could not enqueue scrape task for user_id=%s — "
             "Celery may not be running. User can trigger sync manually.",
             user_id,
@@ -525,17 +556,24 @@ INSTAGRAM_SCOPES = "user_profile,user_media"
 @router.get("/instagram/start")
 async def instagram_start(
     ct: Optional[str] = Query(None, description="Single-use connect token from POST /connect/session"),
-    token: Optional[str] = Query(None, description="Deprecated: raw JWT (use ct instead)"),
     db: Session = Depends(get_db),
 ):
     if not settings.INSTAGRAM_APP_ID:
         return _popup_response("instagram", "error", error="Instagram OAuth is not configured.")
 
-    user_id, err_reason = await _resolve_start_user(ct, token)
+    user_id, err_reason = await _resolve_start_user(ct)
     if not user_id:
-        return _popup_response("instagram", "error", error=f"Invalid session token. Reason: {err_reason}")
+        return _popup_response("instagram", "error", error=err_reason)
 
     state = _make_connect_state(user_id, "instagram")
+    try:
+        bind_connect_state(state, user_id)  # single-use, session-bound (TTL 10m)
+    except ConnectStateStoreError:
+        return _popup_response(
+            "instagram",
+            "error",
+            error="Could not reach the connection store. Please try connecting again.",
+        )
     params = urlencode({
         "client_id": settings.INSTAGRAM_APP_ID,
         "redirect_uri": settings.INSTAGRAM_REDIRECT_URI,
@@ -559,6 +597,24 @@ async def instagram_callback(
 
     user_id = decoded["sub"]
 
+    # Single-use/binding check: the state must have been recorded at /start, must
+    # not be expired, and must not have been consumed already. Rejects missing,
+    # expired, reused, and unbound states (mirrors the X PKCE verifier guarantee).
+    try:
+        bound_user_id = take_connect_state(state)
+    except ConnectStateStoreError:
+        return _popup_response(
+            "instagram",
+            "error",
+            error="Could not reach the connection store. Please try connecting again.",
+        )
+    if not bound_user_id or bound_user_id != user_id:
+        return _popup_response(
+            "instagram",
+            "error",
+            error="OAuth state is missing, expired, or already used. Please start the connection again.",
+        )
+
     async with httpx.AsyncClient(timeout=15) as client:
         token_res = await client.post(
             INSTAGRAM_TOKEN_URL,
@@ -571,6 +627,7 @@ async def instagram_callback(
             },
         )
         if token_res.is_error:
+            logger.warning("instagram token exchange failed (status=%s)", token_res.status_code)
             return _popup_response("instagram", "error", error="Token exchange failed.")
 
         tokens = token_res.json()
@@ -581,6 +638,7 @@ async def instagram_callback(
             f"{INSTAGRAM_ME_URL}?fields=id,username&access_token={access_token}"
         )
         if me_res.is_error:
+            logger.warning("instagram profile fetch failed (status=%s)", me_res.status_code)
             return _popup_response("instagram", "error", error="Could not fetch Instagram profile.")
 
         me = me_res.json()
@@ -621,7 +679,9 @@ def _connection_status_payload(conn: SocialConnection) -> dict:
         "missing_read_scopes": read_missing,
         "posting_ready": not posting_missing,
         "read_sync_ready": not read_missing,
-        "reconnect_required": bool(posting_missing),
+        # A persisted requires_reconnect (token could not be refreshed/decrypted)
+        # forces reconnect regardless of scope state (R4.3).
+        "reconnect_required": bool(posting_missing) or bool(conn.requires_reconnect),
         # ── Legacy aliases (deprecated) ──
         "username": conn.platform_username,
         "last_synced": conn.last_synced_at,

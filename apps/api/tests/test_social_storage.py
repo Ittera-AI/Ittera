@@ -125,7 +125,7 @@ def test_storage_export_ok_not_connected(client):
     headers = _register_and_token(client)
     r = client.get("/api/v1/storage/export/download", headers=headers)
     assert r.status_code == 400
-    assert "Connect Google Drive first" in r.json()["detail"]
+    assert "Connect Google Drive first" in r.json()["error"]["message"]
 
 
 def test_storage_import_ok_not_connected(client):
@@ -133,7 +133,7 @@ def test_storage_import_ok_not_connected(client):
     headers = _register_and_token(client)
     r = client.post("/api/v1/storage/import", json={"test": "data"}, headers=headers)
     assert r.status_code == 400
-    assert "Connect Google Drive first" in r.json()["detail"]
+    assert "Connect Google Drive first" in r.json()["error"]["message"]
 
 
 # Token Encryption Tests

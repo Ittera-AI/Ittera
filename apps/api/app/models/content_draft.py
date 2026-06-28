@@ -30,6 +30,9 @@ class ContentDraft(Base):
     platform_post_id = Column(String, nullable=True)
     published_at = Column(DateTime, nullable=True)
     publish_error = Column(Text, nullable=True)
+    # Stable key set before the platform call so a retry after partial success
+    # can be detected and not republished (R8.5). Unique per draft.
+    publish_idempotency_key = Column(String, nullable=True, unique=True)
     review_email_sent_at = Column(DateTime, nullable=True)
     auto_post_enabled_snapshot = Column(Boolean, nullable=False, default=False)
     persona_fit_score = Column(Integer, nullable=True)

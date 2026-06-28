@@ -1,9 +1,13 @@
 from pathlib import Path
 from typing import List
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _INSECURE_SECRET = "change-me-in-production"
+
+# Environments that must serve traffic only with hardened, non-default secrets and
+# an explicit CORS allowlist. Startup fails closed when these conditions are unmet.
+_FAIL_CLOSED_ENVIRONMENTS = {"staging", "production"}
 
 # Resolve env files by absolute path so they load no matter the working directory
 # (uvicorn is typically launched from apps/api, but the env files live at the repo root).
@@ -119,12 +123,70 @@ class Settings(BaseSettings):
     # Include 127.0.0.1 — browsers treat it as a different origin than localhost.
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
+    # Rate limiting — Redis-backed sliding window enforced per client IP per tier.
+    # Limits hold across processes/replicas because the window lives in Redis
+    # (REDIS_URL). Authentication routes get a stricter limit than general routes
+    # so credentials cannot be brute-forced. All values are configurable via env.
+    RATE_LIMIT_ENABLED: bool = True
+    # General tier: applies to every route that is not an authentication route.
+    RATE_LIMIT_GENERAL_MAX_REQUESTS: int = 100
+    RATE_LIMIT_GENERAL_WINDOW_SECONDS: int = 60
+    # Authentication tier: stricter (lower) limit for the auth path prefix below.
+    RATE_LIMIT_AUTH_MAX_REQUESTS: int = 10
+    RATE_LIMIT_AUTH_WINDOW_SECONDS: int = 60
+    # Requests whose path starts with this prefix are limited by the auth tier.
+    RATE_LIMIT_AUTH_PATH_PREFIX: str = "/api/v1/auth"
+
     model_config = SettingsConfigDict(
         env_file=tuple(str(p) for p in _ENV_FILES),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def _fail_closed_in_staging_and_production(self) -> "Settings":
+        """Fail startup with a descriptive error when security-critical configuration
+        is left at insecure defaults in staging or production.
+
+        This complements (and does not weaken) ``secret_key_must_be_changed``: that
+        field validator still rejects the default ``SECRET_KEY`` in production, while
+        this model validator additionally enforces a dedicated ``TOKEN_ENCRYPTION_KEY``
+        and a non-empty ``ALLOWED_ORIGINS`` allowlist across staging and production.
+        """
+        if self.ENVIRONMENT not in _FAIL_CLOSED_ENVIRONMENTS:
+            return self
+
+        problems: List[str] = []
+
+        if self.SECRET_KEY == _INSECURE_SECRET:
+            problems.append(
+                "SECRET_KEY is set to the insecure default. Generate a secure value "
+                'with: python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+
+        if not self.TOKEN_ENCRYPTION_KEY or not self.TOKEN_ENCRYPTION_KEY.strip():
+            problems.append(
+                "TOKEN_ENCRYPTION_KEY must be set to a dedicated, non-empty value so "
+                "OAuth credentials at rest are not encrypted with a SECRET_KEY-derived key."
+            )
+
+        if not self.ALLOWED_ORIGINS or all(
+            not str(origin).strip() for origin in self.ALLOWED_ORIGINS
+        ):
+            problems.append(
+                "ALLOWED_ORIGINS must contain at least one approved origin; an empty "
+                "CORS allowlist is not permitted while credentials are allowed."
+            )
+
+        if problems:
+            joined = "\n  - ".join(problems)
+            raise ValueError(
+                f"Insecure configuration detected for ENVIRONMENT='{self.ENVIRONMENT}':"
+                f"\n  - {joined}"
+            )
+
+        return self
 
 
 settings = Settings()

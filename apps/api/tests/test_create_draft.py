@@ -64,7 +64,7 @@ def test_create_draft_thread_validates_segment_length(client):
         headers=headers,
     )
     assert response.status_code == 422
-    assert "exceeds" in response.json()["detail"].lower()
+    assert "exceeds" in response.json()["error"]["message"].lower()
 
 
 def test_create_draft_thread_empty_list_rejected(client):

@@ -36,6 +36,7 @@ from app.config import settings
 from app.core.audit_logger import AuditAction, get_audit_logger
 from app.core.retry import drive_api_retry
 from app.core.security import decrypt_value
+from app.db.datetime_helpers import ensure_aware, utc_now
 
 logger = logging.getLogger("iterra.storage")
 audit = get_audit_logger()
@@ -94,7 +95,6 @@ class StorageService:
         )
         # Set expiry if provided (for proactive refresh calculation)
         if expires_at:
-            from google.auth import datetime as google_datetime
             self._credentials.expiry = expires_at
 
         self._drive = build("drive", "v3", credentials=self._credentials)
@@ -108,13 +108,14 @@ class StorageService:
             return
 
         # Check if token is expired or will expire soon (proactive refresh)
-        from google.auth import datetime as google_datetime
-        now = google_datetime.utcnow()
+        now = utc_now()
         buffer = timedelta(seconds=self.TOKEN_EXPIRY_BUFFER)
 
-        # If we have expiry info, check with buffer; otherwise use default expired check
+        # If we have expiry info, check with buffer; otherwise use default expired check.
+        # Normalize the credential expiry to aware UTC so a naive stored value never
+        # raises "can't subtract offset-naive and offset-aware datetimes".
         if self._credentials.expiry:
-            needs_refresh = (self._credentials.expiry - buffer) <= now
+            needs_refresh = (ensure_aware(self._credentials.expiry) - buffer) <= now
         else:
             needs_refresh = self._credentials.expired
 
