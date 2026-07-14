@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -31,6 +32,122 @@ def _session():
 
     engine = create_engine(settings.DATABASE_URL)
     return sessionmaker(autocommit=False, autoflush=False, bind=engine)()
+
+
+def _bridge_and_enqueue_learning_loop(db, user, draft, publish_result) -> None:
+    """
+    Bridge a freshly-published draft to a Post and enqueue the learning loop.
+
+    Best-effort and isolated from the publish flow: any failure here is logged and
+    swallowed so it can never break publishing (Requirement 1.8). The bridge commits
+    its own Post/linkage, so if the enqueue ultimately fails the Post and
+    ``draft.post_id`` linkage are retained.
+
+    Imports are local to avoid import cycles and to keep publishing resilient if the
+    bridge/orchestrator modules can't be imported in this context (Requirement 1.6).
+    """
+    try:
+        from app.services.post_bridge_service import bridge_draft_to_post
+
+        post = bridge_draft_to_post(db, user, draft, publish_result)
+        if post is None:
+            return
+
+        try:
+            from workers.celery.tasks.learning_loop import on_post_published
+        except ImportError:
+            logger.warning(
+                "learning_loop task not importable; skipping enqueue for post_id=%s",
+                post.id,
+            )
+            return
+
+        if not _enqueue_with_retry(on_post_published, post.id):
+            logger.error(
+                "Failed to enqueue on_post_published for post_id=%s after retries; "
+                "Post and draft linkage retained",
+                post.id,
+            )
+    except Exception:
+        logger.exception(
+            "Learning-loop bridge/enqueue failed for draft_id=%s",
+            getattr(draft, "id", None),
+        )
+
+
+def _lock_due_draft(db, draft_id):
+    """Re-read a due draft under a row-level lock before transitioning to publishing.
+
+    On Postgres this issues ``SELECT ... FOR UPDATE SKIP LOCKED`` so that concurrent
+    queue runs can never select and publish the same draft: a row already locked by
+    another run is skipped (returns ``None``) instead of blocking. On SQLite (the test
+    environment, which does not support ``FOR UPDATE SKIP LOCKED``) the lock clause is
+    omitted, mirroring the ``_lock_draft`` pattern in ``content_service`` (R8.1).
+
+    Returns the locked draft, or ``None`` when the row is locked by another run or no
+    longer exists.
+    """
+    from app.models.content_draft import ContentDraft
+
+    query = db.query(ContentDraft).filter(ContentDraft.id == draft_id)
+    try:
+        if db.bind and db.bind.dialect.name != "sqlite":
+            query = query.with_for_update(skip_locked=True)
+    except Exception:
+        pass
+    return query.first()
+
+
+def _already_published_platform_post_id(db, draft) -> str | None:
+    """Return the platform post id when this draft was already published.
+
+    Natural-key idempotency guard (R8.5): a retry after a partial success must not
+    re-post to the platform. A publish is treated as already done when either
+
+    * the draft itself already carries a ``platform_post_id`` (set on a prior
+      attempt before the run was interrupted), or
+    * a ``Post`` already exists for this draft under the natural key
+      ``(user_id, platform, platform_post_id)`` — located via the draft's
+      ``post_id`` linkage written by the publication bridge.
+
+    Returns the existing platform post id, or ``None`` when no prior publish is
+    found and the platform call should proceed.
+    """
+    from app.models.post import Post
+
+    if draft.platform_post_id:
+        return draft.platform_post_id
+
+    if draft.post_id:
+        existing = (
+            db.query(Post)
+            .filter(
+                Post.id == draft.post_id,
+                Post.user_id == draft.user_id,
+                Post.platform == draft.platform,
+            )
+            .first()
+        )
+        if existing and existing.platform_post_id:
+            return existing.platform_post_id
+    return None
+
+
+def _enqueue_with_retry(task, post_id: str, attempts: int = 3) -> bool:
+    """
+    Enqueue a Celery task by post id, retrying transient broker failures.
+
+    Returns ``True`` on a successful enqueue, ``False`` if all attempts fail.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            task.delay(post_id)
+            return True
+        except Exception:
+            logger.warning(
+                "Enqueue attempt %d/%d failed for post_id=%s", attempt, attempts, post_id
+            )
+    return False
 
 
 @celery_app.task(name="workers.celery.tasks.publisher.process_publishing_queue", bind=True)
@@ -93,9 +210,14 @@ def process_publishing_queue(self) -> dict:
             )
             .all()
         )
-        for draft in due:
-            # Refresh to prevent race conditions causing duplicate posts
-            db.refresh(draft)
+        for due_draft in due:
+            # Acquire a row-level lock (FOR UPDATE SKIP LOCKED on Postgres) before
+            # transitioning the draft so concurrent queue runs cannot select the same
+            # draft and produce duplicate posts (R8.1). A draft already locked by another
+            # run is skipped; the lock is held until the publishing-state commit below.
+            draft = _lock_due_draft(db, due_draft.id)
+            if draft is None:
+                continue
             if draft.status != DRAFT_STATUS_SCHEDULED:
                 continue
                 
@@ -109,6 +231,28 @@ def process_publishing_queue(self) -> dict:
                 continue
             try:
                 validate_platform_media(draft.platform, len([item for item in draft.media if item.status != "deleted"]))
+
+                # Natural-key idempotency guard (R8.5): before calling the platform,
+                # detect a prior (partially-successful) publish so a retry does not
+                # create a duplicate post. A draft that already carries a
+                # ``platform_post_id`` — or for which a ``published`` Post already
+                # exists under the natural key (user_id, platform, platform_post_id) —
+                # is finalized as published without re-posting.
+                already_post_id = _already_published_platform_post_id(db, draft)
+                if already_post_id:
+                    draft.status = DRAFT_STATUS_PUBLISHED
+                    draft.review_status = REVIEW_STATUS_APPROVED
+                    draft.platform_post_id = already_post_id
+                    draft.published_at = draft.published_at or now
+                    draft.publish_error = None
+                    result["published"] += 1
+                    db.commit()
+                    continue
+
+                # Set a stable idempotency key before the platform call so the
+                # publish can be correlated across retries after a partial success (R8.5).
+                if not draft.publish_idempotency_key:
+                    draft.publish_idempotency_key = uuid.uuid4().hex
                 draft.status = DRAFT_STATUS_PUBLISHING
                 draft.publish_error = None
                 db.commit()
@@ -119,7 +263,18 @@ def process_publishing_queue(self) -> dict:
                 draft.published_at = now
                 draft.publish_error = None
                 result["published"] += 1
+                db.commit()
+
+                # Self-learning loop wiring: bridge the published draft to a
+                # learnable Post and enqueue the orchestrator. Runs only after a
+                # successful publish + commit and never raises out of here so a
+                # bridge/enqueue failure can't fail the publish (Requirements 1.6, 1.8).
+                _bridge_and_enqueue_learning_loop(db, user, draft, published)
             except (PublishingValidationError, PublishError, Exception) as exc:
+                # Bounded failure (R8.3): any publish error transitions the draft to a
+                # terminal ``failed`` state with a category-level message. Failed drafts
+                # are never re-selected (the due query above filters ``status ==
+                # scheduled``), so a failed publish is not retried indefinitely.
                 error_category = getattr(exc, "code", "unknown_error")
                 error_detail = getattr(exc, "detail", "An unexpected error occurred during publishing.")
                 if not isinstance(exc, (PublishingValidationError, PublishError)):

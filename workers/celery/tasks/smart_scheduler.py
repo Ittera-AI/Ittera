@@ -17,9 +17,9 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from celery import shared_task
 from sqlalchemy.orm import Session
 
+from workers.celery.app import celery_app
 from app.db.session import SessionLocal
 from app.models.content_draft import ContentDraft
 from app.models.user import User
@@ -228,7 +228,7 @@ def _fallback_timing(
     }
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def suggest_optimal_schedule(self, draft_id: str) -> dict[str, Any]:
     """
     Celery task to suggest optimal schedule for a draft.
@@ -259,7 +259,7 @@ def suggest_optimal_schedule(self, draft_id: str) -> dict[str, Any]:
         db.close()
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def auto_schedule_draft(self, draft_id: str, confidence_threshold: float = 0.7) -> dict[str, Any]:
     """
     Automatically schedule a draft at the optimal time if confidence is high.
@@ -315,7 +315,7 @@ def auto_schedule_draft(self, draft_id: str, confidence_threshold: float = 0.7) 
         db.close()
 
 
-@shared_task
+@celery_app.task
 def batch_optimize_schedule(draft_ids: list[str]) -> dict[str, Any]:
     """
     Optimize scheduling for multiple drafts to spread them optimally.
@@ -370,7 +370,7 @@ def batch_optimize_schedule(draft_ids: list[str]) -> dict[str, Any]:
     return results
 
 
-@shared_task
+@celery_app.task
 def daily_schedule_optimization() -> dict[str, Any]:
     """
     Daily task to review and optimize upcoming scheduled posts.

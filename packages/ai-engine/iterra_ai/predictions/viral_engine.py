@@ -28,6 +28,7 @@ from iterra_ai.predictions.schemas import (
     ViralPattern,
 )
 from iterra_ai.predictions.prompts import build_viral_prompt
+from iterra_ai.core.cost_tracker import CostTracker
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ class ViralPredictionEngine:
         )
         self.model = model or os.getenv("AIML_MODEL", "gpt-4o-mini")
         self.max_tokens = 4096
+        self.cost_tracker = CostTracker()
     
     def _compute_content_hash(self, content: str, platform: str) -> str:
         """Compute hash for caching."""
@@ -92,6 +94,9 @@ class ViralPredictionEngine:
                 "input_tokens": getattr(response.usage, "prompt_tokens", 0),
                 "output_tokens": getattr(response.usage, "completion_tokens", 0),
             }
+            self.cost_tracker.log(
+                "viral", usage["input_tokens"], usage["output_tokens"]
+            )
             return content or "", usage
         except Exception as e:
             logger.error(f"Viral LLM call failed: {e}")

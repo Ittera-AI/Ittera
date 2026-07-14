@@ -1,4 +1,10 @@
-version: "3.9"
+# Resource limits and healthchecks are defined per service so orchestration can
+# gate readiness on application health (R12.3, R12.4). Secrets and credentials are
+# sourced from the environment (via `.env` / environment-specific secret stores)
+# with local-development defaults only — no production credentials are hardcoded
+# here (R12.6). Provide POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB and the
+# DATABASE_URL / REDIS_URL / CELERY_* values through your environment in staging
+# and production.
 
 services:
   web:
@@ -14,10 +20,26 @@ services:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
       - API_PROXY_TARGET=http://api:8000
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     env_file:
       - .env
     restart: unless-stopped
+    healthcheck:
+      # busybox wget ships in the node:20-alpine runtime image.
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
 
   api:
     build:
@@ -33,16 +55,36 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://iterra:iterra@db:5432/iterra
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      # Local-dev defaults only; override via environment-specific secret stores in prod.
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-iterra}:${POSTGRES_PASSWORD:-iterra}@db:5432/${POSTGRES_DB:-iterra}}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
     restart: unless-stopped
     volumes:
       - ./apps/api:/app
       - ./packages/ai-engine:/packages/ai-engine
       - ./scripts:/scripts
       - media_uploads:/app/uploads
+    healthcheck:
+      # python:3.11-slim has no curl/wget; use the stdlib for the liveness probe.
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request,sys;
+          sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').getcode()==200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   worker:
     build:
@@ -56,14 +98,29 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://iterra:iterra@db:5432/iterra
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-iterra}:${POSTGRES_PASSWORD:-iterra}@db:5432/${POSTGRES_DB:-iterra}}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
       - ENABLE_PLACEHOLDER_TASKS=${ENABLE_PLACEHOLDER_TASKS:-false}
     volumes:
       - media_uploads:/app/uploads
     restart: unless-stopped
+    healthcheck:
+      # Celery liveness: a worker that answers a control ping is healthy.
+      test: ["CMD-SHELL", "celery -A workers.celery.app.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   beat:
     build:
@@ -78,29 +135,53 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://iterra:iterra@db:5432/iterra
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-iterra}:${POSTGRES_PASSWORD:-iterra}@db:5432/${POSTGRES_DB:-iterra}}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
       - ENABLE_PLACEHOLDER_TASKS=${ENABLE_PLACEHOLDER_TASKS:-false}
     restart: unless-stopped
+    healthcheck:
+      # beat has no inspect endpoint; assert the scheduler process is alive.
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
 
   db:
     image: postgres:16
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: iterra
-      POSTGRES_PASSWORD: iterra
-      POSTGRES_DB: iterra
+      # Local-dev defaults; supply real credentials via the environment in staging/prod.
+      POSTGRES_USER: ${POSTGRES_USER:-iterra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-iterra}
+      POSTGRES_DB: ${POSTGRES_DB:-iterra}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U iterra"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iterra}"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   redis:
     image: redis:7-alpine
@@ -114,6 +195,14 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
 
   nginx:
     image: nginx:alpine

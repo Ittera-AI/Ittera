@@ -30,6 +30,7 @@ from iterra_ai.predictions.schemas import (
     TimingPattern,
 )
 from iterra_ai.predictions.prompts import build_timing_prompt
+from iterra_ai.core.cost_tracker import CostTracker
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,7 @@ class TimingPredictionEngine:
         )
         self.model = model or os.getenv("AIML_MODEL", "gpt-4o-mini")
         self.max_tokens = 4096
+        self.cost_tracker = CostTracker()
     
     def _compute_content_hash(self, content: str, context: dict) -> str:
         """Compute hash for caching."""
@@ -119,6 +121,9 @@ class TimingPredictionEngine:
                 "input_tokens": getattr(response.usage, "prompt_tokens", 0),
                 "output_tokens": getattr(response.usage, "completion_tokens", 0),
             }
+            self.cost_tracker.log(
+                "timing", usage["input_tokens"], usage["output_tokens"]
+            )
             return content or "", usage
         except Exception as e:
             logger.error(f"Timing LLM call failed: {e}")

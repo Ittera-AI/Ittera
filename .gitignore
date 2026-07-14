@@ -26,8 +26,13 @@ env/
 .pytest_cache/
 htmlcov/
 .coverage
+.coverage.*
 coverage.xml
 *.cover
+
+# Transient test artifacts
+.hypothesis/
+iterra.db
 
 # Node / Next.js
 node_modules/

@@ -71,67 +71,109 @@ async function clearInvalidSession() {
   window.dispatchEvent(new Event("ittera-auth-invalid"));
 }
 
-class ApiError extends Error {
+/**
+ * Canonical API error for the whole web app.
+ *
+ * Exposes `message`/`detail` (same string) and `status` so both calling
+ * conventions used across the codebase keep working:
+ *   - `err.message` (low-level `apiFetch` callers)
+ *   - `err.detail`  (typed `api.*` namespace callers)
+ */
+export class ApiError extends Error {
+  detail: string;
   constructor(
+    message: string,
     public status: number,
-    public detail: string,
   ) {
-    super(detail);
+    super(message);
     this.name = "ApiError";
+    this.detail = message;
   }
 }
 
-async function request<T>(
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
-  path: string,
-  body?: unknown,
-): Promise<T> {
-  const token = await getToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+async function parseErrorMessage(response: Response): Promise<string> {
+  let message = response.statusText || `HTTP ${response.status}`;
+  try {
+    const body = await response.json();
+    message = body.detail ?? message;
+  } catch {
+    // Keep the HTTP status text when the API did not return JSON.
+  }
+  return message;
+}
 
-  const send = (requestHeaders: Record<string, string>) =>
-    fetch(`${BASE_URL}${path}`, {
-      method,
-      headers: requestHeaders,
-      credentials: "include",
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+/**
+ * Single low-level transport for the app. The typed `api.*` namespace and the
+ * raw `apiFetch` consumers (product/waitlist services) both route through here,
+ * so token attachment, 401 refresh, and error shaping live in exactly one place.
+ *
+ * Callers pass an absolute API path (e.g. `/api/v1/...`). A caller-provided
+ * `Authorization` header bypasses the automatic Supabase bearer token.
+ */
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (!headers.has("Content-Type") && init.body && !isFormData) {
+    headers.set("Content-Type", "application/json");
+  }
 
-  let res = await send(headers);
+  const callerProvidedAuthorization = headers.has("Authorization");
+  const accessToken = callerProvidedAuthorization ? null : await getToken();
+  if (accessToken && !callerProvidedAuthorization) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
 
-  if (res.status === 401) {
-    if (token) {
+  const url = `${BASE_URL}${path}`;
+  const send = (requestHeaders: Headers) =>
+    fetch(url, { ...init, headers: requestHeaders, credentials: "include" });
+
+  let response: Response;
+  try {
+    response = await send(headers);
+  } catch (err) {
+    const hint =
+      BASE_URL === ""
+        ? "Same-origin proxy: ensure Next.js rewrites are configured and FastAPI is reachable from the dev server (see API_PROXY_TARGET / port 8000)."
+        : `Tried ${BASE_URL}. Is the API running and is CORS (ALLOWED_ORIGINS) correct?`;
+    const cause = err instanceof Error ? err.message : String(err);
+    throw new ApiError(`Failed to reach API (${cause}). ${hint}`, 0);
+  }
+
+  if (response.status === 401 && !callerProvidedAuthorization) {
+    if (accessToken) {
       const refreshedToken = await refreshToken();
       if (refreshedToken) {
-        res = await send({
-          ...headers,
-          Authorization: `Bearer ${refreshedToken}`,
-        });
+        const retryHeaders = new Headers(headers);
+        retryHeaders.set("Authorization", `Bearer ${refreshedToken}`);
+        response = await send(retryHeaders);
       }
     }
 
-    if (res.status === 401) {
+    if (response.status === 401) {
       await clearInvalidSession();
     }
   }
 
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      const json = await res.json();
-      detail = json.detail ?? detail;
-    } catch {
-      /* non-JSON error body */
-    }
-    throw new ApiError(res.status, detail);
+  if (!response.ok) {
+    throw new ApiError(await parseErrorMessage(response), response.status);
   }
 
-  if (res.status === 204) return undefined as T;
+  if (response.status === 204) {
+    return undefined as T;
+  }
 
-  return res.json() as Promise<T>;
+  return response.json() as Promise<T>;
+}
+
+function request<T>(
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  return apiFetch<T>(path, {
+    method,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
 }
 
 const get    = <T>(path: string)               => request<T>("GET",    path);
@@ -238,6 +280,76 @@ export interface BrandProfile {
   confirmed: boolean;
 }
 
+// ─── Permanent context (Step 1 onboarding questionnaire) ──────────────────────
+
+export interface PlatformFactEntry {
+  best_post_times: string[];
+  best_formats: string[];
+  avoid: string[];
+  confirmed_at: string | null;
+}
+
+export interface PermanentContext {
+  brand_name: string | null;
+  bio: string | null;
+  target_audience: string | null;
+  content_mission: string | null;
+  niche: string | null;
+  primary_platform: string;
+  platform_facts: Record<string, PlatformFactEntry>;
+  context_version: number;
+}
+
+export interface PersonaContext {
+  voice_tone: string | null;
+  sentence_style: string | null;
+  hook_patterns: string[];
+  content_pillars: string[];
+  hashtag_style: string | null;
+  emoji_usage: string | null;
+  avg_post_length: number | null;
+  analysis_based_on_posts: number;
+  confidence_score: number;
+}
+
+export interface ReportContext {
+  top_performing_topics: string[];
+  avg_engagement_rate: number | null;
+  best_hook_last_cycle: string | null;
+  content_gaps: string[];
+  posts_analysed: number;
+  period_days: number;
+  learned_summary: string | null;
+  why_wins: string[];
+  recommendations: string[];
+  avg_hook_score: number | null;
+  recurring_improvement: string | null;
+}
+
+export interface AssembledContext {
+  system_prompt: string;
+  permanent: PermanentContext;
+  persona: PersonaContext;
+  report: ReportContext;
+  platform: string;
+  missing_layers: string[];
+}
+
+export interface UpdatePermanentContextRequest {
+  brand_name?: string | null;
+  bio?: string | null;
+  target_audience?: string | null;
+  content_mission?: string | null;
+  niche?: string | null;
+  primary_platform?: string | null;
+}
+
+export interface UpdateContextResult {
+  message: string;
+  context_version: number;
+  missing_layers: string[];
+}
+
 // ─── API Namespaces ───────────────────────────────────────────────────────────
 
 const auth = {
@@ -260,8 +372,11 @@ const waitlist = {
 
 const connect = {
   status: ()                                  => get<SocialConnectionStatus[]>("/api/v1/connect/status"),
-  startUrl: (platform: string, token: string) =>
-    `${BASE_URL}/api/v1/connect/${platform}/start?token=${encodeURIComponent(token)}`,
+  // Mint a single-use connect token (Bearer auth) so the JWT never enters the start URL.
+  createSession: ()                           => post<{ connect_token: string }>("/api/v1/connect/session", {}),
+  // Build the OAuth start URL from a single-use connect token (not the raw JWT).
+  startUrl: (platform: string, connectToken: string) =>
+    `${BASE_URL}/api/v1/connect/${platform}/start?ct=${encodeURIComponent(connectToken)}`,
   disconnect: (platform: string)              => del<{ disconnected: string }>(`/api/v1/connect/${platform}`),
 };
 
@@ -316,6 +431,17 @@ const analytics = {
   summary: ()                                => get("/api/v1/analytics/summary"),
 };
 
+const context = {
+  get: (platform = "linkedin")               =>
+    get<AssembledContext>(`/api/v1/context/?platform=${encodeURIComponent(platform)}`),
+  updatePermanent: (payload: UpdatePermanentContextRequest) =>
+    patch<UpdateContextResult>("/api/v1/context/", payload),
+  prompt: (platform = "linkedin")            =>
+    get<{ system_prompt: string; missing_layers: string[]; context_version: number }>(
+      `/api/v1/context/prompt?platform=${encodeURIComponent(platform)}`,
+    ),
+};
+
 const trends = {
   list: ()                                   => get("/api/v1/trends"),
   refresh: ()                                => post("/api/v1/trends/refresh", {}),
@@ -333,7 +459,6 @@ export const api = {
   repurpose,
   brandProfile,
   analytics,
+  context,
   trends,
 };
-
-export { ApiError };

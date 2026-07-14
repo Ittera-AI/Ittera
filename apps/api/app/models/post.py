@@ -18,6 +18,7 @@ class Post(Base):
     content = Column(Text, nullable=False)
     content_type = Column(String, nullable=False)
     published_at = Column(DateTime, nullable=True)
+    source = Column(String, nullable=False, default="imported", index=True)  # 'imported' (scraper/importer) | 'iterra_published' (created by the bridge)
     impressions = Column(Integer, nullable=False, default=0)
     likes = Column(Integer, nullable=False, default=0)
     comments = Column(Integer, nullable=False, default=0)

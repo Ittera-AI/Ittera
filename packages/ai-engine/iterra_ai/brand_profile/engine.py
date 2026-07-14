@@ -1,4 +1,4 @@
-"""BrandProfileEngine — derives writing style from real post data via Anthropic Claude."""
+"""BrandProfileEngine — derives writing style from real post data via the AIML LLM gateway."""
 
 from __future__ import annotations
 

@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
+from app.db.datetime_helpers import ensure_aware
 from app.models.brand_profile import BrandProfile
 from app.models.post import Post
 from app.models.post_analysis import PostAnalysis
@@ -81,9 +82,16 @@ def analyze_post(db: Session, user: User, post_id: str) -> dict[str, Any]:
     if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
-    # Return existing analysis if available and fresh (< 30 days)
+    # Return existing analysis if available and fresh (< 30 days).
+    # This short-circuit reuses the cached analysis and performs zero LLM calls,
+    # so NO auto_analysis_complete event is emitted here (avoids double-charging).
     if post.analysis is not None:
-        analysis_age = datetime.now(timezone.utc) - post.analysis.created_at
+        # PostAnalysis.created_at is stored as a naive DateTime (and Postgres
+        # TIMESTAMP WITHOUT TIME ZONE), so it comes back timezone-naive. Normalize
+        # to aware-UTC before subtracting from an aware datetime to avoid a
+        # "can't subtract offset-naive and offset-aware datetimes" TypeError.
+        created_at = ensure_aware(post.analysis.created_at)
+        analysis_age = datetime.now(timezone.utc) - created_at
         if analysis_age.days < 30:
             return _analysis_payload(post.id, post.analysis)
 
@@ -166,7 +174,12 @@ def analyze_post(db: Session, user: User, post_id: str) -> dict[str, Any]:
         if post.analysis:
             db.refresh(post.analysis)
 
-        return _analysis_payload(post.id, post.analysis or analysis)
+        completed_analysis = post.analysis or analysis
+        _emit_auto_analysis_complete(
+            db, user.id, post.id, completed_analysis, is_heuristic=False
+        )
+
+        return _analysis_payload(post.id, completed_analysis)
 
     except Exception as e:
         # Log error but still create a basic analysis to avoid breaking flow
@@ -194,7 +207,47 @@ def analyze_post(db: Session, user: User, post_id: str) -> dict[str, Any]:
         db.commit()
         db.refresh(fallback)
 
+        # A new PostAnalysis was still produced (heuristic), so synthesis must be
+        # able to detect it; emit exactly one completion event for this analysis.
+        _emit_auto_analysis_complete(
+            db, user.id, post.id, fallback, is_heuristic=True
+        )
+
         return _analysis_payload(post.id, fallback)
+
+
+def _emit_auto_analysis_complete(
+    db: Session,
+    user_id: str,
+    post_id: str,
+    analysis: PostAnalysis,
+    is_heuristic: bool = False,
+) -> None:
+    """
+    Record exactly one ``auto_analysis_complete`` AnalyticsEvent for a completed
+    per-post analysis so the synthesis stage can detect new analyses since its
+    last run (Requirement 2.5).
+
+    This is only called from the completion paths of ``analyze_post`` (LLM success
+    and heuristic fallback). It is deliberately NOT called from the fresh-analysis
+    (<30d) short-circuit, so reusing a cached analysis never emits an event and
+    never double-charges (Requirement 2.2).
+    """
+    from app.models.analytics_snapshot import AnalyticsEvent
+
+    event = AnalyticsEvent(
+        user_id=user_id,
+        event_type="auto_analysis_complete",
+        post_id=post_id,
+        metrics={
+            "hook_score": analysis.hook_score,
+            "tone_match_score": analysis.tone_match_score,
+            "structure_score": analysis.structure_score,
+            "is_heuristic": is_heuristic,
+        },
+    )
+    db.add(event)
+    db.commit()
 
 
 def analytics_summary(

@@ -344,10 +344,12 @@ async def download_report(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     
-    # Check authorization
+    # Owner-scoped access (R2.2): a report that does not belong to the
+    # authenticated user is indistinguishable from a missing report — return
+    # 404 rather than 403 so we never disclose the existence of another user's
+    # report by identifier.
     if report["user_id"] != current_user.id:
-        # TODO: Check workspace permissions
-        pass
+        raise HTTPException(status_code=404, detail="Report not found")
     
     return Response(
         content=report["pdf_bytes"],

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Clock, Linkedin, Twitter, Instagram, X as XIcon } from "lucide-react";
 import { AuthenticatedImage } from "@/components/product/AuthenticatedImage";
+import { LearningsPanel } from "@/components/product/LearningsPanel";
 import { ProductShell } from "@/components/product/ProductShell";
 import { useProduct } from "@/hooks/useProduct";
 
@@ -61,6 +62,15 @@ export default function CalendarPage() {
   const today = useMemo(() => new Date(), []);
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  // Surface learnings for the platform the user schedules most (fallback LinkedIn).
+  const dominantPlatform = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const event of calendar) {
+      if (event.platform) counts[event.platform] = (counts[event.platform] ?? 0) + 1;
+    }
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "linkedin";
+  }, [calendar]);
 
   useEffect(() => {
     void loadCalendar().catch(() => undefined);
@@ -159,6 +169,9 @@ export default function CalendarPage() {
             );
           })}
         </div>
+
+        {/* Self-learning loop output: memory + promoted optimal post times */}
+        <LearningsPanel platform={dominantPlatform} />
 
         {/* Calendar grid */}
         <div

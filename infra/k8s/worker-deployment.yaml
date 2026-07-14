@@ -1,0 +1,63 @@
+# Worker (Celery) deployment.
+#
+# Resource limits/requests (R12.3) and exec-based liveness/readiness probes
+# (R12.4). The worker exposes no HTTP port, so health is asserted via a Celery
+# control ping. Secrets/config come from `iterra-secrets` / `iterra-config`
+# with nothing hardcoded (R12.6).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iterra-worker
+  labels:
+    app: iterra
+    component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: iterra
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: iterra
+        component: worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: worker
+          image: iterra/worker:latest
+          command: ["celery", "-A", "workers.celery.app.celery_app", "worker", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: iterra-config
+            - secretRef:
+                name: iterra-secrets
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "celery -A workers.celery.app.celery_app inspect ping -d celery@$HOSTNAME"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "celery -A workers.celery.app.celery_app inspect ping -d celery@$HOSTNAME"
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3

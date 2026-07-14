@@ -107,7 +107,7 @@ class TestTriggerSync:
         response = authed_client.post("/api/v1/sync/instagram")
 
         assert response.status_code == 404
-        detail = response.json()["detail"]
+        detail = response.json()["error"]["message"]
         assert "instagram" in detail.lower()
         assert "linkedin" in detail.lower()
         assert "twitter" in detail.lower()
@@ -326,7 +326,7 @@ class TestGetPlatformStatus:
         response = authed_client.get("/api/v1/sync/youtube/status")
 
         assert response.status_code == 404
-        detail = response.json()["detail"]
+        detail = response.json()["error"]["message"]
         assert "youtube" in detail.lower()
 
     def test_get_status_requires_auth(self):

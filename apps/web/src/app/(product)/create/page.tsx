@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { FileText, ImagePlus, Save, Trash2, Sparkles, Loader2 } from "lucide-react";
 
 import { AuthenticatedImage } from "@/components/product/AuthenticatedImage";
+import { LearningsPanel } from "@/components/product/LearningsPanel";
 import { ProductShell } from "@/components/product/ProductShell";
 import { TwitterContentControls, BrandProfileProgress } from "@/components/product/TwitterContentControls";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -235,6 +236,9 @@ export default function CreatePage() {
                 threshold={5}
                 hasProfile={hasBrandProfile}
               />
+
+              {/* Self-learning loop output: memory + promoted optimal post times */}
+              <LearningsPanel platform={platform} />
 
               <div className="space-y-3">
                 <label className="text-sm font-medium leading-none text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70">

@@ -123,9 +123,19 @@ def _get_persona_context(db: Session, user: User) -> PersonaContext:
 def _get_report_context(db: Session, user: User, platform: str) -> ReportContext:
     """
     Derives the report context from the last 30 days of post + analysis data.
-    Falls back to an empty ReportContext if no data exists yet.
+
+    Folds in the active LearnedInsight memory (summary / why_wins /
+    recommendations) and aggregates recent PostAnalysis records (average hook
+    score and the most common recurring improvement). Degrades gracefully:
+    when no insight and no analyses exist, the returned ReportContext carries
+    empty learning fields so the assembled prompt matches prior behavior.
     """
+    from collections import Counter
     from datetime import datetime, timedelta, timezone
+
+    # Local import to avoid a circular import (learning_insight_service imports
+    # models that, transitively, pull in this module's siblings).
+    from app.services import learning_insight_service
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
 
@@ -140,8 +150,48 @@ def _get_report_context(db: Session, user: User, platform: str) -> ReportContext
         .all()
     )
 
+    # ── Learnings: active LearnedInsight memory (independent of raw posts) ────
+    insight = learning_insight_service.get_active_insight(db, user, platform)
+
+    # ── Aggregate recent PostAnalysis for analyzed posts in the window ───────
+    analysis_rows = (
+        db.query(PostAnalysis)
+        .join(Post, Post.id == PostAnalysis.post_id)
+        .filter(
+            Post.user_id == user.id,
+            Post.platform == platform,
+            Post.published_at >= cutoff,
+        )
+        .all()
+    )
+
+    avg_hook_score: float | None = None
+    recurring_improvement: str | None = None
+    if analysis_rows:
+        hook_scores = [a.hook_score for a in analysis_rows if a.hook_score is not None]
+        if hook_scores:
+            avg_hook_score = round(sum(hook_scores) / len(hook_scores), 2)
+
+        improvements = [
+            imp
+            for a in analysis_rows
+            if (imp := (a.coach_feedback or {}).get("top_improvement"))
+        ]
+        if improvements:
+            recurring_improvement = Counter(improvements).most_common(1)[0][0]
+
+    learning_fields = {
+        "learned_summary": insight.summary if insight else None,
+        "why_wins": list(insight.why_wins or []) if insight else [],
+        "recommendations": list(insight.recommendations or []) if insight else [],
+        "avg_hook_score": avg_hook_score,
+        "recurring_improvement": recurring_improvement,
+    }
+
     if not posts:
-        return ReportContext()
+        # No raw post signal, but still surface any learned memory / analysis
+        # aggregates that exist for this (user, platform).
+        return ReportContext(**learning_fields)
 
     # Top topics from highest-engagement posts
     top_topics: list[str] = []
@@ -167,6 +217,7 @@ def _get_report_context(db: Session, user: User, platform: str) -> ReportContext
         best_hook_last_cycle=best_hook,
         posts_analysed=len(posts),
         period_days=30,
+        **learning_fields,
     )
 
 
@@ -240,6 +291,19 @@ def _build_system_prompt(
             parts.append(f"- Avg Engagement Rate (last {report.period_days}d): {report.avg_engagement_rate:.2%}")
         if report.best_hook_last_cycle:
             parts.append(f"- Best-Performing Hook Recently: \"{report.best_hook_last_cycle}\"")
+        parts.append("")
+
+    # What We've Learned (LearnedInsight memory) — omitted entirely when no
+    # active insight exists, preserving prior prompt behavior.
+    if report.learned_summary:
+        parts.append("## What We've Learned (apply this)")
+        parts.append(f"- Summary: {report.learned_summary}")
+        if report.why_wins:
+            parts.append(f"- What wins for you: {'; '.join(report.why_wins[:4])}")
+        if report.recommendations:
+            parts.append(f"- Do next: {'; '.join(report.recommendations[:4])}")
+        if report.recurring_improvement:
+            parts.append(f"- Recurring fix to avoid repeating: {report.recurring_improvement}")
         parts.append("")
 
     parts.append(

@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.linkedin_client import LinkedInClient
-from app.core.security import TokenDecryptionError, decrypt_token, encrypt_value
+from app.core.security import (
+    TokenDecryptionError,
+    decrypt_token,
+    decrypt_token_lenient,
+    encrypt_value,
+)
 from app.models.content_draft import ContentDraft, ContentDraftMedia
 from app.models.social_connection import SocialConnection
 from app.models.user import User
@@ -76,10 +81,14 @@ def _connection(db: Session, user: User, platform: str) -> SocialConnection | No
 def _mark_reconnect_required(db: Session, conn: SocialConnection) -> None:
     """Flag a connection as requiring reconnection.
 
-    Used when a stored token cannot be decrypted so the connection is not used
-    with an unusable token (requirement 5.6). Reassigns connection_metadata with
-    a new dict so SQLAlchemy detects the change, mirroring _upsert_connection.
+    Used when a stored token cannot be decrypted or refreshed so the connection
+    is not used with an unusable token (requirements 4.3, 5.6). Sets the
+    dedicated ``SocialConnection.requires_reconnect`` column and also keeps the
+    legacy ``connection_metadata["reconnect_required"]`` flag for backward
+    compatibility. Reassigns connection_metadata with a new dict so SQLAlchemy
+    detects the change, mirroring _upsert_connection.
     """
+    conn.requires_reconnect = True
     meta = dict(conn.connection_metadata or {})
     meta["reconnect_required"] = True
     conn.connection_metadata = meta
@@ -109,19 +118,20 @@ async def _publish_linkedin(conn: SocialConnection, draft: ContentDraft) -> dict
     if member_urn and not member_urn.startswith("urn:"):
         member_urn = f"urn:li:person:{member_urn}"
 
-    client = LinkedInClient(conn.access_token)
+    token = decrypt_token_lenient(conn.access_token or "")
+    client = LinkedInClient(token)
     try:
         media_assets = []
         if len(draft.media) > 1:
             raise PublishError("LinkedIn image publishing supports one image per post in this version.", status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
         for item in draft.media:
-            asset = await _upload_linkedin_image(conn.access_token, member_urn, item)
+            asset = await _upload_linkedin_image(token, member_urn, item)
             media_assets.append(asset)
 
         if not media_assets:
             data = await client.publish_post(member_urn=member_urn, text=draft.content or "")
         else:
-            data = await _create_linkedin_image_post(conn.access_token, member_urn, draft.content or "", media_assets)
+            data = await _create_linkedin_image_post(token, member_urn, draft.content or "", media_assets)
         return {"platform_post_id": data.get("id") or data.get("urn") or ""}
     except Exception as exc:
         if isinstance(exc, PublishError):
@@ -434,15 +444,36 @@ def _require_scopes(conn: SocialConnection, required: set[str], platform_label: 
 
 
 async def _refresh_x_token_if_needed(db: Session, conn: SocialConnection) -> None:
-    if not conn.refresh_token or not conn.token_expires_at:
-        return
+    """Refresh an expired X credential, or flag the connection for reconnect.
+
+    Decision (requirement 4.3 / Property 8): when the stored credential is at or
+    near expiry, refresh it if a refresh token is available; otherwise mark the
+    connection as requiring reconnection and surface a category-level error
+    instead of letting an unusable token reach the platform call.
+    """
     from datetime import datetime, timedelta, timezone
+
+    # No expiry information is stored — nothing can be decided here. A token that
+    # is in fact expired is still caught by the platform 401 handler downstream.
+    if not conn.token_expires_at:
+        return
 
     expires_at = conn.token_expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
+    # Still comfortably valid → keep using the stored token.
     if expires_at > datetime.now(timezone.utc) + timedelta(minutes=5):
         return
+
+    # Credential is expired/near-expiry. Refresh only when a refresh token exists;
+    # otherwise the user must re-authorize the connection.
+    if not conn.refresh_token:
+        _mark_reconnect_required(db, conn)
+        raise PublishError(
+            "X token expired and cannot be refreshed. Reconnect X before publishing.",
+            code="token_expired",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
 
     # Decrypt the stored refresh token before use; flag reconnect on failure
     # rather than sending an unusable value to the token endpoint (req 5.3, 5.6).
@@ -480,6 +511,9 @@ async def _refresh_x_token_if_needed(db: Session, conn: SocialConnection) -> Non
             auth=auth,
         )
     if res.is_error:
+        # The refresh token is no longer usable — require reconnection rather than
+        # leaving the connection in a silently-broken state.
+        _mark_reconnect_required(db, conn)
         raise PublishError("X token expired. Reconnect X before publishing.", code="token_expired", status_code=status.HTTP_401_UNAUTHORIZED)
     tokens = res.json()
     # Re-encrypt rotated tokens at rest; leave existing ciphertext untouched when
@@ -494,6 +528,8 @@ async def _refresh_x_token_if_needed(db: Session, conn: SocialConnection) -> Non
         conn.scopes = str(tokens["scope"]).split()
     if tokens.get("expires_in"):
         conn.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(tokens["expires_in"]))
+    # A successful refresh restores a usable credential — clear any stale flag.
+    conn.requires_reconnect = False
     db.commit()
 
 

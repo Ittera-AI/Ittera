@@ -1,0 +1,83 @@
+# API (FastAPI) deployment.
+#
+# Resource limits/requests are defined so the scheduler can bin-pack and the
+# kubelet can enforce QoS (R12.3). Liveness/readiness probes let Kubernetes gate
+# traffic on real application health (R12.4): liveness hits the process-only
+# /health/live probe, readiness hits /health/ready which checks the DB + broker.
+#
+# All secrets/credentials come from the `iterra-secrets` Secret and non-secret
+# config from the `iterra-config` ConfigMap — nothing is hardcoded here (R12.6).
+# Create those out-of-band from an environment-specific secret store, e.g.:
+#   kubectl create secret generic iterra-secrets \
+#     --from-literal=DATABASE_URL=... --from-literal=SECRET_KEY=... \
+#     --from-literal=TOKEN_ENCRYPTION_KEY=... --from-literal=REDIS_URL=...
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iterra-api
+  labels:
+    app: iterra
+    component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: iterra
+      component: api
+  template:
+    metadata:
+      labels:
+        app: iterra
+        component: api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: api
+          image: iterra/api:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: iterra-config
+            - secretRef:
+                name: iterra-secrets
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iterra-api
+  labels:
+    app: iterra
+    component: api
+spec:
+  selector:
+    app: iterra
+    component: api
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
