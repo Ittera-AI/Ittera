@@ -174,6 +174,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/context/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get assembled context
+         * @description Returns all three context layers — Permanent (identity + platform facts), Persona (AI-derived writing style), and Report (engagement insights) — merged into an AssembledContext with the ready-to-use system_prompt.
+         */
+        get: operations["get_context_api_v1_context__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update permanent context
+         * @description Updates the user's permanent context identity fields. Creates a new versioned UserContext snapshot so prior state is preserved.
+         */
+        patch: operations["update_context_api_v1_context__patch"];
+        trace?: never;
+    };
+    "/api/v1/context/prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview system prompt
+         * @description Returns the raw LLM system prompt for the current user context. Useful for debugging.
+         */
+        get: operations["get_system_prompt_api_v1_context_prompt_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/linkedin/status": {
         parameters: {
             query?: never;
@@ -181,7 +225,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Status */
+        /**
+         * Status
+         * @description Return connection status and current post count.
+         */
         get: operations["status_api_v1_linkedin_status_get"];
         put?: never;
         post?: never;
@@ -200,7 +247,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Connect Mock */
+        /**
+         * Connect Mock
+         * @description Create a mock LinkedIn connection (development only).
+         */
         post: operations["connect_mock_api_v1_linkedin_connect_mock_post"];
         delete?: never;
         options?: never;
@@ -217,8 +267,54 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sync */
-        post: operations["sync_api_v1_linkedin_sync_post"];
+        /**
+         * Sync Mock
+         * @description Legacy mock sync — inserts deterministic fake posts.
+         *     Kept for dev/testing. Use /sync/real for production.
+         */
+        post: operations["sync_mock_api_v1_linkedin_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/linkedin/sync/real": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Real
+         * @description Synchronously fetches real LinkedIn posts (OAuth API or cookie fallback).
+         *     Blocks until sync completes. Use /sync/trigger for non-blocking background sync.
+         */
+        post: operations["sync_real_api_v1_linkedin_sync_real_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/linkedin/sync/trigger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Trigger
+         * @description Enqueues a background Celery task to sync real LinkedIn posts.
+         *     Returns immediately. Check task status via Celery or /status.
+         */
+        post: operations["sync_trigger_api_v1_linkedin_sync_trigger_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -372,7 +468,8 @@ export interface paths {
         /** List Drafts */
         get: operations["list_drafts_api_v1_content_drafts_get"];
         put?: never;
-        post?: never;
+        /** Create Draft */
+        post: operations["create_draft_api_v1_content_drafts_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -414,6 +511,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/content/drafts/{draft_id}/publish-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish Draft Now */
+        post: operations["publish_draft_now_api_v1_content_drafts__draft_id__publish_now_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/content/schedule": {
         parameters: {
             query?: never;
@@ -448,6 +562,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/content/drafts/{draft_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Draft */
+        post: operations["approve_draft_api_v1_content_drafts__draft_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/drafts/{draft_id}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Draft Media */
+        post: operations["add_draft_media_api_v1_content_drafts__draft_id__media_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/drafts/{draft_id}/media/{media_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Draft Media */
+        delete: operations["delete_draft_media_api_v1_content_drafts__draft_id__media__media_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/media-file/{media_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Media File */
+        get: operations["media_file_api_v1_content_media_file__media_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/content/calendar": {
         parameters: {
             query?: never;
@@ -465,6 +647,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analytics/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Summary
+         * @description Get analytics dashboard summary KPIs.
+         *
+         *     Returns aggregated metrics including:
+         *       - Total posts, likes, comments, shares, impressions
+         *       - Average engagement rate
+         *       - Best performing post identification
+         *       - AI analysis coverage
+         *       - Week-over-week trends
+         *       - Engagement distribution by performance tier
+         *       - Average AI analysis scores
+         */
+        get: operations["summary_api_v1_analytics_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analytics/posts": {
         parameters: {
             query?: never;
@@ -472,7 +683,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Posts */
+        /**
+         * Posts
+         * @description Get user's posts with AI analysis data.
+         *
+         *     Args:
+         *         limit: Maximum posts to return (1-100)
+         *         platform: Filter by platform (linkedin, twitter, etc.) or None for all
+         */
         get: operations["posts_api_v1_analytics_posts_get"];
         put?: never;
         post?: never;
@@ -491,8 +709,139 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Analyze */
+        /**
+         * Analyze
+         * @description Analyze a specific post using the AI Engagement Coach.
+         *
+         *     If analysis already exists and is recent (< 30 days), returns cached result.
+         *     Otherwise, generates new AI analysis with historical context for comparative insights.
+         *
+         *     Args:
+         *         post_id: The post ID to analyze
+         */
         post: operations["analyze_api_v1_analytics_analyze__post_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Insights
+         * @description Get AI-generated content insights based on analyzed posts.
+         *
+         *     Identifies patterns in your top-performing content and provides
+         *     actionable recommendations for improvement.
+         *
+         *     Args:
+         *         period_days: Analysis period in days (max 90)
+         */
+        get: operations["insights_api_v1_analytics_insights_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/trends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trends
+         * @description Get time-series trend data for specified metric.
+         *
+         *     Returns daily or aggregated time series data for charting.
+         *     Uses materialized daily snapshots when available for performance,
+         *     falls back to on-the-fly aggregation from posts table.
+         *
+         *     Args:
+         *         metric: Metric to trend (engagement_rate, likes, posts, impressions)
+         *         period_days: Number of days to analyze (7-365)
+         *         interval: Data grouping interval (day, week, month)
+         *
+         *     Returns:
+         *         Time series data points with date, value, and moving averages
+         */
+        get: operations["trends_api_v1_analytics_trends_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/trends/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detect Trends
+         * @description Detect significant trends and anomalies in analytics data.
+         *
+         *     Uses linear regression and statistical analysis to identify:
+         *       - Engagement rate trends (up/down/flat with confidence)
+         *       - Post volume trends
+         *       - Anomalies (spikes or drops outside 2 standard deviations)
+         *       - Actionable recommendations
+         *
+         *     Args:
+         *         period_days: Analysis period in days (7-90)
+         *
+         *     Returns:
+         *         Trend detection results with recommendations
+         */
+        get: operations["detect_trends_api_v1_analytics_trends_detect_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/platforms/comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Platform Comparison
+         * @description Compare engagement patterns across connected platforms.
+         *
+         *     Returns per-platform engagement metrics including:
+         *       - Average engagement rate per platform
+         *       - Best-performing content types per platform
+         *       - Overall platform ranking by engagement
+         *       - Cross-platform comparison insights and recommendations
+         *
+         *     Args:
+         *         period_days: Lookback period in days (1-365, default 30)
+         *
+         *     Returns:
+         *         Cross-platform engagement comparison data
+         */
+        get: operations["platform_comparison_api_v1_analytics_platforms_comparison_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -534,6 +883,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/waitlist/admin/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Waitlist Entries */
+        get: operations["list_waitlist_entries_api_v1_waitlist_admin_entries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waitlist/admin/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Waitlist User */
+        post: operations["approve_waitlist_user_api_v1_waitlist_admin_approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waitlist/admin/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Waitlist User */
+        post: operations["revoke_waitlist_user_api_v1_waitlist_admin_revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/publishing-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Publishing Settings */
+        get: operations["get_publishing_settings_api_v1_users_me_publishing_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Publishing Settings */
+        patch: operations["update_publishing_settings_api_v1_users_me_publishing_settings_patch"];
+        trace?: never;
+    };
     "/api/v1/calendar/generate": {
         parameters: {
             query?: never;
@@ -545,7 +963,7 @@ export interface paths {
         put?: never;
         /**
          * Generate content calendar
-         * @description Produces a structured weekly-style plan. By default this is a deterministic mock plan suitable for demos and CI. Set `USE_ITERRA_AI_CALENDAR=true` with `ANTHROPIC_API_KEY` configured to use `iterra_ai.CalendarEngine` (falls back to mock on LLM failure).
+         * @description Produces a structured weekly-style plan. By default this is a deterministic mock plan suitable for demos and CI. Set `USE_ITERRA_AI_CALENDAR=true` with `AIML_API_KEY` configured to use `iterra_ai.CalendarEngine` (falls back to mock on LLM failure).
          */
         post: operations["generate_calendar_api_v1_calendar_generate_post"];
         delete?: never;
@@ -761,6 +1179,569 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/social/sync/twitter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Twitter
+         * @description Trigger a manual Twitter content sync for the current user.
+         */
+        post: operations["sync_twitter_api_v1_social_sync_twitter_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/sync/twitter/status/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Twitter Sync Status
+         * @description Check the status of a Twitter sync task.
+         */
+        get: operations["twitter_sync_status_api_v1_social_sync_twitter_status__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/platforms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get All Platforms Status
+         * @description Return detailed status for all connected platforms (settings page).
+         *
+         *     Iterates through registered sync providers to get rich status (posting
+         *     readiness, sync readiness, missing scopes, sync-in-progress indicator).
+         *     Also includes platforms that have a connection but no sync provider
+         *     (e.g., instagram, google_drive) with basic connection info.
+         *
+         *     Requirements: 5.1, 5.2, 5.3
+         */
+        get: operations["get_all_platforms_status_api_v1_social_platforms_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/platforms/{platform}/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disconnect Platform
+         * @description Disconnect a platform (deactivate the connection).
+         *
+         *     The connection record is retained but marked inactive.
+         *     User can reconnect via the OAuth flow.
+         *     Requirements: 5.3
+         */
+        post: operations["disconnect_platform_api_v1_social_platforms__platform__disconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/platforms/{platform}/reconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconnect Platform
+         * @description Return the OAuth URL to reconnect a platform.
+         *
+         *     The frontend should open this URL in a popup to re-authorize.
+         *     Requirements: 5.3
+         */
+        post: operations["reconnect_platform_api_v1_social_platforms__platform__reconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/twitter/tier": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Twitter Tier Endpoint
+         * @description Get the user's current Twitter subscription tier and associated limits.
+         */
+        get: operations["get_twitter_tier_endpoint_api_v1_social_twitter_tier_get"];
+        /**
+         * Update Twitter Tier Endpoint
+         * @description Update the user's Twitter subscription tier (free or premium).
+         *
+         *     This affects character limits applied to subsequent content generation:
+         *     - free: 280 chars per tweet (thread splitting enabled)
+         *     - premium: 25,000 chars per post
+         */
+        put: operations["update_twitter_tier_endpoint_api_v1_social_twitter_tier_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/{platform}/auto-post": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Auto Post
+         * @description Get the current auto-post preference for a platform.
+         */
+        get: operations["get_auto_post_api_v1_social__platform__auto_post_get"];
+        /**
+         * Update Auto Post
+         * @description Toggle auto-post on/off for a specific platform.
+         *
+         *     Stores the preference in connection_metadata on the SocialConnection row.
+         *     Uses flag_modified to ensure SQLAlchemy detects JSON column mutation.
+         *     Requirements: 5.6
+         */
+        put: operations["update_auto_post_api_v1_social__platform__auto_post_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/{platform}/posting-times": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Posting Times
+         * @description Get the current preferred posting times for a platform.
+         */
+        get: operations["get_posting_times_api_v1_social__platform__posting_times_get"];
+        /**
+         * Update Posting Times
+         * @description Set preferred posting times for a specific platform.
+         *
+         *     Times should be in HH:MM (24-hour) format.
+         *     Stores the preference in connection_metadata on the SocialConnection row.
+         *     Uses flag_modified to ensure SQLAlchemy detects JSON column mutation.
+         *     Requirements: 5.7
+         */
+        put: operations["update_posting_times_api_v1_social__platform__posting_times_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/{platform}/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Platform Preferences
+         * @description Get all publishing preferences for a platform (auto-post + posting times).
+         */
+        get: operations["get_platform_preferences_api_v1_social__platform__preferences_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get All Platforms Status
+         * @description Return the sync/connection status for ALL registered platforms in one call.
+         *
+         *     Iterates over _SYNC_PROVIDERS registry and calls provider.get_status()
+         *     for each platform. Returns a list of PlatformStatusResponse objects
+         *     including per-platform: username, connection date, last sync time,
+         *     posting readiness, sync readiness, missing scopes, sync-in-progress
+         *     indicator, and error states.
+         *
+         *     Requirements: 5.1, 5.2, 5.3
+         */
+        get: operations["get_all_platforms_status_api_v1_sync_all_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/{platform}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Sync
+         * @description Trigger a manual content sync for the specified platform.
+         *
+         *     Validates the platform exists in the registry, then queues the
+         *     appropriate Celery sync task. Returns the task ID for status polling.
+         */
+        post: operations["trigger_sync_api_v1_sync__platform__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/{platform}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Platform Status
+         * @description Return the current sync/connection status for a platform.
+         *
+         *     Retrieves the provider from the registry and calls get_status()
+         *     to return comprehensive PlatformStatus information.
+         */
+        get: operations["get_platform_status_api_v1_sync__platform__status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connect/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Connection Status
+         * @description Return all active social connections for the current user.
+         */
+        get: operations["connection_status_api_v1_connect_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connect/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Connect Session
+         * @description Mint a single-use connect token for the authenticated user.
+         *
+         *     The frontend calls this (Bearer auth) and passes the returned token to
+         *     ``/connect/{platform}/start`` as ``?ct=...`` instead of the raw Supabase JWT,
+         *     so no bearer credential ends up in the OAuth start URL.
+         */
+        post: operations["create_connect_session_api_v1_connect_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connect/{platform}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Disconnect */
+        delete: operations["disconnect_api_v1_connect__platform__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connect/twitter/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Twitter Start
+         * @description Open this in a popup. Redirects to Twitter OAuth.
+         */
+        get: operations["twitter_start_api_v1_connect_twitter_start_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connect/twitter/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Twitter Callback */
+        get: operations["twitter_callback_api_v1_connect_twitter_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connect/linkedin/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Linkedin Start */
+        get: operations["linkedin_start_api_v1_connect_linkedin_start_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connect/linkedin/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Linkedin Callback */
+        get: operations["linkedin_callback_api_v1_connect_linkedin_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connect/instagram/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Instagram Start */
+        get: operations["instagram_start_api_v1_connect_instagram_start_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connect/instagram/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Instagram Callback */
+        get: operations["instagram_callback_api_v1_connect_instagram_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/persona/onboarding/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Onboarding */
+        post: operations["start_onboarding_api_v1_persona_onboarding_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/persona/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sources */
+        get: operations["list_sources_api_v1_persona_sources_get"];
+        put?: never;
+        /** Add Source */
+        post: operations["add_source_api_v1_persona_sources_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/persona/scrape": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scrape Sources */
+        post: operations["scrape_sources_api_v1_persona_scrape_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/persona/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Analyze Persona */
+        post: operations["analyze_persona_api_v1_persona_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/persona": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Persona */
+        get: operations["get_persona_api_v1_persona_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Persona */
+        patch: operations["update_persona_api_v1_persona_patch"];
+        trace?: never;
+    };
+    "/api/v1/persona/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Persona */
+        post: operations["confirm_persona_api_v1_persona_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/storage/status": {
         parameters: {
             query?: never;
@@ -770,6 +1751,27 @@ export interface paths {
         };
         /** Storage Status */
         get: operations["storage_status_api_v1_storage_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Storage Health
+         * @description Check the health of the Google Drive connection.
+         *     Tests connectivity, permissions, and token validity.
+         */
+        get: operations["storage_health_api_v1_storage_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -820,6 +1822,1041 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/storage/export/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export All Data
+         * @description Export all Iterra data from user's Google Drive (GDPR Article 20).
+         *
+         *     Returns a complete export of:
+         *     - Scraped posts data
+         *     - Brand analysis data
+         *     - Content drafts
+         *     - File metadata
+         *
+         *     This enables data portability - users can take their data elsewhere.
+         */
+        get: operations["export_all_data_api_v1_storage_export_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Data
+         * @description Import Iterra data to user's Google Drive.
+         *
+         *     Restores data from a previous export (from export/download).
+         *     Use with caution - validates data format before import.
+         *
+         *     Args:
+         *         data: The export data to import
+         *         overwrite: If True, overwrite existing files; if False, skip existing
+         */
+        post: operations["import_data_api_v1_storage_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage/privacy-dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Privacy Dashboard
+         * @description Privacy dashboard showing where user data is stored.
+         *
+         *     Provides transparency about:
+         *     - Which data types are stored where (Drive vs Iterra)
+         *     - Storage preferences
+         *     - Data retention policy
+         *     - Pending operations
+         *     - Recent access history
+         */
+        get: operations["privacy_dashboard_api_v1_storage_privacy_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Organization
+         * @description Create a new organization.
+         *
+         *     The creator becomes the organization owner.
+         */
+        post: operations["create_organization_api_v1_organizations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/my": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Organizations
+         * @description List organizations the current user is a member of.
+         */
+        get: operations["list_my_organizations_api_v1_organizations_my_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{org_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Organization
+         * @description Get organization details.
+         */
+        get: operations["get_organization_api_v1_organizations__org_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Organization
+         * @description Update organization settings.
+         *
+         *     Requires: org:manage permission
+         */
+        patch: operations["update_organization_api_v1_organizations__org_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{org_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Organization Members
+         * @description List all members of an organization.
+         */
+        get: operations["list_organization_members_api_v1_organizations__org_id__members_get"];
+        put?: never;
+        /**
+         * Invite Organization Member
+         * @description Invite a user to the organization.
+         *
+         *     Requires: members:invite permission
+         */
+        post: operations["invite_organization_member_api_v1_organizations__org_id__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{org_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Organization Member
+         * @description Remove a member from the organization.
+         *
+         *     Requires: members:manage permission
+         */
+        delete: operations["remove_organization_member_api_v1_organizations__org_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Organization Member
+         * @description Update a member's role.
+         *
+         *     Requires: members:manage permission (for roles you can manage)
+         */
+        patch: operations["update_organization_member_api_v1_organizations__org_id__members__user_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{org_id}/white-label": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get White Label Settings
+         * @description Get white-label settings for the organization.
+         */
+        get: operations["get_white_label_settings_api_v1_organizations__org_id__white_label_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update White Label Settings
+         * @description Update white-label settings.
+         *
+         *     Requires: org:manage permission
+         */
+        patch: operations["update_white_label_settings_api_v1_organizations__org_id__white_label_patch"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{org_id}/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Organization Workspaces
+         * @description List all workspaces in the organization.
+         */
+        get: operations["list_organization_workspaces_api_v1_organizations__org_id__workspaces_get"];
+        put?: never;
+        /**
+         * Create Workspace
+         * @description Create a new workspace within the organization.
+         *
+         *     Requires: workspace:create permission
+         */
+        post: operations["create_workspace_api_v1_organizations__org_id__workspaces_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/my": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Workspaces
+         * @description List all workspaces the current user has access to.
+         *
+         *     Includes direct workspace memberships and organization-level access.
+         */
+        get: operations["list_my_workspaces_api_v1_workspaces_my_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Workspace
+         * @description Get detailed workspace information.
+         */
+        get: operations["get_workspace_api_v1_workspaces__workspace_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Workspace
+         * @description Soft-delete a workspace (sets is_active = False).
+         *
+         *     Requires: workspace:delete permission
+         */
+        delete: operations["delete_workspace_api_v1_workspaces__workspace_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Workspace
+         * @description Update workspace settings.
+         *
+         *     Requires: workspace:edit permission
+         */
+        patch: operations["update_workspace_api_v1_workspaces__workspace_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Workspace Members
+         * @description List all members of a workspace.
+         */
+        get: operations["list_workspace_members_api_v1_workspaces__workspace_id__members_get"];
+        put?: never;
+        /**
+         * Add Workspace Member
+         * @description Add a member to the workspace.
+         *
+         *     Requires: workspace:manage permission
+         */
+        post: operations["add_workspace_member_api_v1_workspaces__workspace_id__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Workspace Member
+         * @description Remove a member from the workspace.
+         *
+         *     Requires: workspace:manage permission
+         */
+        delete: operations["remove_workspace_member_api_v1_workspaces__workspace_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Workspace Member
+         * @description Update a workspace member's role.
+         *
+         *     Requires: workspace:manage permission
+         */
+        patch: operations["update_workspace_member_api_v1_workspaces__workspace_id__members__user_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Workspace Context
+         * @description Get the current user's context within a workspace.
+         *
+         *     Returns role, permissions, and settings.
+         */
+        get: operations["get_workspace_context_api_v1_workspaces__workspace_id__context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/predictions/performance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Predict Performance
+         * @description Predict content performance with confidence intervals.
+         *
+         *     Analyzes content and predicts:
+         *     - Likes, comments, shares, impressions
+         *     - Engagement rate with 95% confidence intervals
+         *     - Key factors affecting performance
+         *     - Improvement suggestions
+         */
+        post: operations["predict_performance_api_v1_predictions_performance_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/predictions/viral": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Predict Viral Potential
+         * @description Analyze content for viral potential.
+         *
+         *     Detects viral patterns:
+         *     - Hook strength
+         *     - Emotional resonance
+         *     - Shareability
+         *     - Timeliness
+         *     - Uniqueness
+         *
+         *     Returns viral probability score (0-1) and amplification suggestions.
+         */
+        post: operations["predict_viral_potential_api_v1_predictions_viral_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/predictions/timing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Predict Optimal Timing
+         * @description Predict optimal posting time for content.
+         *
+         *     Analyzes:
+         *     - Historical post performance patterns
+         *     - Platform-specific audience behavior
+         *     - Content type and complexity
+         *     - Competition analysis
+         *
+         *     Returns optimal time, alternative slots, and timing insights.
+         */
+        post: operations["predict_optimal_timing_api_v1_predictions_timing_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/predictions/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Predict All
+         * @description Get all predictions (performance, viral, timing) in one call.
+         *
+         *     Efficient for clients that want a complete analysis.
+         */
+        post: operations["predict_all_api_v1_predictions_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/predictions/cache": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Cached Predictions
+         * @description List cached predictions for the workspace.
+         */
+        get: operations["list_cached_predictions_api_v1_predictions_cache_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/predictions/cache/{prediction_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Cached Prediction
+         * @description Delete a cached prediction.
+         */
+        delete: operations["delete_cached_prediction_api_v1_predictions_cache__prediction_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/competitors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Competitors
+         * @description List all competitors for the workspace.
+         */
+        get: operations["list_competitors_api_v1_competitors_get"];
+        put?: never;
+        /**
+         * Create Competitor
+         * @description Add a new competitor to track.
+         *
+         *     Requires: ai:competitor_analysis permission
+         */
+        post: operations["create_competitor_api_v1_competitors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/competitors/{competitor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Competitor
+         * @description Get detailed competitor information with recent activity.
+         */
+        get: operations["get_competitor_api_v1_competitors__competitor_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Competitor
+         * @description Remove a competitor from tracking.
+         */
+        delete: operations["delete_competitor_api_v1_competitors__competitor_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Competitor
+         * @description Update competitor information.
+         */
+        patch: operations["update_competitor_api_v1_competitors__competitor_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/competitors/{competitor_id}/analyze/strategy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Competitor Strategy
+         * @description Run AI strategy analysis on a competitor.
+         *
+         *     Analyzes their content patterns, engagement tactics, and identifies opportunities.
+         */
+        post: operations["analyze_competitor_strategy_api_v1_competitors__competitor_id__analyze_strategy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/competitors/analyze/gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Content Gaps
+         * @description Analyze content gaps between author and competitors.
+         *
+         *     Identifies topics, formats, and approaches competitors use
+         *     that the author doesn't.
+         */
+        post: operations["analyze_content_gaps_api_v1_competitors_analyze_gaps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/competitors/analyze/trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Benchmark Trend
+         * @description Benchmark author vs competitors on a specific trend/topic.
+         *
+         *     Identifies why some creators succeed more than others on the same topic.
+         */
+        post: operations["benchmark_trend_api_v1_competitors_analyze_trend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/competitors/analyses/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Analyses
+         * @description List recent competitive analyses.
+         */
+        get: operations["list_analyses_api_v1_competitors_analyses_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Analytics Report
+         * @description Generate an analytics PDF report.
+         *
+         *     Comprehensive report including:
+         *     - Performance metrics and trends
+         *     - Engagement analysis
+         *     - AI-generated insights
+         *     - Top performing content
+         */
+        post: operations["generate_analytics_report_api_v1_reports_analytics_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/competitive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Competitive Report
+         * @description Generate a competitive intelligence PDF report.
+         *
+         *     Includes:
+         *     - Competitor overview
+         *     - Content gap analysis
+         *     - Strategic opportunities
+         *     - Actionable recommendations
+         */
+        post: operations["generate_competitive_report_api_v1_reports_competitive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/custom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Custom Report
+         * @description Generate a custom PDF report from structured sections.
+         *
+         *     Allows building reports with:
+         *     - Metric cards
+         *     - Data tables
+         *     - Text blocks
+         *     - Insight boxes
+         */
+        post: operations["generate_custom_report_api_v1_reports_custom_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/download/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Report
+         * @description Download a generated report by ID.
+         */
+        get: operations["download_report_api_v1_reports_download__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reports
+         * @description List generated reports for the user.
+         */
+        get: operations["list_reports_api_v1_reports_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/white-label": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get White Label Settings
+         * @description Get white-label settings for reports.
+         *
+         *     Used to customize report branding, colors, and sender information.
+         */
+        get: operations["get_white_label_settings_api_v1_reports_white_label_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update White Label Settings
+         * @description Update white-label settings for reports.
+         *
+         *     Allows customizing:
+         *     - Brand colors
+         *     - Logo
+         *     - Sender information
+         *     - Footer text
+         */
+        patch: operations["update_white_label_settings_api_v1_reports_white_label_patch"];
+        trace?: never;
+    };
+    "/api/v1/reports/scheduled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Scheduled Reports
+         * @description List configured scheduled reports.
+         */
+        get: operations["list_scheduled_reports_api_v1_reports_scheduled_get"];
+        put?: never;
+        /**
+         * Configure Scheduled Report
+         * @description Configure automated scheduled reports.
+         *
+         *     Schedule regular analytics or competitive reports to be
+         *     generated and emailed automatically.
+         */
+        post: operations["configure_scheduled_report_api_v1_reports_scheduled_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Workflows
+         * @description List all approval workflows for the workspace.
+         */
+        get: operations["list_workflows_api_v1_approvals_workflows_get"];
+        put?: never;
+        /**
+         * Create Workflow
+         * @description Create a new approval workflow.
+         *
+         *     Requires: workspace:manage permission
+         */
+        post: operations["create_workflow_api_v1_approvals_workflows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/workflows/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Workflow
+         * @description Soft-delete an approval workflow.
+         *
+         *     Requires: workspace:manage permission
+         */
+        delete: operations["delete_workflow_api_v1_approvals_workflows__workflow_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Workflow
+         * @description Update an approval workflow.
+         *
+         *     Requires: workspace:manage permission
+         */
+        patch: operations["update_workflow_api_v1_approvals_workflows__workflow_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/approvals/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Approval
+         * @description Request approval for content.
+         *
+         *     Starts the approval workflow for the specified content.
+         */
+        post: operations["request_approval_api_v1_approvals_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/{approval_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make Decision
+         * @description Make an approval decision.
+         *
+         *     Decisions: approved, rejected, requested_changes
+         */
+        post: operations["make_decision_api_v1_approvals__approval_id__decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/{approval_id}/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resubmit After Changes
+         * @description Resubmit content after changes were requested.
+         *
+         *     Returns the approval to pending status for re-review.
+         */
+        post: operations["resubmit_after_changes_api_v1_approvals__approval_id__resubmit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/status/{content_type}/{content_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Approval Status
+         * @description Get approval status for specific content.
+         */
+        get: operations["get_approval_status_api_v1_approvals_status__content_type___content_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Pending Approvals
+         * @description Get pending approvals awaiting this user's decision.
+         *
+         *     Shows only approvals where the user is the current approver.
+         */
+        get: operations["get_pending_approvals_api_v1_approvals_pending_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/my": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Approvals
+         * @description Get all approvals related to the current user.
+         *
+         *     Includes:
+         *     - Approvals requested by this user
+         *     - Pending approvals awaiting this user's decision
+         */
+        get: operations["get_my_approvals_api_v1_approvals_my_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -827,8 +2864,55 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health Check */
+        /**
+         * Health Check
+         * @description Liveness alias retained for backward compatibility (nginx, tests).
+         */
         get: operations["health_check_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liveness Probe
+         * @description Liveness_Probe: reports process health without checking dependencies. (R11.2)
+         */
+        get: operations["liveness_probe_health_live_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Readiness Probe
+         * @description Readiness_Probe: ready only if the DB and broker are both reachable. (R11.3)
+         *
+         *     Runs a DB ``SELECT 1`` and a broker ping. When either is unreachable the
+         *     probe returns HTTP 503 with a category-only failure detail (which dependency
+         *     failed), never the underlying exception or connection string.
+         */
+        get: operations["readiness_probe_health_ready_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -841,6 +2925,256 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AddWorkspaceMember */
+        AddWorkspaceMember: {
+            /** User Id */
+            user_id: string;
+            /** Role */
+            role: string;
+        };
+        /** AnalysisResponse */
+        AnalysisResponse: {
+            /** Analysis Id */
+            analysis_id: string;
+            /** Analysis Type */
+            analysis_type: string;
+            /** Competitor Id */
+            competitor_id: string | null;
+            /** Created At */
+            created_at: string;
+            /** Findings Summary */
+            findings_summary: Record<string, never>;
+        };
+        /**
+         * AnalyticsReportRequest
+         * @description Request to generate an analytics report.
+         */
+        AnalyticsReportRequest: {
+            /**
+             * Period Days
+             * @default 30
+             */
+            period_days: number;
+            /**
+             * Include Charts
+             * @default true
+             */
+            include_charts: boolean;
+            /** Email Recipients */
+            email_recipients?: string[];
+            /**
+             * Send Email
+             * @default false
+             */
+            send_email: boolean;
+        };
+        /**
+         * AnalyticsSummaryResponse
+         * @description Dashboard KPI summary for analytics page.
+         */
+        AnalyticsSummaryResponse: {
+            /** Total Posts */
+            total_posts: number;
+            /** Total Likes */
+            total_likes: number;
+            /** Total Comments */
+            total_comments: number;
+            /** Total Shares */
+            total_shares: number;
+            /** Total Impressions */
+            total_impressions: number;
+            /** Avg Engagement Rate */
+            avg_engagement_rate: number;
+            best_performing_post?: components["schemas"]["PostWithAnalysis"] | null;
+            /** Posts Analyzed */
+            posts_analyzed: number;
+            /** Analysis Coverage Percent */
+            analysis_coverage_percent: number;
+            /** Platform Breakdown */
+            platform_breakdown: {
+                [key: string]: number;
+            };
+            /**
+             * Period Days
+             * @default 30
+             */
+            period_days: number;
+            trends?: components["schemas"]["AnalyticsTrends"] | null;
+            engagement_distribution?: components["schemas"]["EngagementDistribution"] | null;
+            avg_analysis_scores?: components["schemas"]["AverageAnalysisScores"] | null;
+        };
+        /**
+         * AnalyticsTrends
+         * @description Period-over-period trend data.
+         */
+        AnalyticsTrends: {
+            posts_change: components["schemas"]["TrendMetrics"];
+            engagement_rate_change: components["schemas"]["TrendMetrics"];
+            likes_change: components["schemas"]["TrendMetrics"];
+        };
+        /**
+         * AnomalyDetection
+         * @description Detected anomaly in time series data.
+         */
+        AnomalyDetection: {
+            /** Date */
+            date: string;
+            /** Value */
+            value: number;
+            /** Deviation */
+            deviation: number;
+            /** Type */
+            type: string;
+        };
+        /** ApprovalDecisionRequest */
+        ApprovalDecisionRequest: {
+            /** Expected Step */
+            expected_step: number;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approved" | "rejected" | "requested_changes";
+            /** Comments */
+            comments?: string | null;
+        };
+        /** ApprovalDetailResponse */
+        ApprovalDetailResponse: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Content Type */
+            content_type: string;
+            /** Content Id */
+            content_id: string;
+            /** Workflow Id */
+            workflow_id: string | null;
+            /** Current Step */
+            current_step: number;
+            /** Status */
+            status: string;
+            /** Requested By */
+            requested_by: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Completed At */
+            completed_at: string | null;
+            /** Workflow Name */
+            workflow_name: string | null;
+            /** Current Step Title */
+            current_step_title: string | null;
+            /** Decisions */
+            decisions: Record<string, never>[];
+            /**
+             * Can Approve
+             * @default false
+             */
+            can_approve: boolean;
+        };
+        /** ApprovalRequest */
+        ApprovalRequest: {
+            /** Content Type */
+            content_type: string;
+            /** Content Id */
+            content_id: string;
+            /** Workflow Id */
+            workflow_id?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** ApprovalResponse */
+        ApprovalResponse: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Content Type */
+            content_type: string;
+            /** Content Id */
+            content_id: string;
+            /** Workflow Id */
+            workflow_id: string | null;
+            /** Current Step */
+            current_step: number;
+            /** Status */
+            status: string;
+            /** Requested By */
+            requested_by: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Completed At */
+            completed_at: string | null;
+        };
+        /**
+         * AssembledContext
+         * @description The fully assembled context passed to every LLM content generation call.
+         *     system_prompt is injected as the system message; the three source objects
+         *     are retained for debugging, logging, and cost attribution.
+         */
+        AssembledContext: {
+            /** System Prompt */
+            system_prompt: string;
+            permanent: components["schemas"]["PermanentContext"];
+            persona: components["schemas"]["PersonaContext"];
+            report: components["schemas"]["ReportContext"];
+            /** Platform */
+            platform: string;
+            /**
+             * Missing Layers
+             * @description Layers that were absent / low-confidence — for UI warnings
+             */
+            missing_layers?: string[];
+        };
+        /**
+         * AutoPostUpdateRequest
+         * @description Request body for toggling auto-post on/off for a platform.
+         */
+        AutoPostUpdateRequest: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /**
+         * AutoPostUpdateResponse
+         * @description Response after updating auto-post preference.
+         */
+        AutoPostUpdateResponse: {
+            /** Platform */
+            platform: string;
+            /** Auto Post Enabled */
+            auto_post_enabled: boolean;
+            /**
+             * Message
+             * @default Auto-post preference updated
+             */
+            message: string;
+        };
+        /**
+         * AverageAnalysisScores
+         * @description Average AI analysis scores for the period.
+         */
+        AverageAnalysisScores: {
+            /** Hook Score */
+            hook_score?: number | null;
+            /** Structure Score */
+            structure_score?: number | null;
+            /** Tone Score */
+            tone_score?: number | null;
+        };
+        /** Body_add_draft_media_api_v1_content_drafts__draft_id__media_post */
+        Body_add_draft_media_api_v1_content_drafts__draft_id__media_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
         /** BrandProfileData */
         BrandProfileData: {
             /** Voice Tone */
@@ -941,12 +3275,19 @@ export interface components {
             /** Status */
             status: string;
             /**
+             * Review Status
+             * @default draft
+             */
+            review_status: string;
+            /**
              * Starts At
              * Format: date-time
              */
             starts_at: string;
             /** Content */
             content: string;
+            /** Media */
+            media?: components["schemas"]["DraftMediaResponse"][];
         };
         /** CalendarInput */
         CalendarInput: {
@@ -985,6 +3326,165 @@ export interface components {
             /** Summary */
             summary: string;
         };
+        /**
+         * CompetitiveReportRequest
+         * @description Request to generate a competitive intelligence report.
+         */
+        CompetitiveReportRequest: {
+            /**
+             * Analysis Id
+             * @description Specific analysis to include, or latest if not provided
+             */
+            analysis_id?: string | null;
+            /** Email Recipients */
+            email_recipients?: string[];
+            /**
+             * Send Email
+             * @default false
+             */
+            send_email: boolean;
+        };
+        /** CompetitorCreate */
+        CompetitorCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Platform
+             * @default linkedin
+             * @enum {string}
+             */
+            platform: "linkedin" | "twitter" | "instagram" | "facebook";
+            /** Handle */
+            handle: string;
+            /** Profile Url */
+            profile_url?: string | null;
+            /** Niche Tags */
+            niche_tags?: string[];
+        };
+        /** CompetitorDetailResponse */
+        CompetitorDetailResponse: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** Platform */
+            platform: string;
+            /** Handle */
+            handle: string;
+            /** Profile Url */
+            profile_url: string | null;
+            /** Follower Count */
+            follower_count: number | null;
+            /** Niche Tags */
+            niche_tags: string[];
+            /** Is Active */
+            is_active: boolean;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Created At */
+            created_at: string;
+            /** Recent Posts Count */
+            recent_posts_count: number;
+            /** Recent Analyses */
+            recent_analyses: Record<string, never>[];
+        };
+        /** CompetitorResponse */
+        CompetitorResponse: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** Platform */
+            platform: string;
+            /** Handle */
+            handle: string;
+            /** Profile Url */
+            profile_url: string | null;
+            /** Follower Count */
+            follower_count: number | null;
+            /** Niche Tags */
+            niche_tags: string[];
+            /** Is Active */
+            is_active: boolean;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Created At */
+            created_at: string;
+        };
+        /** CompetitorUpdate */
+        CompetitorUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Niche Tags */
+            niche_tags?: string[] | null;
+        };
+        /** ConfidenceIntervalResponse */
+        ConfidenceIntervalResponse: {
+            /** Lower */
+            lower: number;
+            /** Upper */
+            upper: number;
+            /** Confidence */
+            confidence: number;
+        };
+        /** ContentGapRequest */
+        ContentGapRequest: {
+            /** Competitor Ids */
+            competitor_ids?: string[] | null;
+            /**
+             * Include Underserved
+             * @default true
+             */
+            include_underserved: boolean;
+        };
+        /** ContentGapResponse */
+        ContentGapResponse: {
+            /** Analysis Id */
+            analysis_id: string;
+            /** Analysis Type */
+            analysis_type: string;
+            /** Competitor Id */
+            competitor_id: string | null;
+            /** Created At */
+            created_at: string;
+            /** Findings Summary */
+            findings_summary: Record<string, never>;
+            /** Covered Topics */
+            covered_topics: Record<string, never>[];
+            /** Gap Topics */
+            gap_topics: Record<string, never>[];
+            /** Format Gaps */
+            format_gaps: Record<string, never>[];
+            /** High Impact Opportunities */
+            high_impact_opportunities: Record<string, never>[];
+            /** Quick Wins */
+            quick_wins: string[];
+            /** Suggested Content Calendar */
+            suggested_content_calendar: Record<string, never>[];
+        };
+        /**
+         * ContentInsightsResponse
+         * @description AI-generated content insights based on analysis data.
+         */
+        ContentInsightsResponse: {
+            /** Period Days */
+            period_days: number;
+            /** Analyzed Posts Count */
+            analyzed_posts_count: number;
+            top_performer_avg_scores: components["schemas"]["AverageAnalysisScores"];
+            /** Identified Strengths */
+            identified_strengths: string[];
+            /** Recommendations */
+            recommendations: string[];
+            /** Message */
+            message?: string | null;
+        };
         /** ContentSlot */
         ContentSlot: {
             /** Date */
@@ -1011,6 +3511,125 @@ export interface components {
             /** Why It Works */
             why_it_works: string;
         };
+        /**
+         * ContentTypePerformance
+         * @description Performance metrics for a content type.
+         */
+        ContentTypePerformance: {
+            /** Content Type */
+            content_type: string;
+            /** Post Count */
+            post_count: number;
+            /** Avg Engagement Rate */
+            avg_engagement_rate: number;
+        };
+        /**
+         * CrossPlatformComparisonResponse
+         * @description Cross-platform engagement comparison response.
+         */
+        CrossPlatformComparisonResponse: {
+            /** Period Days */
+            period_days: number;
+            /** Platforms */
+            platforms: components["schemas"]["PlatformEngagementMetrics"][];
+            /** Best Platform */
+            best_platform?: string | null;
+            /** Comparison Insights */
+            comparison_insights: string[];
+            /** Message */
+            message?: string | null;
+        };
+        /**
+         * CustomReportRequest
+         * @description Request to generate a custom report.
+         */
+        CustomReportRequest: {
+            /** Title */
+            title: string;
+            /** Sections */
+            sections: components["schemas"]["CustomReportSection"][];
+            /** Email Recipients */
+            email_recipients?: string[];
+            /**
+             * Send Email
+             * @default false
+             */
+            send_email: boolean;
+        };
+        /**
+         * CustomReportSection
+         * @description Custom report section definition.
+         */
+        CustomReportSection: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "metrics" | "table" | "text" | "insights";
+            /** Title */
+            title: string;
+            /** Data */
+            data?: Record<string, never>;
+        };
+        /**
+         * DataExportDownloadResponse
+         * @description Response for downloading all user data (GDPR Article 20 - data portability).
+         */
+        DataExportDownloadResponse: {
+            /** Export Data */
+            export_data: Record<string, never>;
+            /** Export Timestamp */
+            export_timestamp: string;
+            /** Total Files */
+            total_files: number;
+            /** Total Drafts */
+            total_drafts: number;
+            /**
+             * Message
+             * @default Data export generated successfully. This includes all data stored in your Google Drive.
+             */
+            message: string;
+        };
+        /**
+         * DataImportResponse
+         * @description Response for importing user data.
+         */
+        DataImportResponse: {
+            /** Success */
+            success: boolean;
+            /** Scraped Posts Imported */
+            scraped_posts_imported: boolean;
+            /** Brand Analysis Imported */
+            brand_analysis_imported: boolean;
+            /** Drafts Imported */
+            drafts_imported: number;
+            /** Drafts Skipped */
+            drafts_skipped: number;
+            /** Errors */
+            errors: string[];
+            /** Import Timestamp */
+            import_timestamp: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * DataLocationInfo
+         * @description Information about where a specific data type is stored.
+         */
+        DataLocationInfo: {
+            /** Data Type */
+            data_type: string;
+            /** Storage Location */
+            storage_location: string;
+            /** Description */
+            description: string;
+            /** Drive File Id */
+            drive_file_id?: string | null;
+            /** Last Updated */
+            last_updated?: string | null;
+            /** Size Approximate */
+            size_approximate?: string | null;
+        };
         /** DeleteDataResponse */
         DeleteDataResponse: {
             /** Deleted Files */
@@ -1019,6 +3638,38 @@ export interface components {
             db_records_cleared: boolean;
             /** Message */
             message: string;
+        };
+        /** DraftCreateRequest */
+        DraftCreateRequest: {
+            /**
+             * Platform
+             * @enum {string}
+             */
+            platform: "linkedin" | "instagram" | "twitter";
+            /** Content */
+            content: string | string[];
+            /** Scheduled For */
+            scheduled_for?: string | null;
+        };
+        /** DraftMediaResponse */
+        DraftMediaResponse: {
+            /** Id */
+            id: string;
+            /** Filename */
+            filename: string;
+            /** Mime Type */
+            mime_type: string;
+            /** Preview Url */
+            preview_url?: string | null;
+            /** Drive File Id */
+            drive_file_id?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
         };
         /** DraftResponse */
         DraftResponse: {
@@ -1030,12 +3681,19 @@ export interface components {
             content?: string | null;
             /** Drive File Id */
             drive_file_id?: string | null;
+            /** Media */
+            media?: components["schemas"]["DraftMediaResponse"][];
             /** Repurposed Versions */
             repurposed_versions?: {
                 [key: string]: string;
             };
             /** Status */
             status: string;
+            /**
+             * Review Status
+             * @default draft
+             */
+            review_status: string;
             /** Scheduled For */
             scheduled_for?: string | null;
             /** Platform Post Id */
@@ -1044,6 +3702,15 @@ export interface components {
             published_at?: string | null;
             /** Publish Error */
             publish_error?: string | null;
+            /**
+             * Auto Post Enabled Snapshot
+             * @default false
+             */
+            auto_post_enabled_snapshot: boolean;
+            /** Persona Fit Score */
+            persona_fit_score?: number | null;
+            /** Persona Fit Notes */
+            persona_fit_notes?: string[];
             /** Trend Used */
             trend_used?: string | null;
             /** Created At */
@@ -1059,6 +3726,60 @@ export interface components {
             status?: string | null;
             /** Scheduled For */
             scheduled_for?: string | null;
+        };
+        /**
+         * EngagementDistribution
+         * @description Distribution of posts by engagement rate ranges.
+         */
+        EngagementDistribution: {
+            /**
+             * High
+             * @description Posts with > 5% engagement rate
+             */
+            high: number;
+            /**
+             * Good
+             * @description Posts with 2-5% engagement rate
+             */
+            good: number;
+            /**
+             * Average
+             * @description Posts with 1-2% engagement rate
+             */
+            average: number;
+            /**
+             * Low
+             * @description Posts with < 1% engagement rate
+             */
+            low: number;
+        };
+        /**
+         * EngagementRateTrend
+         * @description Trend analysis for engagement rate.
+         */
+        EngagementRateTrend: {
+            /** Direction */
+            direction: string;
+            /** Strength */
+            strength: number;
+            /** Slope */
+            slope: number;
+            /** Confidence */
+            confidence: number;
+        };
+        /** FeatureImportanceResponse */
+        FeatureImportanceResponse: {
+            /** Feature */
+            feature: string;
+            /** Importance */
+            importance: number;
+            /**
+             * Impact
+             * @enum {string}
+             */
+            impact: "positive" | "negative" | "neutral";
+            /** Explanation */
+            explanation: string;
         };
         /** GenerateRequest */
         GenerateRequest: {
@@ -1086,6 +3807,19 @@ export interface components {
             word_count: number;
             /** Within Platform Limit */
             within_platform_limit: boolean;
+            /** Thread Segments */
+            thread_segments?: string[] | null;
+            /** Content Limit */
+            content_limit?: Record<string, never> | null;
+            /** Context Warnings */
+            context_warnings?: string[];
+            /** Context Summary */
+            context_summary?: Record<string, never>;
+            /**
+             * Generation Mode
+             * @default live
+             */
+            generation_mode: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1108,6 +3842,27 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * LinkedInRealSyncResponse
+         * @description Response from POST /sync/real — includes path info and analysis readiness.
+         */
+        LinkedInRealSyncResponse: {
+            /** Synced Posts */
+            synced_posts: number;
+            /** Total Posts */
+            total_posts: number;
+            /**
+             * Last Synced At
+             * Format: date-time
+             */
+            last_synced_at: string;
+            /** Message */
+            message: string;
+            /** Sync Path */
+            sync_path: string;
+            /** Ready For Analysis */
+            ready_for_analysis: boolean;
+        };
         /** LinkedInStatusResponse */
         LinkedInStatusResponse: {
             /** Connected */
@@ -1121,8 +3876,43 @@ export interface components {
              * @default 0
              */
             synced_posts: number;
+            /**
+             * Scopes
+             * @default []
+             */
+            scopes: string[];
+            /**
+             * Posting Ready
+             * @default false
+             */
+            posting_ready: boolean;
+            /**
+             * Read Sync Ready
+             * @default false
+             */
+            read_sync_ready: boolean;
+            /**
+             * Missing Posting Scopes
+             * @default []
+             */
+            missing_posting_scopes: string[];
+            /**
+             * Missing Read Scopes
+             * @default []
+             */
+            missing_read_scopes: string[];
+            /**
+             * Reconnect Required
+             * @default false
+             */
+            reconnect_required: boolean;
+            /** Message */
+            message?: string | null;
         };
-        /** LinkedInSyncResponse */
+        /**
+         * LinkedInSyncResponse
+         * @description Legacy mock sync response — used by POST /sync.
+         */
         LinkedInSyncResponse: {
             /** Synced Posts */
             synced_posts: number;
@@ -1155,6 +3945,55 @@ export interface components {
             token_type: string;
             user: components["schemas"]["UserResponse"];
         };
+        /** MemberDetailResponse */
+        MemberDetailResponse: {
+            /** Id */
+            id: string;
+            /** User Id */
+            user_id: string;
+            /** Role */
+            role: string;
+            /** Invited By */
+            invited_by: string | null;
+            /** Joined At */
+            joined_at: string;
+            /** User Name */
+            user_name: string | null;
+            /** User Email */
+            user_email: string;
+        };
+        /** MemberInvite */
+        MemberInvite: {
+            /** User Id */
+            user_id: string;
+            /** Role */
+            role: string;
+        };
+        /** MemberResponse */
+        MemberResponse: {
+            /** Id */
+            id: string;
+            /** User Id */
+            user_id: string;
+            /** Role */
+            role: string;
+            /** Invited By */
+            invited_by: string | null;
+            /** Joined At */
+            joined_at: string;
+        };
+        /** MemberUpdate */
+        MemberUpdate: {
+            /** Role */
+            role: string;
+        };
+        /** MyApprovalsResponse */
+        MyApprovalsResponse: {
+            /** Requested */
+            requested: components["schemas"]["ApprovalResponse"][];
+            /** Pending My Decision */
+            pending_my_decision: components["schemas"]["ApprovalDetailResponse"][];
+        };
         /** OAuthConnectResponse */
         OAuthConnectResponse: {
             /** Authorization Url */
@@ -1178,6 +4017,405 @@ export interface components {
              * @default google_drive
              */
             storage_preference: string;
+            /** Brand Name */
+            brand_name?: string | null;
+            /** Bio */
+            bio?: string | null;
+            /** Target Audience */
+            target_audience?: string | null;
+            /** Content Mission */
+            content_mission?: string | null;
+        };
+        /** OrganizationCreate */
+        OrganizationCreate: {
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /**
+             * Plan Type
+             * @default agency
+             */
+            plan_type: string;
+            /** Billing Email */
+            billing_email?: string | null;
+        };
+        /** OrganizationResponse */
+        OrganizationResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Plan Type */
+            plan_type: string;
+            /** Billing Email */
+            billing_email: string | null;
+            /** Settings */
+            settings: Record<string, never>;
+            /** White Label Settings */
+            white_label_settings: Record<string, never>;
+            /** Created At */
+            created_at: string;
+        };
+        /** OrganizationUpdate */
+        OrganizationUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Billing Email */
+            billing_email?: string | null;
+            /** Settings */
+            settings?: Record<string, never> | null;
+        };
+        /** PendingApprovalsResponse */
+        PendingApprovalsResponse: {
+            /** Pending */
+            pending: components["schemas"]["ApprovalDetailResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * PerformancePredictionRequest
+         * @description Request to predict content performance.
+         */
+        PerformancePredictionRequest: {
+            /**
+             * Content
+             * @description Content to analyze
+             */
+            content: string;
+            /**
+             * Platform
+             * @default linkedin
+             * @enum {string}
+             */
+            platform: "linkedin" | "twitter" | "instagram" | "facebook";
+            /**
+             * Content Type
+             * @default post
+             * @enum {string}
+             */
+            content_type: "post" | "article" | "video" | "image" | "poll";
+            /** Hashtags */
+            hashtags?: string[];
+            /** Mentioned Accounts */
+            mentioned_accounts?: string[];
+            /**
+             * Use Cache
+             * @description Use cached prediction if available
+             * @default true
+             */
+            use_cache: boolean;
+        };
+        /** PerformancePredictionResponse */
+        PerformancePredictionResponse: {
+            /** Prediction Id */
+            prediction_id: string;
+            /** Content Hash */
+            content_hash: string;
+            metrics: components["schemas"]["PredictionMetricsResponse"];
+            confidence: components["schemas"]["PredictionConfidenceResponse"];
+            /** Feature Importance */
+            feature_importance: components["schemas"]["FeatureImportanceResponse"][];
+            /** Improvement Suggestions */
+            improvement_suggestions: string[];
+            /** Comparative Analysis */
+            comparative_analysis: string | null;
+            /** Model Version */
+            model_version: string;
+            /** Prediction Time */
+            prediction_time: string;
+            /** Processing Time Ms */
+            processing_time_ms: number;
+            /**
+             * Cached
+             * @default false
+             */
+            cached: boolean;
+        };
+        /**
+         * PermanentContext
+         * @description Layer 1 — never volatile. Set at onboarding, only updated when the user
+         *     confirms a change (manual edit) or approves a learning-loop fact promotion.
+         */
+        PermanentContext: {
+            /** Brand Name */
+            brand_name?: string | null;
+            /** Bio */
+            bio?: string | null;
+            /** Target Audience */
+            target_audience?: string | null;
+            /** Content Mission */
+            content_mission?: string | null;
+            /** Niche */
+            niche?: string | null;
+            /**
+             * Primary Platform
+             * @default linkedin
+             */
+            primary_platform: string;
+            /**
+             * Platform Facts
+             * @description Keyed by platform slug: 'linkedin', 'twitter', 'instagram'
+             */
+            platform_facts?: {
+                [key: string]: components["schemas"]["PlatformFactEntry"];
+            };
+            /**
+             * Context Version
+             * @default 1
+             */
+            context_version: number;
+        };
+        /**
+         * PersonaContext
+         * @description Layer 2 — AI-derived from post analysis. Updated whenever new posts are
+         *     scraped and analysed. Represents *how* the user writes, not *who* they are.
+         */
+        PersonaContext: {
+            /** Voice Tone */
+            voice_tone?: string | null;
+            /** Sentence Style */
+            sentence_style?: string | null;
+            /** Hook Patterns */
+            hook_patterns?: string[];
+            /** Content Pillars */
+            content_pillars?: string[];
+            /** Hashtag Style */
+            hashtag_style?: string | null;
+            /** Emoji Usage */
+            emoji_usage?: string | null;
+            /** Avg Post Length */
+            avg_post_length?: number | null;
+            /**
+             * Analysis Based On Posts
+             * @default 0
+             */
+            analysis_based_on_posts: number;
+            /**
+             * Confidence Score
+             * @default 0
+             */
+            confidence_score: number;
+        };
+        /** PersonaInsightResponse */
+        PersonaInsightResponse: {
+            /** Source Summary */
+            source_summary?: Record<string, never>;
+            /** Extracted Topics */
+            extracted_topics?: string[];
+            /** Extracted Hooks */
+            extracted_hooks?: string[];
+            /** Extracted Offers */
+            extracted_offers?: string[];
+            /** Extracted Audience */
+            extracted_audience?: string[];
+            /** Extracted Voice Traits */
+            extracted_voice_traits?: string[];
+            /** Extracted Proof Points */
+            extracted_proof_points?: string[];
+            /** Id */
+            id: string;
+            /** Persona Profile Id */
+            persona_profile_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** PersonaProfileResponse */
+        PersonaProfileResponse: {
+            /**
+             * Status
+             * @default draft
+             */
+            status: string;
+            /** Niche */
+            niche?: string | null;
+            /** Target Audience */
+            target_audience?: string | null;
+            /** Goals */
+            goals?: string[];
+            /** Persona Summary */
+            persona_summary?: string | null;
+            /** Voice Tone */
+            voice_tone?: string | null;
+            /** Positioning */
+            positioning?: string | null;
+            /** Content Pillars */
+            content_pillars?: string[];
+            /** Audience Pain Points */
+            audience_pain_points?: string[];
+            /** Credibility Signals */
+            credibility_signals?: string[];
+            /** Content Opportunities */
+            content_opportunities?: string[];
+            /** Avoid Topics */
+            avoid_topics?: string[];
+            /** Id */
+            id: string;
+            /** User Id */
+            user_id: string;
+            /** Raw Ai Output */
+            raw_ai_output?: Record<string, never>;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Sources */
+            sources?: components["schemas"]["PersonaSourceResponse"][];
+            /** Insights */
+            insights?: components["schemas"]["PersonaInsightResponse"][];
+        };
+        /** PersonaProfileUpdate */
+        PersonaProfileUpdate: {
+            /** Niche */
+            niche?: string | null;
+            /** Target Audience */
+            target_audience?: string | null;
+            /** Goals */
+            goals?: string[] | null;
+            /** Persona Summary */
+            persona_summary?: string | null;
+            /** Voice Tone */
+            voice_tone?: string | null;
+            /** Positioning */
+            positioning?: string | null;
+            /** Content Pillars */
+            content_pillars?: string[] | null;
+            /** Audience Pain Points */
+            audience_pain_points?: string[] | null;
+            /** Credibility Signals */
+            credibility_signals?: string[] | null;
+            /** Content Opportunities */
+            content_opportunities?: string[] | null;
+            /** Avoid Topics */
+            avoid_topics?: string[] | null;
+        };
+        /** PersonaSourceCreate */
+        PersonaSourceCreate: {
+            /**
+             * Source Type
+             * @description E.g., website, x, linkedin, youtube, instagram, manual
+             */
+            source_type: string;
+            /** Url */
+            url?: string | null;
+            /** Manual Text */
+            manual_text?: string | null;
+        };
+        /** PersonaSourceResponse */
+        PersonaSourceResponse: {
+            /**
+             * Source Type
+             * @description E.g., website, x, linkedin, youtube, instagram, manual
+             */
+            source_type: string;
+            /** Url */
+            url?: string | null;
+            /** Manual Text */
+            manual_text?: string | null;
+            /** Id */
+            id: string;
+            /** Persona Profile Id */
+            persona_profile_id: string;
+            /** Status */
+            status: string;
+            /** Error Message */
+            error_message?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * PlatformBestPost
+         * @description The best performing post on a platform.
+         */
+        PlatformBestPost: {
+            /** Id */
+            id: string;
+            /** Content */
+            content: string;
+            /** Engagement Rate */
+            engagement_rate: number;
+            /** Published At */
+            published_at?: string | null;
+        };
+        /**
+         * PlatformEngagementMetrics
+         * @description Engagement metrics for a single platform.
+         */
+        PlatformEngagementMetrics: {
+            /** Platform */
+            platform: string;
+            /** Total Posts */
+            total_posts: number;
+            /** Avg Engagement Rate */
+            avg_engagement_rate: number;
+            /** Total Likes */
+            total_likes: number;
+            /** Total Comments */
+            total_comments: number;
+            /** Total Shares */
+            total_shares: number;
+            /** Total Impressions */
+            total_impressions: number;
+            /** Best Content Types */
+            best_content_types: components["schemas"]["ContentTypePerformance"][];
+            best_post: components["schemas"]["PlatformBestPost"];
+        };
+        /**
+         * PlatformFactEntry
+         * @description A single user-approved learned fact for one platform.
+         */
+        PlatformFactEntry: {
+            /**
+             * Best Post Times
+             * @description UTC times in HH:MM format when posts perform best, e.g. ['17:00']
+             */
+            best_post_times?: string[];
+            /**
+             * Best Formats
+             * @description Post formats that consistently perform well, e.g. ['listicle', 'story']
+             */
+            best_formats?: string[];
+            /**
+             * Avoid
+             * @description Formats or topics that consistently underperform
+             */
+            avoid?: string[];
+            /**
+             * Confirmed At
+             * @description ISO datetime when the user approved these facts
+             */
+            confirmed_at?: string | null;
+        };
+        /**
+         * PlatformPreferencesResponse
+         * @description Combined response for a platform's publishing preferences.
+         */
+        PlatformPreferencesResponse: {
+            /** Platform */
+            platform: string;
+            /** Auto Post Enabled */
+            auto_post_enabled: boolean;
+            /** Preferred Posting Times */
+            preferred_posting_times: string[];
         };
         /** PlatformStatus */
         PlatformStatus: {
@@ -1191,6 +4429,63 @@ export interface components {
             last_synced_at?: string | null;
             /** Metadata Summary */
             metadata_summary?: Record<string, never> | null;
+        };
+        /**
+         * PlatformStatusResponse
+         * @description Full platform status response matching PlatformStatus dataclass.
+         */
+        PlatformStatusResponse: {
+            /** Platform */
+            platform: string;
+            /** Connected */
+            connected: boolean;
+            /** Platform Username */
+            platform_username?: string | null;
+            /** Last Synced At */
+            last_synced_at?: string | null;
+            /**
+             * Synced Posts
+             * @default 0
+             */
+            synced_posts: number;
+            /**
+             * Scopes
+             * @default []
+             */
+            scopes: string[];
+            /**
+             * Posting Ready
+             * @default false
+             */
+            posting_ready: boolean;
+            /**
+             * Read Sync Ready
+             * @default false
+             */
+            read_sync_ready: boolean;
+            /**
+             * Missing Posting Scopes
+             * @default []
+             */
+            missing_posting_scopes: string[];
+            /**
+             * Missing Read Scopes
+             * @default []
+             */
+            missing_read_scopes: string[];
+            /**
+             * Reconnect Required
+             * @default false
+             */
+            reconnect_required: boolean;
+            /** Message */
+            message?: string | null;
+            /** Sync Status */
+            sync_status?: string | null;
+            /** Sync Error */
+            sync_error?: string | null;
+            /** Sync Started At */
+            sync_started_at?: string | null;
         };
         /** PostAnalysisResponse */
         PostAnalysisResponse: {
@@ -1208,10 +4503,22 @@ export interface components {
             top_strength: string;
             /** Top Improvement */
             top_improvement: string;
+            /** Detailed Feedback */
+            detailed_feedback?: string | null;
             /** Predicted Engagement */
             predicted_engagement: string;
             /** Rewrite Suggestion */
             rewrite_suggestion?: string | null;
+        };
+        /**
+         * PostVolumeTrend
+         * @description Trend analysis for post volume.
+         */
+        PostVolumeTrend: {
+            /** Direction */
+            direction: string;
+            /** Strength */
+            strength: number;
         };
         /** PostWithAnalysis */
         PostWithAnalysis: {
@@ -1229,9 +4536,127 @@ export interface components {
             comments: number;
             /** Shares */
             shares: number;
+            /** Impressions */
+            impressions?: number | null;
             /** Engagement Rate */
             engagement_rate: number;
             analysis?: components["schemas"]["PostAnalysisResponse"] | null;
+        };
+        /**
+         * PostingTimesUpdateRequest
+         * @description Request body for setting preferred posting times per platform.
+         *
+         *     Times should be in HH:MM (24-hour) format, e.g. ["09:00", "14:00", "18:00"].
+         */
+        PostingTimesUpdateRequest: {
+            /** Times */
+            times: string[];
+        };
+        /**
+         * PostingTimesUpdateResponse
+         * @description Response after updating preferred posting times.
+         */
+        PostingTimesUpdateResponse: {
+            /** Platform */
+            platform: string;
+            /** Preferred Posting Times */
+            preferred_posting_times: string[];
+            /**
+             * Message
+             * @default Posting times updated
+             */
+            message: string;
+        };
+        /** PredictionCacheEntry */
+        PredictionCacheEntry: {
+            /** Prediction Id */
+            prediction_id: string;
+            /** Prediction Type */
+            prediction_type: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Created At */
+            created_at: string;
+            /** Expires At */
+            expires_at: string | null;
+            /** Confidence Score */
+            confidence_score: number | null;
+            /** Model Used */
+            model_used: string | null;
+        };
+        /** PredictionConfidenceResponse */
+        PredictionConfidenceResponse: {
+            /** Overall Confidence */
+            overall_confidence: number;
+            engagement_rate_ci: components["schemas"]["ConfidenceIntervalResponse"];
+            impressions_ci: components["schemas"]["ConfidenceIntervalResponse"] | null;
+            /** Data Quality Score */
+            data_quality_score: number;
+            /** Historical Alignment */
+            historical_alignment: number;
+            /** Model Confidence */
+            model_confidence: number;
+        };
+        /** PredictionListResponse */
+        PredictionListResponse: {
+            /** Predictions */
+            predictions: components["schemas"]["PredictionCacheEntry"][];
+            /** Total */
+            total: number;
+        };
+        /** PredictionMetricsResponse */
+        PredictionMetricsResponse: {
+            /** Likes */
+            likes: number;
+            /** Comments */
+            comments: number;
+            /** Shares */
+            shares: number;
+            /** Impressions */
+            impressions: number;
+            /** Engagement Rate */
+            engagement_rate: number;
+            /** Reach */
+            reach: number | null;
+            /** Click Through Rate */
+            click_through_rate: number | null;
+        };
+        /**
+         * PrivacyDashboardResponse
+         * @description Privacy dashboard showing where user data is stored.
+         */
+        PrivacyDashboardResponse: {
+            /** User Id */
+            user_id: string;
+            /** Generated At */
+            generated_at: string;
+            /** Data Locations */
+            data_locations: components["schemas"]["DataLocationInfo"][];
+            /** Drive Connected */
+            drive_connected: boolean;
+            /** Drive Folder Id */
+            drive_folder_id?: string | null;
+            /** Storage Preferences */
+            storage_preferences: Record<string, never>;
+            /** Data Retention Days */
+            data_retention_days: number | null;
+            /** Next Cleanup Date */
+            next_cleanup_date: string | null;
+            /** Recent Exports */
+            recent_exports: Record<string, never>[];
+            /** Last Accessed */
+            last_accessed: string | null;
+            /** Pending Operations */
+            pending_operations: number;
+            /** Can Export */
+            can_export: boolean;
+            /** Can Delete */
+            can_delete: boolean;
+            /**
+             * Message
+             * @default Privacy dashboard - see where your data lives
+             */
+            message: string;
         };
         /** PublishRequest */
         PublishRequest: {
@@ -1247,6 +4672,16 @@ export interface components {
              * Format: date-time
              */
             published_at: string;
+        };
+        /** PublishingSettingsRequest */
+        PublishingSettingsRequest: {
+            /** Auto Post Enabled */
+            auto_post_enabled: boolean;
+        };
+        /** PublishingSettingsResponse */
+        PublishingSettingsResponse: {
+            /** Auto Post Enabled */
+            auto_post_enabled: boolean;
         };
         /** RadarInput */
         RadarInput: {
@@ -1282,6 +4717,80 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * ReportContext
+         * @description Layer 3 — current cycle insights. Volatile; refreshed after every analytics
+         *     sync. Represents *what's working right now* for this user's content.
+         */
+        ReportContext: {
+            /** Top Performing Topics */
+            top_performing_topics?: string[];
+            /** Avg Engagement Rate */
+            avg_engagement_rate?: number | null;
+            /** Best Hook Last Cycle */
+            best_hook_last_cycle?: string | null;
+            /** Content Gaps */
+            content_gaps?: string[];
+            /**
+             * Posts Analysed
+             * @default 0
+             */
+            posts_analysed: number;
+            /**
+             * Period Days
+             * @default 30
+             */
+            period_days: number;
+            /** Learned Summary */
+            learned_summary?: string | null;
+            /** Why Wins */
+            why_wins?: string[];
+            /** Recommendations */
+            recommendations?: string[];
+            /** Avg Hook Score */
+            avg_hook_score?: number | null;
+            /** Recurring Improvement */
+            recurring_improvement?: string | null;
+        };
+        /**
+         * ReportMetadata
+         * @description Report metadata for listing.
+         */
+        ReportMetadata: {
+            /** Report Id */
+            report_id: string;
+            /** Report Type */
+            report_type: string;
+            /** Title */
+            title: string | null;
+            /** Generated At */
+            generated_at: string;
+            /** Size Kb */
+            size_kb: number;
+            /** Download Url */
+            download_url: string;
+        };
+        /**
+         * ReportResponse
+         * @description Report generation response.
+         */
+        ReportResponse: {
+            /** Report Id */
+            report_id: string;
+            /** Report Type */
+            report_type: string;
+            /** Download Url */
+            download_url: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "generated" | "queued" | "error";
+            /** Metadata */
+            metadata: Record<string, never>;
+            /** Message */
+            message: string | null;
+        };
         /** RepurposeInput */
         RepurposeInput: {
             /** Original Content */
@@ -1305,6 +4814,8 @@ export interface components {
              * @enum {string}
              */
             target_platform: "instagram" | "twitter";
+            /** Scheduled For */
+            scheduled_for?: string | null;
         };
         /** RepurposeResponse */
         RepurposeResponse: {
@@ -1314,6 +4825,17 @@ export interface components {
             content: string;
             /** Platform */
             platform: string;
+            /** New Draft Id */
+            new_draft_id?: string | null;
+            /** Thread Segments */
+            thread_segments?: string[] | null;
+            /**
+             * Within Platform Limit
+             * @default true
+             */
+            within_platform_limit: boolean;
+            /** Content Limit */
+            content_limit?: Record<string, never> | null;
         };
         /** RepurposedItem */
         RepurposedItem: {
@@ -1323,6 +4845,11 @@ export interface components {
             content: string;
             /** Format */
             format: string;
+        };
+        /** ResubmitRequest */
+        ResubmitRequest: {
+            /** Change Notes */
+            change_notes?: string | null;
         };
         /** ScheduleRequest */
         ScheduleRequest: {
@@ -1345,6 +4872,120 @@ export interface components {
             scheduled_for: string;
             /** Suggested Times */
             suggested_times: string[];
+        };
+        /**
+         * ScheduledReportConfig
+         * @description Configuration for scheduled reports.
+         */
+        ScheduledReportConfig: {
+            /**
+             * Report Type
+             * @default analytics
+             * @enum {string}
+             */
+            report_type: "analytics" | "competitive";
+            /**
+             * Frequency
+             * @default monthly
+             * @enum {string}
+             */
+            frequency: "weekly" | "monthly" | "quarterly";
+            /**
+             * Period Days
+             * @default 30
+             */
+            period_days: number;
+            /** Email Recipients */
+            email_recipients?: string[];
+            /**
+             * Include Charts
+             * @default true
+             */
+            include_charts: boolean;
+            /** Day Of Week */
+            day_of_week?: number | null;
+            /** Day Of Month */
+            day_of_month?: number | null;
+        };
+        /**
+         * SettingsPlatformStatus
+         * @description Rich per-platform status for the settings page.
+         *
+         *     Includes connection info, sync state, readiness flags, and missing scopes.
+         */
+        SettingsPlatformStatus: {
+            /** Platform */
+            platform: string;
+            /** Connected */
+            connected: boolean;
+            /** Platform Username */
+            platform_username?: string | null;
+            /** Connected At */
+            connected_at?: string | null;
+            /** Last Synced At */
+            last_synced_at?: string | null;
+            /**
+             * Posting Ready
+             * @default false
+             */
+            posting_ready: boolean;
+            /**
+             * Read Sync Ready
+             * @default false
+             */
+            read_sync_ready: boolean;
+            /**
+             * Missing Scopes
+             * @default []
+             */
+            missing_scopes: string[];
+            /**
+             * Missing Posting Scopes
+             * @default []
+             */
+            missing_posting_scopes: string[];
+            /**
+             * Missing Read Scopes
+             * @default []
+             */
+            missing_read_scopes: string[];
+            /** Sync Status */
+            sync_status?: string | null;
+            /** Sync Error */
+            sync_error?: string | null;
+            /**
+             * Sync In Progress
+             * @default false
+             */
+            sync_in_progress: boolean;
+            /**
+             * Reconnect Required
+             * @default false
+             */
+            reconnect_required: boolean;
+            /**
+             * Can Disconnect
+             * @default true
+             */
+            can_disconnect: boolean;
+            /**
+             * Can Reconnect
+             * @default true
+             */
+            can_reconnect: boolean;
+            /**
+             * Can Sync
+             * @default false
+             */
+            can_sync: boolean;
+        };
+        /**
+         * SettingsPlatformsResponse
+         * @description Response for GET /platforms — all connected platform statuses.
+         */
+        SettingsPlatformsResponse: {
+            /** Platforms */
+            platforms: components["schemas"]["SettingsPlatformStatus"][];
         };
         /** SocialStatusResponse */
         SocialStatusResponse: {
@@ -1376,6 +5017,23 @@ export interface components {
             /** Modified At */
             modified_at?: string | null;
         };
+        /** StorageHealthResponse */
+        StorageHealthResponse: {
+            /** Healthy */
+            healthy: boolean;
+            /** Connected */
+            connected: boolean;
+            /** Can Read */
+            can_read: boolean;
+            /** Can Write */
+            can_write: boolean;
+            /** Scopes Valid */
+            scopes_valid: boolean;
+            /** Message */
+            message: string;
+            /** Last Checked */
+            last_checked?: string | null;
+        };
         /** StorageStatus */
         StorageStatus: {
             /** Connected */
@@ -1388,6 +5046,48 @@ export interface components {
             scraped_posts_file_id?: string | null;
             /** Brand Analysis File Id */
             brand_analysis_file_id?: string | null;
+        };
+        /** StrategyAnalysisRequest */
+        StrategyAnalysisRequest: {
+            /**
+             * Posts To Analyze
+             * @default 10
+             */
+            posts_to_analyze: number;
+            /**
+             * Force Refresh
+             * @default false
+             */
+            force_refresh: boolean;
+        };
+        /** StrategyAnalysisResponse */
+        StrategyAnalysisResponse: {
+            /** Analysis Id */
+            analysis_id: string;
+            /** Analysis Type */
+            analysis_type: string;
+            /** Competitor Id */
+            competitor_id: string | null;
+            /** Created At */
+            created_at: string;
+            /** Findings Summary */
+            findings_summary: Record<string, never>;
+            /** Content Strategy */
+            content_strategy: Record<string, never>;
+            /** Posting Patterns */
+            posting_patterns: Record<string, never>;
+            /** Engagement Tactics */
+            engagement_tactics: string[];
+            /** Top Performing Themes */
+            top_performing_themes: Record<string, never>[];
+            /** Opportunities */
+            opportunities: Record<string, never>[];
+            /** Recommended Actions */
+            recommended_actions: string[];
+            /** Content Ideas */
+            content_ideas: string[];
+            /** Confidence Score */
+            confidence_score: number;
         };
         /** SuggestRequest */
         SuggestRequest: {
@@ -1404,6 +5104,8 @@ export interface components {
         SuggestResponse: {
             /** Suggestions */
             suggestions: components["schemas"]["ContentSuggestion"][];
+            /** Context Warnings */
+            context_warnings?: string[];
         };
         /** SyncResponse */
         SyncResponse: {
@@ -1425,6 +5127,197 @@ export interface components {
             result?: Record<string, never> | null;
             /** Error */
             error?: string | null;
+        };
+        /**
+         * SyncTriggerResponse
+         * @description Response after triggering a platform sync.
+         */
+        SyncTriggerResponse: {
+            /** Task Id */
+            task_id: string;
+            /** Platform */
+            platform: string;
+            /**
+             * Message
+             * @default Sync enqueued
+             */
+            message: string;
+        };
+        /**
+         * TimeSeriesDataPoint
+         * @description A single data point in a time series.
+         */
+        TimeSeriesDataPoint: {
+            /** Date */
+            date: string;
+            /** Value */
+            value: number;
+            /** Posts Count */
+            posts_count: number;
+            /** Interval */
+            interval?: string | null;
+            /** Ma7 */
+            ma7?: number | null;
+            /** Ma30 */
+            ma30?: number | null;
+        };
+        /** TimeSlotResponse */
+        TimeSlotResponse: {
+            /** Day */
+            day: string;
+            /** Hour */
+            hour: number;
+            /** Score */
+            score: number;
+            /** Predicted Engagement Rate */
+            predicted_engagement_rate: number;
+            /** Predicted Reach */
+            predicted_reach: number;
+            /** Audience Availability */
+            audience_availability: number;
+            /** Competition Level */
+            competition_level: string;
+            /** Reasoning */
+            reasoning: string;
+        };
+        /** TimingPatternResponse */
+        TimingPatternResponse: {
+            /** Pattern Type */
+            pattern_type: string;
+            /** Description */
+            description: string;
+            /** Confidence */
+            confidence: number;
+            /** Recommended Action */
+            recommended_action: string | null;
+        };
+        /**
+         * TimingPredictionRequest
+         * @description Request to predict optimal posting time.
+         */
+        TimingPredictionRequest: {
+            /** Content */
+            content: string;
+            /**
+             * Platform
+             * @default linkedin
+             * @enum {string}
+             */
+            platform: "linkedin" | "twitter" | "instagram" | "facebook";
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timezone: string;
+            /** Allowed Days */
+            allowed_days?: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
+            /**
+             * Allowed Hours Start
+             * @default 8
+             */
+            allowed_hours_start: number;
+            /**
+             * Allowed Hours End
+             * @default 18
+             */
+            allowed_hours_end: number;
+            /**
+             * Use Cache
+             * @default true
+             */
+            use_cache: boolean;
+        };
+        /** TimingPredictionResponse */
+        TimingPredictionResponse: {
+            /** Prediction Id */
+            prediction_id: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Optimal Time */
+            optimal_time: string;
+            /** Confidence Score */
+            confidence_score: number;
+            /** Alternative Slots */
+            alternative_slots: components["schemas"]["TimeSlotResponse"][];
+            /** Detected Patterns */
+            detected_patterns: components["schemas"]["TimingPatternResponse"][];
+            /** Best Days */
+            best_days: string[];
+            /** Best Hours */
+            best_hours: number[];
+            /** Worst Times To Post */
+            worst_times_to_post: string[];
+            /** Platform Insights */
+            platform_insights: string | null;
+            /** Model Version */
+            model_version: string;
+            /** Prediction Time */
+            prediction_time: string;
+            /** Processing Time Ms */
+            processing_time_ms: number;
+            /**
+             * Cached
+             * @default false
+             */
+            cached: boolean;
+        };
+        /** TrendBenchmarkRequest */
+        TrendBenchmarkRequest: {
+            /** Trend Topic */
+            trend_topic: string;
+            /** Competitor Ids */
+            competitor_ids?: string[] | null;
+        };
+        /** TrendBenchmarkResponse */
+        TrendBenchmarkResponse: {
+            /** Analysis Id */
+            analysis_id: string;
+            /** Analysis Type */
+            analysis_type: string;
+            /** Competitor Id */
+            competitor_id: string | null;
+            /** Created At */
+            created_at: string;
+            /** Findings Summary */
+            findings_summary: Record<string, never>;
+            /** Trend Topic */
+            trend_topic: string;
+            /** Your Rank */
+            your_rank: number | null;
+            /** Total Competitors */
+            total_competitors: number;
+            /** Why Top Performers Succeeded */
+            why_top_performers_succeeded: string[];
+            /** Your Gaps Vs Top */
+            your_gaps_vs_top: string[];
+            /** Trend Lifecycle */
+            trend_lifecycle: string;
+            /** How To Improve */
+            how_to_improve: string[];
+        };
+        /**
+         * TrendDetectionResult
+         * @description Results from trend detection analysis.
+         */
+        TrendDetectionResult: {
+            /** Has Enough Data */
+            has_enough_data: boolean;
+            /** Period Days */
+            period_days?: number | null;
+            /** Message */
+            message?: string | null;
+            engagement_rate?: components["schemas"]["EngagementRateTrend"] | null;
+            post_volume?: components["schemas"]["PostVolumeTrend"] | null;
+            /**
+             * Anomalies
+             * @default []
+             */
+            anomalies: components["schemas"]["AnomalyDetection"][];
+            /**
+             * Recommendations
+             * @default []
+             */
+            recommendations: string[];
         };
         /** TrendItem */
         TrendItem: {
@@ -1450,6 +5343,18 @@ export interface components {
             /** Content Angle */
             content_angle: string;
         };
+        /**
+         * TrendMetrics
+         * @description Week-over-week or period-over-period trend metrics.
+         */
+        TrendMetrics: {
+            /** Direction */
+            direction: string;
+            /** Percent Change */
+            percent_change?: number | null;
+            /** Absolute Change */
+            absolute_change: number;
+        };
         /** TrendResponse */
         TrendResponse: {
             /** Niche */
@@ -1464,6 +5369,54 @@ export interface components {
             fetched_at: string;
             /** Cache Age Minutes */
             cache_age_minutes: number;
+        };
+        /** TwitterTierUpdateRequest */
+        TwitterTierUpdateRequest: {
+            /**
+             * Tier
+             * @enum {string}
+             */
+            tier: "free" | "premium";
+        };
+        /** TwitterTierUpdateResponse */
+        TwitterTierUpdateResponse: {
+            /** Tier */
+            tier: string;
+            /** Max Chars */
+            max_chars: number;
+            /**
+             * Is Thread Eligible
+             * @default false
+             */
+            is_thread_eligible: boolean;
+            /**
+             * Message
+             * @default Twitter tier updated successfully
+             */
+            message: string;
+        };
+        /**
+         * UpdatePermanentContextRequest
+         * @description User-initiated edit of their permanent context.
+         */
+        UpdatePermanentContextRequest: {
+            /** Brand Name */
+            brand_name?: string | null;
+            /** Bio */
+            bio?: string | null;
+            /** Target Audience */
+            target_audience?: string | null;
+            /** Content Mission */
+            content_mission?: string | null;
+            /** Niche */
+            niche?: string | null;
+            /** Primary Platform */
+            primary_platform?: string | null;
+        };
+        /** UpdateWorkspaceMember */
+        UpdateWorkspaceMember: {
+            /** Role */
+            role: string;
         };
         /** UserResponse */
         UserResponse: {
@@ -1496,6 +5449,14 @@ export interface components {
             storage_preference: string;
             /** Is Active */
             is_active: boolean;
+            /** Brand Name */
+            brand_name?: string | null;
+            /** Bio */
+            bio?: string | null;
+            /** Target Audience */
+            target_audience?: string | null;
+            /** Content Mission */
+            content_mission?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1506,12 +5467,118 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** ViralPatternResponse */
+        ViralPatternResponse: {
+            /** Pattern Type */
+            pattern_type: string;
+            /** Score */
+            score: number;
+            /** Detected */
+            detected: boolean;
+            /** Explanation */
+            explanation: string;
+            /** Examples */
+            examples: string[];
+        };
+        /**
+         * ViralPredictionRequest
+         * @description Request to analyze viral potential.
+         */
+        ViralPredictionRequest: {
+            /** Content */
+            content: string;
+            /**
+             * Platform
+             * @default linkedin
+             * @enum {string}
+             */
+            platform: "linkedin" | "twitter" | "instagram" | "facebook";
+            /**
+             * Use Cache
+             * @default true
+             */
+            use_cache: boolean;
+        };
+        /** ViralPredictionResponse */
+        ViralPredictionResponse: {
+            /** Prediction Id */
+            prediction_id: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Viral Probability */
+            viral_probability: number;
+            /** Viral Score */
+            viral_score: number;
+            /** Category */
+            category: string;
+            /** Patterns */
+            patterns: components["schemas"]["ViralPatternResponse"][];
+            /** Percentile Rank */
+            percentile_rank: number;
+            /** Comparison To Top Performers */
+            comparison_to_top_performers: string | null;
+            /** Viral Triggers */
+            viral_triggers: string[];
+            /** Amplification Suggestions */
+            amplification_suggestions: string[];
+            /** Model Version */
+            model_version: string;
+            /** Prediction Time */
+            prediction_time: string;
+            /** Processing Time Ms */
+            processing_time_ms: number;
+            /**
+             * Cached
+             * @default false
+             */
+            cached: boolean;
+        };
+        /** WaitlistAdminActionRequest */
+        WaitlistAdminActionRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+        };
+        /** WaitlistAdminEntriesResponse */
+        WaitlistAdminEntriesResponse: {
+            /** Entries */
+            entries: components["schemas"]["WaitlistAdminEntryResponse"][];
+        };
+        /** WaitlistAdminEntryResponse */
+        WaitlistAdminEntryResponse: {
+            /** Email */
+            email: string;
+            /** Name */
+            name: string | null;
+            /** Profession */
+            profession: string | null;
+            /** Access Approved */
+            access_approved: boolean;
+            /** Approved At */
+            approved_at: string | null;
+            /** Approved By */
+            approved_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** WaitlistMemberStatusResponse */
         WaitlistMemberStatusResponse: {
             /** Email */
             email: string;
             /** Joined */
             joined: boolean;
+            /**
+             * Access Approved
+             * @default false
+             */
+            access_approved: boolean;
+            /** Approved At */
+            approved_at?: string | null;
             /** Position */
             position: number | null;
             /** Total Joined */
@@ -1560,6 +5627,246 @@ export interface components {
             remaining_seats: number;
             /** Recent Joiners */
             recent_joiners: string[];
+        };
+        /**
+         * WhiteLabelSettingsResponse
+         * @description White-label settings for reports.
+         */
+        WhiteLabelSettingsResponse: {
+            /** Enabled */
+            enabled: boolean;
+            /** Logo Url */
+            logo_url: string | null;
+            /** Primary Color */
+            primary_color: string;
+            /** Secondary Color */
+            secondary_color: string | null;
+            /** Sender Name */
+            sender_name: string;
+            /** Sender Email */
+            sender_email: string;
+            /** Custom Footer */
+            custom_footer: string | null;
+            /** Hide Powered By */
+            hide_powered_by: boolean;
+        };
+        /** WorkflowCreate */
+        WorkflowCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Content Type
+             * @default post
+             * @enum {string}
+             */
+            content_type: "post" | "content_plan" | "campaign";
+            /** Steps */
+            steps: components["schemas"]["WorkflowStep"][];
+        };
+        /** WorkflowResponse */
+        WorkflowResponse: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** Content Type */
+            content_type: string;
+            /** Steps */
+            steps: Record<string, never>[];
+            /** Is Active */
+            is_active: boolean;
+            /** Created At */
+            created_at: string;
+        };
+        /** WorkflowStep */
+        WorkflowStep: {
+            /** Step Number */
+            step_number: number;
+            /** Role Required */
+            role_required?: string | null;
+            /** User Id */
+            user_id?: string | null;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
+            /** Auto Approve Hours */
+            auto_approve_hours?: number | null;
+        };
+        /** WorkspaceCreate */
+        WorkspaceCreate: {
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Client Name */
+            client_name?: string | null;
+            /** Client Email */
+            client_email?: string | null;
+        };
+        /** WorkspaceDetail */
+        WorkspaceDetail: {
+            /** Id */
+            id: string;
+            /** Organization Id */
+            organization_id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Client Name */
+            client_name: string | null;
+            /** Client Email */
+            client_email: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Brand Colors */
+            brand_colors: {
+                [key: string]: string;
+            } | null;
+            /** Logo Url */
+            logo_url: string | null;
+            /** Settings */
+            settings: Record<string, never>;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+            stats?: components["schemas"]["WorkspaceStats"] | null;
+            /** My Role */
+            my_role?: string | null;
+            /** Organization Name */
+            organization_name?: string | null;
+        };
+        /** WorkspaceMember */
+        WorkspaceMember: {
+            /** Id */
+            id: string;
+            /** User Id */
+            user_id: string;
+            /** Role */
+            role: string;
+            /** Added By */
+            added_by: string | null;
+            /** Added At */
+            added_at: string;
+        };
+        /** WorkspaceResponse */
+        WorkspaceResponse: {
+            /** Id */
+            id: string;
+            /** Organization Id */
+            organization_id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Client Name */
+            client_name: string | null;
+            /** Client Email */
+            client_email: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Brand Colors */
+            brand_colors: {
+                [key: string]: string;
+            } | null;
+            /** Logo Url */
+            logo_url: string | null;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** WorkspaceStats */
+        WorkspaceStats: {
+            /** Posts Count */
+            posts_count: number;
+            /** Drafts Count */
+            drafts_count: number;
+            /** Content Plans Count */
+            content_plans_count: number;
+            /** Competitors Count */
+            competitors_count: number;
+            /** Members Count */
+            members_count: number;
+        };
+        /** WorkspaceUpdate */
+        WorkspaceUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Client Name */
+            client_name?: string | null;
+            /** Client Email */
+            client_email?: string | null;
+            /** Brand Colors */
+            brand_colors?: {
+                [key: string]: string;
+            } | null;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+        };
+        /** WhiteLabelSettingsUpdate */
+        app__routers__organizations__WhiteLabelSettingsUpdate: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Primary Color */
+            primary_color?: string | null;
+            /** Secondary Color */
+            secondary_color?: string | null;
+            /** Favicon Url */
+            favicon_url?: string | null;
+            /** Custom Domain */
+            custom_domain?: string | null;
+            /** Sender Name */
+            sender_name?: string | null;
+            /** Sender Email */
+            sender_email?: string | null;
+            /** Reply To Email */
+            reply_to_email?: string | null;
+            /** Custom Footer */
+            custom_footer?: string | null;
+            /** Hide Powered By */
+            hide_powered_by?: boolean | null;
+            /** Custom Disclaimer */
+            custom_disclaimer?: string | null;
+            /** Enable Client Portal */
+            enable_client_portal?: boolean | null;
+            /** Portal Access Level */
+            portal_access_level?: string | null;
+        };
+        /**
+         * WhiteLabelSettingsUpdate
+         * @description Update white-label settings.
+         */
+        app__routers__reports__WhiteLabelSettingsUpdate: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Primary Color */
+            primary_color?: string | null;
+            /** Secondary Color */
+            secondary_color?: string | null;
+            /** Sender Name */
+            sender_name?: string | null;
+            /** Sender Email */
+            sender_email?: string | null;
+            /** Custom Footer */
+            custom_footer?: string | null;
+            /** Hide Powered By */
+            hide_powered_by?: boolean | null;
         };
     };
     responses: never;
@@ -1861,6 +6168,107 @@ export interface operations {
             };
         };
     };
+    get_context_api_v1_context__get: {
+        parameters: {
+            query?: {
+                platform?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssembledContext"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_context_api_v1_context__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePermanentContextRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_system_prompt_api_v1_context_prompt_get: {
+        parameters: {
+            query?: {
+                platform?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     status_api_v1_linkedin_status_get: {
         parameters: {
             query?: never;
@@ -1923,7 +6331,7 @@ export interface operations {
             };
         };
     };
-    sync_api_v1_linkedin_sync_post: {
+    sync_mock_api_v1_linkedin_sync_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1941,6 +6349,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LinkedInSyncResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_real_api_v1_linkedin_sync_real_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkedInRealSyncResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_trigger_api_v1_linkedin_sync_trigger_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -2282,6 +6752,41 @@ export interface operations {
             };
         };
     };
+    create_draft_api_v1_content_drafts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_draft_api_v1_content_drafts__draft_id__get: {
         parameters: {
             query?: never;
@@ -2387,6 +6892,39 @@ export interface operations {
             };
         };
     };
+    publish_draft_now_api_v1_content_drafts__draft_id__publish_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     schedule_api_v1_content_schedule_post: {
         parameters: {
             query?: never;
@@ -2455,6 +6993,143 @@ export interface operations {
             };
         };
     };
+    approve_draft_api_v1_content_drafts__draft_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_draft_media_api_v1_content_drafts__draft_id__media_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_add_draft_media_api_v1_content_drafts__draft_id__media_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftMediaResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_draft_media_api_v1_content_drafts__draft_id__media__media_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+                media_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    media_file_api_v1_content_media_file__media_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     calendar_api_v1_content_calendar_get: {
         parameters: {
             query?: never;
@@ -2486,11 +7161,44 @@ export interface operations {
             };
         };
     };
+    summary_api_v1_analytics_summary_get: {
+        parameters: {
+            query?: {
+                period_days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     posts_api_v1_analytics_posts_get: {
         parameters: {
             query?: {
                 limit?: number;
-                platform?: string;
+                platform?: string | null;
             };
             header?: never;
             path?: never;
@@ -2540,6 +7248,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PostAnalysisResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    insights_api_v1_analytics_insights_get: {
+        parameters: {
+            query?: {
+                period_days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentInsightsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trends_api_v1_analytics_trends_get: {
+        parameters: {
+            query?: {
+                metric?: string;
+                period_days?: number;
+                interval?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeSeriesDataPoint"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detect_trends_api_v1_analytics_trends_detect_get: {
+        parameters: {
+            query?: {
+                period_days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrendDetectionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_comparison_api_v1_analytics_platforms_comparison_get: {
+        parameters: {
+            query?: {
+                period_days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrossPlatformComparisonResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2624,6 +7466,173 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WaitlistMemberStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_waitlist_entries_api_v1_waitlist_admin_entries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistAdminEntriesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_waitlist_user_api_v1_waitlist_admin_approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitlistAdminActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_waitlist_user_api_v1_waitlist_admin_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitlistAdminActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_publishing_settings_api_v1_users_me_publishing_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishingSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_publishing_settings_api_v1_users_me_publishing_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishingSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishingSettingsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3064,6 +8073,1048 @@ export interface operations {
             };
         };
     };
+    sync_twitter_api_v1_social_sync_twitter_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    twitter_sync_status_api_v1_social_sync_twitter_status__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_all_platforms_status_api_v1_social_platforms_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsPlatformsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_platform_api_v1_social_platforms__platform__disconnect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconnect_platform_api_v1_social_platforms__platform__reconnect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_twitter_tier_endpoint_api_v1_social_twitter_tier_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_twitter_tier_endpoint_api_v1_social_twitter_tier_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwitterTierUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwitterTierUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_auto_post_api_v1_social__platform__auto_post_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoPostUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_auto_post_api_v1_social__platform__auto_post_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoPostUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoPostUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_posting_times_api_v1_social__platform__posting_times_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostingTimesUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_posting_times_api_v1_social__platform__posting_times_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostingTimesUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostingTimesUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_platform_preferences_api_v1_social__platform__preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformPreferencesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_all_platforms_status_api_v1_sync_all_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformStatusResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_sync_api_v1_sync__platform__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncTriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_platform_status_api_v1_sync__platform__status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    connection_status_api_v1_connect_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_connect_session_api_v1_connect_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_api_v1_connect__platform__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    twitter_start_api_v1_connect_twitter_start_get: {
+        parameters: {
+            query?: {
+                /** @description Single-use connect token from POST /connect/session */
+                ct?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    twitter_callback_api_v1_connect_twitter_callback_get: {
+        parameters: {
+            query: {
+                code: string;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    linkedin_start_api_v1_connect_linkedin_start_get: {
+        parameters: {
+            query?: {
+                /** @description Single-use connect token from POST /connect/session */
+                ct?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    linkedin_callback_api_v1_connect_linkedin_callback_get: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                state?: string | null;
+                error?: string | null;
+                error_description?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    instagram_start_api_v1_connect_instagram_start_get: {
+        parameters: {
+            query?: {
+                /** @description Single-use connect token from POST /connect/session */
+                ct?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    instagram_callback_api_v1_connect_instagram_callback_get: {
+        parameters: {
+            query: {
+                code: string;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_onboarding_api_v1_persona_onboarding_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sources_api_v1_persona_sources_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaSourceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_source_api_v1_persona_sources_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonaSourceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scrape_sources_api_v1_persona_scrape_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_persona_api_v1_persona_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_persona_api_v1_persona_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_persona_api_v1_persona_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonaProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_persona_api_v1_persona_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     storage_status_api_v1_storage_status_get: {
         parameters: {
             query?: never;
@@ -3082,6 +9133,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StorageStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    storage_health_api_v1_storage_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageHealthResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3157,7 +9239,2092 @@ export interface operations {
             };
         };
     };
+    export_all_data_api_v1_storage_export_download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExportDownloadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_data_api_v1_storage_import_post: {
+        parameters: {
+            query?: {
+                overwrite?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    privacy_dashboard_api_v1_storage_privacy_dashboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacyDashboardResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_organization_api_v1_organizations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_organizations_api_v1_organizations_my_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_organization_api_v1_organizations__org_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_organization_api_v1_organizations__org_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_organization_members_api_v1_organizations__org_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberDetailResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invite_organization_member_api_v1_organizations__org_id__members_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberInvite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_organization_member_api_v1_organizations__org_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+                user_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_organization_member_api_v1_organizations__org_id__members__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+                user_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_white_label_settings_api_v1_organizations__org_id__white_label_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_white_label_settings_api_v1_organizations__org_id__white_label_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__routers__organizations__WhiteLabelSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_organization_workspaces_api_v1_organizations__org_id__workspaces_get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workspace_api_v1_organizations__org_id__workspaces_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_workspaces_api_v1_workspaces_my_get: {
+        parameters: {
+            query?: {
+                org_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workspace_api_v1_workspaces__workspace_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workspace_api_v1_workspaces__workspace_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workspace_api_v1_workspaces__workspace_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workspace_members_api_v1_workspaces__workspace_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMember"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_workspace_member_api_v1_workspaces__workspace_id__members_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddWorkspaceMember"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMember"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_workspace_member_api_v1_workspaces__workspace_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workspace_member_api_v1_workspaces__workspace_id__members__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspaceMember"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMember"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workspace_context_api_v1_workspaces__workspace_id__context_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    predict_performance_api_v1_predictions_performance_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PerformancePredictionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerformancePredictionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    predict_viral_potential_api_v1_predictions_viral_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ViralPredictionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViralPredictionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    predict_optimal_timing_api_v1_predictions_timing_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimingPredictionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimingPredictionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    predict_all_api_v1_predictions_all_post: {
+        parameters: {
+            query: {
+                content: string;
+                platform?: "linkedin" | "twitter" | "instagram" | "facebook";
+            };
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_cached_predictions_api_v1_predictions_cache_get: {
+        parameters: {
+            query?: {
+                prediction_type?: string | null;
+                limit?: number;
+            };
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictionListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_cached_prediction_api_v1_predictions_cache__prediction_id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path: {
+                prediction_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_competitors_api_v1_competitors_get: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_competitor_api_v1_competitors_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetitorCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_competitor_api_v1_competitors__competitor_id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path: {
+                competitor_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_competitor_api_v1_competitors__competitor_id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path: {
+                competitor_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_competitor_api_v1_competitors__competitor_id__patch: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path: {
+                competitor_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetitorUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_competitor_strategy_api_v1_competitors__competitor_id__analyze_strategy_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path: {
+                competitor_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StrategyAnalysisRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyAnalysisResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_content_gaps_api_v1_competitors_analyze_gaps_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContentGapRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentGapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    benchmark_trend_api_v1_competitors_analyze_trend_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrendBenchmarkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrendBenchmarkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_analyses_api_v1_competitors_analyses_history_get: {
+        parameters: {
+            query?: {
+                analysis_type?: string | null;
+                limit?: number;
+            };
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_analytics_report_api_v1_reports_analytics_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_competitive_report_api_v1_reports_competitive_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetitiveReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_custom_report_api_v1_reports_custom_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_report_api_v1_reports_download__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reports_api_v1_reports_history_get: {
+        parameters: {
+            query?: {
+                report_type?: "analytics" | "competitive" | "custom" | "all";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportMetadata"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_white_label_settings_api_v1_reports_white_label_get: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhiteLabelSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_white_label_settings_api_v1_reports_white_label_patch: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__routers__reports__WhiteLabelSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhiteLabelSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_scheduled_reports_api_v1_reports_scheduled_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    configure_scheduled_report_api_v1_reports_scheduled_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduledReportConfig"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflows_api_v1_approvals_workflows_get: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workflow_api_v1_approvals_workflows_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workflow_api_v1_approvals_workflows__workflow_id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path: {
+                workflow_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workflow_api_v1_approvals_workflows__workflow_id__patch: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path: {
+                workflow_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_approval_api_v1_approvals_request_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    make_decision_api_v1_approvals__approval_id__decision_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path: {
+                approval_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resubmit_after_changes_api_v1_approvals__approval_id__resubmit_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path: {
+                approval_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_approval_status_api_v1_approvals_status__content_type___content_id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path: {
+                content_type: string;
+                content_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_pending_approvals_api_v1_approvals_pending_get: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingApprovalsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_approvals_api_v1_approvals_my_get: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Workspace-ID": string;
+            };
+            path?: never;
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyApprovalsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_check_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    liveness_probe_health_live_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    readiness_probe_health_ready_get: {
         parameters: {
             query?: never;
             header?: never;

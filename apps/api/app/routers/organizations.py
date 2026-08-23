@@ -9,12 +9,10 @@ from sqlalchemy.orm import Session
 from app.core.permissions import Permission, has_organization_permission
 from app.dependencies.auth import get_current_user
 from app.dependencies.db import get_db
-from app.dependencies.workspace import get_workspace_context
-from app.models.organization import Organization, OrganizationMember, Workspace
 from app.models.user import User
 from app.services import workspace_service
 
-router = APIRouter(prefix="/organizations", tags=["organizations"])
+router = APIRouter(tags=["organizations"])
 
 
 # ---------------------------------------------------------------------------
@@ -384,7 +382,10 @@ async def list_organization_workspaces(
         raise HTTPException(status_code=403, detail="Access denied")
     
     workspaces = workspace_service.list_organization_workspaces(
-        db, org, include_inactive=include_inactive
+        db,
+        org,
+        current_user,
+        include_inactive=include_inactive,
     )
     return workspaces
 

@@ -9,10 +9,10 @@ Provides dependency functions to:
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.core.permissions import Permission, has_workspace_permission
+from app.core.permissions import Permission, get_all_permissions
 from app.dependencies.auth import get_current_user
 from app.dependencies.db import get_db
-from app.models.organization import Workspace, WorkspaceMember
+from app.models.organization import Workspace
 from app.models.user import User
 
 
@@ -22,76 +22,102 @@ async def get_current_workspace(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Workspace | None:
+    """Resolve one authoritative workspace and validate the user's access.
+
+    Path-scoped endpoints use ``{workspace_id}`` as their authoritative context.
+    Header-scoped endpoints use ``X-Workspace-ID``. When both are present they
+    must match; silently selecting one would allow a confused-deputy request.
+    Endpoints with neither identifier retain the legacy personal-mode result.
     """
-    Extract and validate workspace context from request.
-    
-    Reads X-Workspace-ID header and validates:
-      1. Workspace exists
-      2. User has access to workspace
-      3. Workspace is active
-    
-    If no workspace_id provided, returns None (personal/single-user mode).
-    
-    Args:
-        request: FastAPI request object
-        workspace_id: Workspace ID from X-Workspace-ID header
-        current_user: Authenticated user from auth dependency
-        db: Database session
-        
-    Returns:
-        Workspace object or None (for personal mode)
-        
-    Raises:
-        HTTPException: 404 if workspace not found
-        HTTPException: 403 if user lacks access
-    """
-    # No workspace header - personal mode
-    if not x_workspace_id:
+    path_workspace_id = request.path_params.get("workspace_id")
+    if path_workspace_id is not None:
+        path_workspace_id = str(path_workspace_id)
+
+    if (
+        path_workspace_id
+        and x_workspace_id
+        and path_workspace_id != x_workspace_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Workspace context does not match request path",
+        )
+
+    workspace_id = path_workspace_id or x_workspace_id
+    if not workspace_id:
+        request.state.workspace = None
+        request.state.workspace_member = None
+        request.state.organization_member = None
+        request.state.workspace_role = None
+        request.state.workspace_permissions = get_all_permissions()
         return None
-    
-    # Validate workspace exists
-    workspace = db.query(Workspace).filter(Workspace.id == x_workspace_id).first()
+
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if not workspace:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Workspace not found",
         )
-    
-    # Check if workspace is active
+
     if not workspace.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Workspace is inactive",
         )
-    
-    # Check workspace membership
+
     member = workspace.get_member(current_user.id)
-    if not member:
-        # Check if user is org member (for admin access)
-        org_member = workspace.organization.get_member(current_user.id)
-        if not org_member:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to workspace",
-            )
-        
-        # Org admins can access all workspaces
-        if not has_workspace_permission(org_member.role, Permission.WORKSPACE_MANAGE):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to workspace",
-            )
-    
-    # Store in request state for downstream use
-    request.state.workspace = workspace
+    org_member = workspace.organization.get_member(current_user.id)
+
     if member:
-        request.state.workspace_role = member.role
-        request.state.workspace_member = member
+        role = member.role
+        permissions = member.get_permissions()
     else:
-        # Org-level access
-        request.state.workspace_role = org_member.role
-        request.state.workspace_member = None
-    
+        # Organization owners/admins inherit workspace access through the
+        # organization permission map. Workspace-role permissions must never be
+        # applied to an organization role with the same textual name.
+        if not org_member or not org_member.has_permission(Permission.WORKSPACE_MANAGE):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to workspace",
+            )
+        role = org_member.role
+        permissions = org_member.get_permissions()
+
+    # Membership alone is not sufficient when an explicit deny revokes the
+    # baseline view permission. This gate also protects routes that only resolve
+    # context and do not ask for a more specific action permission.
+    if Permission.WORKSPACE_VIEW not in permissions:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to workspace",
+        )
+
+    request.state.workspace = workspace
+    request.state.workspace_member = member
+    request.state.organization_member = org_member
+    request.state.workspace_role = role
+    request.state.workspace_permissions = permissions
+    return workspace
+
+
+async def get_required_current_workspace(
+    request: Request,
+    x_workspace_id: str = Header(..., alias="X-Workspace-ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Workspace:
+    """Resolve a header-scoped workspace for routes without personal mode."""
+    workspace = await get_current_workspace(
+        request=request,
+        x_workspace_id=x_workspace_id,
+        current_user=current_user,
+        db=db,
+    )
+    if workspace is None:  # Defensive: the required header makes this unreachable.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Workspace context required",
+        )
     return workspace
 
 
@@ -100,73 +126,56 @@ async def require_workspace_permission(
     workspace: Workspace | None = Depends(get_current_workspace),
     request: Request = None,
 ) -> Workspace | None:
-    """
-    Dependency factory to require specific permission.
-    
-    Usage:
-        @router.post("/posts")
-        async def create_post(
-            workspace: Workspace = Depends(require_workspace_permission(Permission.CONTENT_CREATE))
-        ):
-            ...
-    
-    Args:
-        permission: Required permission constant
-        workspace: Workspace from get_current_workspace
-        request: FastAPI request
-        
-    Returns:
-        Workspace if permission granted
-        
-    Raises:
-        HTTPException: 403 if permission denied
-    """
-    # Personal mode - allow all permissions
+    """Require a permission in workspace mode; preserve legacy personal mode."""
     if workspace is None:
         return None
-    
-    # Get role from request state
-    role = getattr(request.state, "workspace_role", None)
-    if not role:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Workspace context required",
-        )
-    
-    # Check permission
-    if not has_workspace_permission(role, permission):
+
+    permissions = getattr(request.state, "workspace_permissions", set())
+    if permission not in permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Permission denied: {permission}",
         )
-    
+
     return workspace
 
 
 class PermissionChecker:
-    """
-    Reusable permission checker for route dependencies.
-    
-    Usage:
-        require_create = PermissionChecker(Permission.CONTENT_CREATE)
-        require_publish = PermissionChecker(Permission.CONTENT_PUBLISH)
-        
-        @router.post("/drafts")
-        async def create_draft(
-            workspace: Workspace = Depends(require_create)
-        ):
-            ...
-    """
-    
+    """Reusable permission checker that permits legacy personal mode."""
+
     def __init__(self, permission: str):
         self.permission = permission
-    
+
     async def __call__(
         self,
         workspace: Workspace | None = Depends(get_current_workspace),
         request: Request = None,
     ) -> Workspace | None:
         return await require_workspace_permission(self.permission, workspace, request)
+
+
+class RequiredWorkspacePermissionChecker:
+    """Permission checker for header-scoped routes that require a workspace."""
+
+    def __init__(self, permission: str):
+        self.permission = permission
+
+    async def __call__(
+        self,
+        workspace: Workspace = Depends(get_required_current_workspace),
+        request: Request = None,
+    ) -> Workspace:
+        resolved = await require_workspace_permission(
+            self.permission,
+            workspace,
+            request,
+        )
+        if resolved is None:  # Defensive: required workspace cannot be personal.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Workspace context required",
+            )
+        return resolved
 
 
 # Predefined permission checkers for common operations
@@ -177,21 +186,27 @@ can_delete_content = PermissionChecker(Permission.CONTENT_DELETE)
 can_view_analytics = PermissionChecker(Permission.ANALYTICS_VIEW)
 can_export_analytics = PermissionChecker(Permission.ANALYTICS_EXPORT)
 can_use_ai_predict = PermissionChecker(Permission.AI_PREDICT)
+can_use_ai_predict_required = RequiredWorkspacePermissionChecker(
+    Permission.AI_PREDICT
+)
 can_use_ai_generate = PermissionChecker(Permission.AI_GENERATE)
-can_manage_workspace = PermissionChecker(Permission.WORKSPACE_MANAGE)
-can_view_competitors = PermissionChecker(Permission.AI_COMPETITOR_ANALYSIS)
+can_manage_workspace = RequiredWorkspacePermissionChecker(Permission.WORKSPACE_MANAGE)
+can_view_competitors = RequiredWorkspacePermissionChecker(
+    Permission.AI_COMPETITOR_ANALYSIS
+)
 can_create_reports = PermissionChecker(Permission.REPORTS_CREATE)
-can_use_whitelabel = PermissionChecker(Permission.REPORTS_WHITELABEL)
+can_create_reports_required = RequiredWorkspacePermissionChecker(
+    Permission.REPORTS_CREATE
+)
+can_use_whitelabel = RequiredWorkspacePermissionChecker(
+    Permission.REPORTS_WHITELABEL
+)
 
 
 def get_workspace_id_header(
     workspace_id: str | None = Header(None, alias="X-Workspace-ID")
 ) -> str | None:
-    """
-    Simple dependency to extract workspace ID from header.
-    
-    Use when you just need the ID without full validation.
-    """
+    """Extract an optional workspace identifier without resolving access."""
     return workspace_id
 
 
@@ -201,58 +216,34 @@ async def get_workspace_context(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    """
-    Get full workspace context including membership details.
-    
-    Returns a dictionary with:
-      - workspace: Workspace object or None
-      - member: WorkspaceMember or None
-      - role: User's role in workspace
-      - permissions: List of granted permissions
-      
-    Useful for endpoints that need detailed context.
-    """
-    if not workspace_id:
+    """Return workspace membership details or an explicit personal context."""
+    workspace = await get_current_workspace(
+        request=request,
+        x_workspace_id=workspace_id,
+        current_user=current_user,
+        db=db,
+    )
+    if workspace is None:
         return {
             "workspace": None,
             "member": None,
+            "organization_member": None,
             "role": None,
-            "permissions": list(Permission.__dict__.values()),  # All permissions in personal mode
+            "permissions": sorted(get_all_permissions()),
             "is_personal": True,
         }
-    
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    if not workspace:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not found",
-        )
-    
-    member = workspace.get_member(current_user.id)
-    org_member = workspace.organization.get_member(current_user.id)
-    
-    if not member and not org_member:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to workspace",
-        )
-    
-    # Determine effective role and permissions
-    if member:
-        role = member.role
-        permissions = member.get_permissions()
-    else:
-        # Org-level access
-        role = org_member.role
-        # Org admins get workspace manage permissions
-        from app.core.permissions import get_organization_role_permissions
-        permissions = get_organization_role_permissions(role)
-    
+
     return {
         "workspace": workspace,
-        "member": member,
-        "organization_member": org_member,
-        "role": role,
-        "permissions": permissions,
+        "member": getattr(request.state, "workspace_member", None),
+        "organization_member": getattr(
+            request.state,
+            "organization_member",
+            None,
+        ),
+        "role": getattr(request.state, "workspace_role", None),
+        "permissions": sorted(
+            getattr(request.state, "workspace_permissions", set())
+        ),
         "is_personal": False,
     }

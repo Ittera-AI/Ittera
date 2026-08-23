@@ -179,6 +179,7 @@ WORKSPACE_ROLE_PERMISSIONS: dict[str, set[str]] = {
     "manager": {
         Permission.WORKSPACE_VIEW,
         Permission.WORKSPACE_EDIT,
+        Permission.WORKSPACE_MANAGE,
         Permission.CONTENT_CREATE,
         Permission.CONTENT_EDIT,
         Permission.CONTENT_VIEW,
@@ -226,24 +227,83 @@ WORKSPACE_ROLE_PERMISSIONS: dict[str, set[str]] = {
 }
 
 
+def _coerce_permission_set(values: object) -> set[str]:
+    """Return only well-formed permission strings from an override value."""
+    if not isinstance(values, (list, tuple, set, frozenset)):
+        return set()
+    return {value for value in values if isinstance(value, str)}
+
+
+def apply_permission_overrides(
+    base_permissions: set[str],
+    overrides: dict | None = None,
+) -> set[str]:
+    """Apply member-specific grants and denials with deny taking precedence."""
+    if not isinstance(overrides, dict):
+        overrides = {}
+
+    allowed = _coerce_permission_set(overrides.get("allowed"))
+    denied = _coerce_permission_set(overrides.get("denied"))
+    return (set(base_permissions) | allowed) - denied
+
+
+def get_all_permissions() -> set[str]:
+    """Return every declared permission constant, excluding class metadata."""
+    return {
+        value
+        for name, value in vars(Permission).items()
+        if name.isupper() and isinstance(value, str)
+    }
+
+
 def get_organization_role_permissions(role: str) -> set[str]:
-    """Get all permissions for an organization role."""
-    return ORGANIZATION_ROLE_PERMISSIONS.get(role, set())
+    """Get all base permissions for an organization role."""
+    return set(ORGANIZATION_ROLE_PERMISSIONS.get(role, set()))
 
 
 def get_workspace_role_permissions(role: str) -> set[str]:
-    """Get all permissions for a workspace role."""
-    return WORKSPACE_ROLE_PERMISSIONS.get(role, set())
+    """Get all base permissions for a workspace role."""
+    return set(WORKSPACE_ROLE_PERMISSIONS.get(role, set()))
 
 
-def has_organization_permission(user_role: str, permission: str) -> bool:
-    """Check if an organization role has a specific permission."""
-    return permission in get_organization_role_permissions(user_role)
+def get_effective_organization_permissions(
+    role: str,
+    overrides: dict | None = None,
+) -> set[str]:
+    """Resolve organization-role permissions plus explicit member overrides."""
+    return apply_permission_overrides(
+        get_organization_role_permissions(role),
+        overrides,
+    )
 
 
-def has_workspace_permission(user_role: str, permission: str) -> bool:
-    """Check if a workspace role has a specific permission."""
-    return permission in get_workspace_role_permissions(user_role)
+def get_effective_workspace_permissions(
+    role: str,
+    overrides: dict | None = None,
+) -> set[str]:
+    """Resolve workspace-role permissions plus explicit member overrides."""
+    return apply_permission_overrides(
+        get_workspace_role_permissions(role),
+        overrides,
+    )
+
+
+def has_organization_permission(
+    user_role: str,
+    permission: str,
+    overrides: dict | None = None,
+) -> bool:
+    """Check an organization role and optional overrides for a permission."""
+    return permission in get_effective_organization_permissions(user_role, overrides)
+
+
+def has_workspace_permission(
+    user_role: str,
+    permission: str,
+    overrides: dict | None = None,
+) -> bool:
+    """Check a workspace role and optional overrides for a permission."""
+    return permission in get_effective_workspace_permissions(user_role, overrides)
 
 
 def get_role_hierarchy(role: str) -> int:

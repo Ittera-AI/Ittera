@@ -13,18 +13,11 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.permissions import (
-    ORGANIZATION_ROLE_PERMISSIONS,
-    WORKSPACE_ROLE_PERMISSIONS,
-    VALID_ORGANIZATION_ROLES,
-    VALID_WORKSPACE_ROLES,
     can_manage_role,
     validate_organization_role,
     validate_workspace_role,
 )
 from app.models.organization import (
-    ApprovalWorkflow,
-    Competitor,
-    ContentApproval,
     Organization,
     OrganizationMember,
     Workspace,
@@ -416,18 +409,37 @@ def get_workspace_by_slug(db: Session, org_id: str, slug: str) -> Workspace | No
     )
 
 
+def _user_can_view_workspace(workspace: Workspace, user: User) -> bool:
+    """Apply direct-membership precedence and effective view permissions."""
+    member = workspace.get_member(user.id)
+    if member is not None:
+        return member.has_permission("workspace:view")
+
+    org_member = workspace.organization.get_member(user.id)
+    return bool(
+        org_member
+        and org_member.has_permission("workspace:manage")
+        and org_member.has_permission("workspace:view")
+    )
+
+
 def list_organization_workspaces(
     db: Session,
     org: Organization,
+    user: User,
     include_inactive: bool = False,
 ) -> list[Workspace]:
-    """Get all workspaces in an organization."""
+    """Get the organization's workspaces visible to one user."""
     query = db.query(Workspace).filter(Workspace.organization_id == org.id)
-    
+
     if not include_inactive:
-        query = query.filter(Workspace.is_active == True)
-    
-    return query.all()
+        query = query.filter(Workspace.is_active.is_(True))
+
+    return [
+        workspace
+        for workspace in query.all()
+        if _user_can_view_workspace(workspace, user)
+    ]
 
 
 def list_user_workspaces(
@@ -435,49 +447,55 @@ def list_user_workspaces(
     user: User,
     org_id: str | None = None,
 ) -> list[Workspace]:
-    """
-    Get all workspaces the user has access to.
-    
-    Includes workspaces where user is:
-      - Direct workspace member
-      - Organization admin (can access all workspaces in org)
-    """
-    # Direct workspace memberships
+    """Get active workspaces visible through effective member permissions."""
     direct_access = (
         db.query(Workspace)
         .join(WorkspaceMember)
         .filter(
             WorkspaceMember.user_id == user.id,
-            Workspace.is_active == True,
+            Workspace.is_active.is_(True),
         )
     )
-    
     if org_id:
         direct_access = direct_access.filter(Workspace.organization_id == org_id)
-    
-    workspaces = set(direct_access.all())
-    
-    # Organization-level access (admins can see all workspaces)
-    org_memberships = (
-        db.query(OrganizationMember)
-        .filter(OrganizationMember.user_id == user.id)
-        .all()
+
+    direct_workspaces = direct_access.all()
+    direct_workspace_ids = {workspace.id for workspace in direct_workspaces}
+    visible = {
+        workspace.id: workspace
+        for workspace in direct_workspaces
+        if _user_can_view_workspace(workspace, user)
+    }
+
+    org_memberships = db.query(OrganizationMember).filter(
+        OrganizationMember.user_id == user.id
     )
-    
-    for org_member in org_memberships:
-        # Admins and owners get access to all workspaces
-        if org_member.role in ("owner", "admin"):
-            org_workspaces = (
-                db.query(Workspace)
-                .filter(
-                    Workspace.organization_id == org_member.organization_id,
-                    Workspace.is_active == True,
-                )
-                .all()
+    if org_id:
+        org_memberships = org_memberships.filter(
+            OrganizationMember.organization_id == org_id
+        )
+
+    for org_member in org_memberships.all():
+        if not (
+            org_member.has_permission("workspace:manage")
+            and org_member.has_permission("workspace:view")
+        ):
+            continue
+
+        org_workspaces = (
+            db.query(Workspace)
+            .filter(
+                Workspace.organization_id == org_member.organization_id,
+                Workspace.is_active.is_(True),
             )
-            workspaces.update(org_workspaces)
-    
-    return list(workspaces)
+            .all()
+        )
+        for workspace in org_workspaces:
+            # A direct membership is authoritative, including an explicit deny.
+            if workspace.id not in direct_workspace_ids:
+                visible[workspace.id] = workspace
+
+    return list(visible.values())
 
 
 def update_workspace(

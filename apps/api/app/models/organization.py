@@ -108,18 +108,15 @@ class OrganizationMember(Base):
     user = relationship("User", foreign_keys=[user_id], back_populates="organization_memberships")
     inviter = relationship("User", foreign_keys=[invited_by])
 
+    def get_permissions(self) -> set[str]:
+        """Resolve effective organization permissions from the central policy."""
+        from app.core.permissions import get_effective_organization_permissions
+
+        return get_effective_organization_permissions(self.role, self.permissions)
+
     def has_permission(self, permission: str) -> bool:
-        """Check if member has a specific permission."""
-        from app.core.permissions import ROLE_PERMISSIONS, Permission
-        
-        # Check explicit permissions first
-        if permission in self.permissions.get("allowed", []):
-            return True
-        if permission in self.permissions.get("denied", []):
-            return False
-        
-        # Fall back to role-based permissions
-        return permission in ROLE_PERMISSIONS.get(self.role, [])
+        """Check a permission using the central organization policy."""
+        return permission in self.get_permissions()
 
 
 class Workspace(Base):
@@ -251,18 +248,15 @@ class WorkspaceMember(Base):
     user = relationship("User", foreign_keys=[user_id], back_populates="workspace_memberships")
     adder = relationship("User", foreign_keys=[added_by])
 
+    def get_permissions(self) -> set[str]:
+        """Resolve effective workspace permissions from the central policy."""
+        from app.core.permissions import get_effective_workspace_permissions
+
+        return get_effective_workspace_permissions(self.role, self.permissions)
+
     def has_permission(self, permission: str) -> bool:
-        """Check if member has a specific permission."""
-        from app.core.permissions import WORKSPACE_ROLE_PERMISSIONS
-        
-        # Check explicit permissions first
-        if permission in self.permissions.get("allowed", []):
-            return True
-        if permission in self.permissions.get("denied", []):
-            return False
-        
-        # Fall back to role-based permissions
-        return permission in WORKSPACE_ROLE_PERMISSIONS.get(self.role, [])
+        """Check a permission using the central workspace policy."""
+        return permission in self.get_permissions()
 
 
 class Competitor(Base):

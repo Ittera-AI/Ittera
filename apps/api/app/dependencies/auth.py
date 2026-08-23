@@ -60,17 +60,14 @@ def _decode_legacy_jwt(token: str) -> dict | None:
 
 
 def _is_email_verified(payload: dict) -> bool:
-    """
-    Determine whether a Supabase token asserts a *verified* email.
+    """Return whether server-controlled Supabase claims verify the email.
 
-    Supabase places the verification flag in different locations depending on
-    the token version and provider. We treat the email as verified only when
-    one of the recognised claims is explicitly truthy:
-      - top-level `email_verified`
-      - top-level `email_confirmed_at` (set by the Supabase REST user endpoint)
-      - `user_metadata.email_verified`
-      - `user_metadata.email_confirmed_at` (set when the email is confirmed)
-    Any missing/false/empty value is treated as *unverified* (fail closed).
+    ``user_metadata`` is intentionally excluded: Supabase users can update that
+    object themselves, so it cannot authorize first-time provisioning or link a
+    Supabase identity to an existing local account. An explicit top-level
+    ``email_verified`` value is authoritative; otherwise the REST user object's
+    top-level ``email_confirmed_at`` timestamp is accepted. Missing, malformed,
+    or contradictory claims fail closed.
     """
 
     def _truthy(value: object) -> bool:
@@ -78,21 +75,13 @@ def _is_email_verified(payload: dict) -> bool:
             return value
         if isinstance(value, str):
             return value.strip().lower() in {"true", "1", "yes"}
-        return bool(value)
+        return False
 
     if "email_verified" in payload:
         return _truthy(payload.get("email_verified"))
 
-    if payload.get("email_confirmed_at"):
-        return True
-
-    meta = payload.get("user_metadata") or {}
-    if "email_verified" in meta:
-        return _truthy(meta.get("email_verified"))
-    if meta.get("email_confirmed_at"):
-        return True
-
-    return False
+    confirmed_at = payload.get("email_confirmed_at")
+    return isinstance(confirmed_at, str) and bool(confirmed_at.strip())
 
 
 def _get_or_create_user_from_supabase(db: Session, payload: dict) -> User:
@@ -111,28 +100,42 @@ def _get_or_create_user_from_supabase(db: Session, payload: dict) -> User:
             detail="Supabase token missing sub or email claim",
         )
 
-    # Account-linking gate (R1.1): an existing local account (e.g. created via
-    # the legacy email/password flow) is linked to this Supabase identity ONLY
-    # when the Supabase token asserts a *verified* email. An unverified email
-    # that collides with an existing account is rejected with 401 and no user
-    # record is created or mutated — we never silently merge identities.
-    user = db.query(User).filter(User.email == email).first()
-    if user is not None:
-        if not _is_email_verified(payload):
+    if not _is_email_verified(payload):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email is not verified",
+        )
+
+    # Resolve the immutable Supabase subject before considering email-based
+    # linking. A subject already associated with a different local email is an
+    # identity inconsistency and must fail closed rather than causing a duplicate
+    # primary-key insert or silently changing account ownership.
+    subject_user = db.query(User).filter(User.id == supabase_id).first()
+    if subject_user is not None:
+        if subject_user.email.strip().lower() != email:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email not verified for account linking",
+                detail="Supabase identity does not match the local account",
             )
+        return subject_user
+
+    # A verified email may link a pre-existing legacy account. The current data
+    # model has no separate external-identity table, so this compatibility path
+    # intentionally preserves the existing local user identifier.
+    user = db.query(User).filter(User.email == email).first()
+    if user is not None:
         return user
 
     # First time we're seeing this Supabase user — create a local profile
     meta = payload.get("user_metadata") or {}
+    if not isinstance(meta, dict):
+        meta = {}
     name = (
         meta.get("full_name")
         or meta.get("name")
         or email.split("@")[0].replace(".", " ").capitalize()
     )
-    import uuid, secrets as _secrets  # noqa: E401
+    import secrets as _secrets
     user = User(
         id=supabase_id,  # reuse Supabase UUID so they stay in sync
         email=email,
@@ -241,9 +244,41 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
         )
 
-    # --- Try Supabase JWT first (local verification, no network) ---
+    # --- Try Supabase JWT first (local signature/audience verification) ---
     supabase_payload = _decode_supabase_jwt(token)
     if supabase_payload is not None:
+        # Supabase access tokens commonly keep verification-looking fields in
+        # user_metadata, which is user-editable and therefore not authoritative.
+        # When the signed token lacks a trusted top-level claim, resolve the
+        # same identity through Auth's /user endpoint before provisioning or
+        # linking by email.
+        if not _is_email_verified(supabase_payload):
+            verified_payload = await _fetch_supabase_user(token)
+            if verified_payload is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Email is not verified",
+                )
+
+            local_subject = supabase_payload.get("sub")
+            remote_subject = verified_payload.get("sub")
+            local_email = (supabase_payload.get("email") or "").strip().lower()
+            remote_email = (verified_payload.get("email") or "").strip().lower()
+            if (
+                not local_subject
+                or local_subject != remote_subject
+                or not local_email
+                or local_email != remote_email
+            ):
+                logger.warning(
+                    "Supabase local and REST identity assertions do not match"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Supabase identity verification failed",
+                )
+            supabase_payload = verified_payload
+
         return _get_or_create_user_from_supabase(db, supabase_payload)
 
     # --- Then the legacy Iterra JWT (also local, no network) ---

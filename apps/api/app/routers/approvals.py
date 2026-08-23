@@ -15,19 +15,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.permissions import Permission
 from app.dependencies.auth import get_current_user
 from app.dependencies.db import get_db
 from app.dependencies.workspace import (
     can_manage_workspace,
-    get_current_workspace,
-    get_workspace_context,
+    get_required_current_workspace,
 )
 from app.models.organization import ApprovalWorkflow, ContentApproval, Workspace
 from app.models.user import User
 from app.services import approval_service
 
-router = APIRouter(prefix="/approvals", tags=["approvals"])
+router = APIRouter(tags=["approvals"])
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +69,7 @@ class ApprovalRequest(BaseModel):
 
 
 class ApprovalDecisionRequest(BaseModel):
+    expected_step: int = Field(..., ge=0)
     decision: Literal["approved", "rejected", "requested_changes"]
     comments: str | None = Field(None, max_length=2000)
 
@@ -88,8 +87,8 @@ class ApprovalResponse(BaseModel):
     current_step: int
     status: str
     requested_by: str
-    requested_at: str
-    completed_at: str | None
+    requested_at: datetime
+    completed_at: datetime | None
     
     class Config:
         from_attributes = True
@@ -118,7 +117,7 @@ class MyApprovalsResponse(BaseModel):
 
 @router.get("/workflows", response_model=list[WorkflowResponse])
 async def list_workflows(
-    workspace: Workspace | None = Depends(get_current_workspace),
+    workspace: Workspace | None = Depends(get_required_current_workspace),
     db: Session = Depends(get_db),
 ):
     """List all approval workflows for the workspace."""
@@ -251,7 +250,7 @@ async def delete_workflow(
 @router.post("/request", response_model=ApprovalResponse)
 async def request_approval(
     data: ApprovalRequest,
-    workspace: Workspace | None = Depends(get_current_workspace),
+    workspace: Workspace | None = Depends(get_required_current_workspace),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -283,7 +282,7 @@ async def request_approval(
 async def make_decision(
     approval_id: str,
     data: ApprovalDecisionRequest,
-    workspace: Workspace | None = Depends(get_current_workspace),
+    workspace: Workspace | None = Depends(get_required_current_workspace),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -314,6 +313,7 @@ async def make_decision(
         db=db,
         approval=approval,
         approver=current_user,
+        expected_step=data.expected_step,
         decision=data.decision,
         comments=data.comments,
     )
@@ -325,7 +325,7 @@ async def make_decision(
 async def resubmit_after_changes(
     approval_id: str,
     data: ResubmitRequest,
-    workspace: Workspace | None = Depends(get_current_workspace),
+    workspace: Workspace | None = Depends(get_required_current_workspace),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -377,7 +377,7 @@ async def resubmit_after_changes(
 async def get_approval_status(
     content_type: str,
     content_id: str,
-    workspace: Workspace | None = Depends(get_current_workspace),
+    workspace: Workspace | None = Depends(get_required_current_workspace),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -390,15 +390,13 @@ async def get_approval_status(
     
     approval = approval_service.get_approval_status(
         db=db,
+        workspace_id=workspace.id,
         content_type=content_type,
         content_id=content_id,
     )
-    
+
     if not approval:
         raise HTTPException(status_code=404, detail="No approval found for this content")
-    
-    if approval.workspace_id != workspace.id:
-        raise HTTPException(status_code=403, detail="Access denied")
     
     # Get workflow details
     workflow = db.query(ApprovalWorkflow).filter(
@@ -450,7 +448,7 @@ async def get_approval_status(
 
 @router.get("/pending", response_model=PendingApprovalsResponse)
 async def get_pending_approvals(
-    workspace: Workspace | None = Depends(get_current_workspace),
+    workspace: Workspace | None = Depends(get_required_current_workspace),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -507,7 +505,7 @@ async def get_pending_approvals(
 
 @router.get("/my", response_model=MyApprovalsResponse)
 async def get_my_approvals(
-    workspace: Workspace | None = Depends(get_current_workspace),
+    workspace: Workspace | None = Depends(get_required_current_workspace),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
