@@ -9,6 +9,10 @@
  *   const drafts = await api.content.listDrafts();
  */
 
+import {
+  registerAuthBoundStateResetter,
+  resetAuthBoundState,
+} from "@/lib/auth-bound-state";
 import { clearStoredSupabaseSessions, supabase } from "@/lib/supabase";
 
 function resolveApiBaseUrl(): string {
@@ -23,6 +27,23 @@ function resolveApiBaseUrl(): string {
 }
 
 const BASE_URL = resolveApiBaseUrl();
+const activeApiRequests = new Set<AbortController>();
+
+registerAuthBoundStateResetter("api-fetch", () => {
+  for (const controller of activeApiRequests) controller.abort();
+  activeApiRequests.clear();
+});
+
+function abortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const error = new Error("API request aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal: AbortSignal) {
+  if (signal.aborted) throw abortError(signal);
+}
 
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 
@@ -68,6 +89,7 @@ async function clearInvalidSession() {
     // Preserve the original API error path if cookie cleanup cannot complete.
   }
 
+  resetAuthBoundState("auth");
   window.dispatchEvent(new Event("ittera-auth-invalid"));
 }
 
@@ -111,58 +133,97 @@ async function parseErrorMessage(response: Response): Promise<string> {
  * `Authorization` header bypasses the automatic Supabase bearer token.
  */
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
-  if (!headers.has("Content-Type") && init.body && !isFormData) {
-    headers.set("Content-Type", "application/json");
+  const controller = new AbortController();
+  const callerSignal = init.signal;
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+
+  if (callerSignal?.aborted) {
+    abortFromCaller();
+  } else {
+    callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
   }
+  activeApiRequests.add(controller);
 
-  const callerProvidedAuthorization = headers.has("Authorization");
-  const accessToken = callerProvidedAuthorization ? null : await getToken();
-  if (accessToken && !callerProvidedAuthorization) {
-    headers.set("Authorization", `Bearer ${accessToken}`);
-  }
-
-  const url = `${BASE_URL}${path}`;
-  const send = (requestHeaders: Headers) =>
-    fetch(url, { ...init, headers: requestHeaders, credentials: "include" });
-
-  let response: Response;
   try {
-    response = await send(headers);
-  } catch (err) {
-    const hint =
-      BASE_URL === ""
-        ? "Same-origin proxy: ensure Next.js rewrites are configured and FastAPI is reachable from the dev server (see API_PROXY_TARGET / port 8000)."
-        : `Tried ${BASE_URL}. Is the API running and is CORS (ALLOWED_ORIGINS) correct?`;
-    const cause = err instanceof Error ? err.message : String(err);
-    throw new ApiError(`Failed to reach API (${cause}). ${hint}`, 0);
-  }
+    throwIfAborted(controller.signal);
 
-  if (response.status === 401 && !callerProvidedAuthorization) {
-    if (accessToken) {
-      const refreshedToken = await refreshToken();
-      if (refreshedToken) {
-        const retryHeaders = new Headers(headers);
-        retryHeaders.set("Authorization", `Bearer ${refreshedToken}`);
-        response = await send(retryHeaders);
+    const headers = new Headers(init.headers);
+    const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+    if (!headers.has("Content-Type") && init.body && !isFormData) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const callerProvidedAuthorization = headers.has("Authorization");
+    const accessToken = callerProvidedAuthorization ? null : await getToken();
+    throwIfAborted(controller.signal);
+
+    if (accessToken && !callerProvidedAuthorization) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
+    }
+
+    const url = `${BASE_URL}${path}`;
+    const send = async (requestHeaders: Headers) => {
+      try {
+        throwIfAborted(controller.signal);
+        const response = await fetch(url, {
+          ...init,
+          headers: requestHeaders,
+          credentials: "include",
+          signal: controller.signal,
+        });
+        throwIfAborted(controller.signal);
+        return response;
+      } catch (error) {
+        if (controller.signal.aborted) throw abortError(controller.signal);
+
+        const hint =
+          BASE_URL === ""
+            ? "Same-origin proxy: ensure Next.js rewrites are configured and FastAPI is reachable from the dev server (see API_PROXY_TARGET / port 8000)."
+            : `Tried ${BASE_URL}. Is the API running and is CORS (ALLOWED_ORIGINS) correct?`;
+        const cause = error instanceof Error ? error.message : String(error);
+        throw new ApiError(`Failed to reach API (${cause}). ${hint}`, 0);
+      }
+    };
+
+    let response = await send(headers);
+
+    if (response.status === 401 && !callerProvidedAuthorization) {
+      if (accessToken) {
+        const refreshedToken = await refreshToken();
+        throwIfAborted(controller.signal);
+        if (refreshedToken) {
+          const retryHeaders = new Headers(headers);
+          retryHeaders.set("Authorization", `Bearer ${refreshedToken}`);
+          response = await send(retryHeaders);
+        }
+      }
+
+      if (response.status === 401) {
+        // Keep this response readable while the auth reset aborts every other
+        // request that began under the invalid principal.
+        activeApiRequests.delete(controller);
+        await clearInvalidSession();
       }
     }
 
-    if (response.status === 401) {
-      await clearInvalidSession();
+    if (!response.ok) {
+      const message = await parseErrorMessage(response);
+      throwIfAborted(controller.signal);
+      throw new ApiError(message, response.status);
     }
-  }
 
-  if (!response.ok) {
-    throw new ApiError(await parseErrorMessage(response), response.status);
-  }
+    if (response.status === 204) {
+      throwIfAborted(controller.signal);
+      return undefined as T;
+    }
 
-  if (response.status === 204) {
-    return undefined as T;
+    const payload = (await response.json()) as T;
+    throwIfAborted(controller.signal);
+    return payload;
+  } finally {
+    activeApiRequests.delete(controller);
+    callerSignal?.removeEventListener("abort", abortFromCaller);
   }
-
-  return response.json() as Promise<T>;
 }
 
 function request<T>(
@@ -200,6 +261,11 @@ export interface WaitlistStats {
   total_seats: number;
   remaining_seats: number;
   recent_joiners: string[];
+}
+
+export interface WaitlistJoinResult {
+  position: number;
+  already_joined: boolean;
 }
 
 export interface WaitlistMemberStatus extends WaitlistStats {
@@ -367,7 +433,7 @@ const waitlist = {
   stats: ()                                   => get<WaitlistStats>("/api/v1/waitlist"),
   myStatus: ()                                => get<WaitlistMemberStatus>("/api/v1/waitlist/me"),
   join: (payload: { email: string; name?: string; profession?: string }) =>
-    post("/api/v1/waitlist", payload),
+    post<WaitlistJoinResult>("/api/v1/waitlist", payload),
 };
 
 const connect = {

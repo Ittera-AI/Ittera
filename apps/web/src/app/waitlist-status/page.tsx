@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { ROUTES } from "@/lib/routes";
-import { apiFetch } from "@/services/api";
+import { api } from "@/lib/api";
 import {
   fetchWaitlistMemberStatus,
 } from "@/services/waitlist-access";
@@ -14,13 +14,6 @@ import WaitlistStatusView, {
 } from "@/components/waitlist/WaitlistStatusView";
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
-
-const FALLBACK_STATS: WaitlistStats = {
-  total_joined: 0,
-  total_seats: 100,
-  remaining_seats: 100,
-  recent_joiners: [],
-};
 
 export default function WaitlistStatusPage() {
   const router = useRouter();
@@ -35,16 +28,35 @@ export default function WaitlistStatusPage() {
     signOut,
   } = useAuth();
 
+  const principalKey = user?.id ?? null;
+  const principalKeyRef = useRef(principalKey);
+  const memberRequestGenerationRef = useRef(0);
+  principalKeyRef.current = principalKey;
+
   const [refreshing, setRefreshing] = useState(false);
   const [justRefreshed, setJustRefreshed] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
-  const [stats, setStats] = useState<WaitlistStats>(FALLBACK_STATS);
+  const [stats, setStats] = useState<WaitlistStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [memberPrincipalKey, setMemberPrincipalKey] = useState<string | null>(null);
   const [memberPosition, setMemberPosition] = useState<number | null>(null);
   const [positionChecked, setPositionChecked] = useState(false);
   const [positionError, setPositionError] = useState<string | null>(null);
 
   const loadMemberStatus = useCallback(async () => {
+    const requestPrincipal = principalKeyRef.current;
+    const requestGeneration = ++memberRequestGenerationRef.current;
+    if (!requestPrincipal) return null;
+
     const { status, error } = await fetchWaitlistMemberStatus();
+    if (
+      requestGeneration !== memberRequestGenerationRef.current ||
+      requestPrincipal !== principalKeyRef.current
+    ) {
+      return null;
+    }
+
+    setMemberPrincipalKey(requestPrincipal);
     if (status) {
       setMemberPosition(status.position);
       setPositionError(null);
@@ -52,9 +64,10 @@ export default function WaitlistStatusPage() {
         total_joined: status.total_joined,
         total_seats: status.total_seats,
         remaining_seats: status.remaining_seats,
-        recent_joiners: prev.recent_joiners,
+        recent_joiners: prev?.recent_joiners ?? [],
       }));
     } else {
+      setMemberPosition(null);
       setPositionError(error);
     }
     setPositionChecked(true);
@@ -63,10 +76,15 @@ export default function WaitlistStatusPage() {
 
   const loadStats = useCallback(async () => {
     try {
-      const data = await apiFetch<WaitlistStats>("/api/v1/waitlist");
+      const data = await api.waitlist.stats();
       setStats(data);
+      setStatsError(null);
+      return true;
     } catch {
-      setStats(FALLBACK_STATS);
+      // Keep any real member-derived aggregate data rather than replacing it
+      // with invented zero/100 availability.
+      setStatsError("Live cohort availability is unavailable. Refresh to try again.");
+      return false;
     }
   }, []);
 
@@ -94,24 +112,44 @@ export default function WaitlistStatusPage() {
   ]);
 
   useEffect(() => {
-    if (!user || hasWorkspaceAccess) return;
+    memberRequestGenerationRef.current += 1;
+    setMemberPrincipalKey(principalKey);
+    setMemberPosition(null);
     setPositionChecked(false);
+    setPositionError(null);
+    setRefreshing(false);
+    setJustRefreshed(false);
+    setRefreshError(null);
+
+    if (!principalKey || hasWorkspaceAccess) return;
     void loadMemberStatus();
-  }, [user, hasWorkspaceAccess, loadMemberStatus]);
+
+    return () => {
+      memberRequestGenerationRef.current += 1;
+    };
+  }, [principalKey, hasWorkspaceAccess, loadMemberStatus]);
 
   useEffect(() => {
     void loadStats();
   }, [loadStats]);
 
   const handleRefresh = useCallback(async () => {
-    if (refreshing) return;
+    const refreshPrincipal = principalKeyRef.current;
+    if (refreshing || !refreshPrincipal) return;
+
     setRefreshing(true);
     setJustRefreshed(false);
     setRefreshError(null);
     try {
       const approved = await refreshWorkspaceAccess();
+      if (principalKeyRef.current !== refreshPrincipal) return;
+
       const status = await loadMemberStatus();
+      if (principalKeyRef.current !== refreshPrincipal) return;
+
       await loadStats();
+      if (principalKeyRef.current !== refreshPrincipal) return;
+
       if (approved) {
         router.replace(ROUTES.dashboard);
         return;
@@ -122,9 +160,11 @@ export default function WaitlistStatusPage() {
       setJustRefreshed(true);
       setTimeout(() => setJustRefreshed(false), 3000);
     } catch {
-      setRefreshError("Could not check status. Make sure the API is running and try again.");
+      if (principalKeyRef.current === refreshPrincipal) {
+        setRefreshError("Could not check status. Make sure the API is running and try again.");
+      }
     } finally {
-      setRefreshing(false);
+      if (principalKeyRef.current === refreshPrincipal) setRefreshing(false);
     }
   }, [refreshing, refreshWorkspaceAccess, loadMemberStatus, loadStats, router]);
 
@@ -134,10 +174,15 @@ export default function WaitlistStatusPage() {
   }, [signOut, router]);
 
   const checking = sessionLoading;
-  const displayPosition = memberPosition ?? waitlistPosition;
+  const hasCurrentMemberState =
+    principalKey !== null && memberPrincipalKey === principalKey;
+  const currentMemberPosition = hasCurrentMemberState ? memberPosition : null;
+  const currentPositionChecked = hasCurrentMemberState && positionChecked;
+  const currentPositionError = hasCurrentMemberState ? positionError : null;
+  const displayPosition = currentMemberPosition ?? waitlistPosition;
   const positionLoading =
-    !positionChecked && displayPosition == null && !positionError;
-  const statusError = refreshError ?? positionError;
+    !currentPositionChecked && displayPosition == null && !currentPositionError;
+  const statusError = refreshError ?? currentPositionError ?? statsError;
 
   return (
     <AnimatePresence mode="wait">
@@ -172,7 +217,7 @@ export default function WaitlistStatusPage() {
             user={user}
             waitlistPosition={displayPosition}
             positionLoading={positionLoading}
-            positionError={positionError}
+            positionError={currentPositionError}
             stats={stats}
             refreshing={refreshing}
             justRefreshed={justRefreshed}

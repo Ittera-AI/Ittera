@@ -40,9 +40,21 @@ jobs:
         working-directory: apps/web
         run: npm run lint
 
+      - name: Type check
+        working-directory: apps/web
+        run: npm run typecheck
+
       - name: Test (Vitest)
         working-directory: apps/web
         run: npm test
+
+      - name: Install Playwright Chromium
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Authenticated safety smoke (Playwright)
+        working-directory: apps/web
+        run: npm run test:e2e:b1
 
       - name: Build (Next.js)
         working-directory: apps/web

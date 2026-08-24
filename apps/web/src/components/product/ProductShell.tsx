@@ -184,10 +184,11 @@ export function ProductShell({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   
   useEffect(() => {
-    const stored = localStorage.getItem("ittera_sidebar_collapsed");
-    if (stored === "true") {
-      setIsCollapsed(true);
-    }
+    const frame = requestAnimationFrame(() => {
+      const stored = localStorage.getItem("ittera_sidebar_collapsed");
+      if (stored === "true") setIsCollapsed(true);
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   const handleToggleCollapse = () => {

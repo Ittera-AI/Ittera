@@ -1,5 +1,6 @@
 import type { components } from "@iterra/shared-types";
 
+import { connectWithOAuthPopup } from "@/lib/oauth-popup";
 import { supabase } from "@/lib/supabase";
 import { apiFetch } from "@/services/api";
 
@@ -328,52 +329,6 @@ async function getAccessToken(): Promise<string> {
   return token;
 }
 
-function openConnectPopup(url: string, platform: "linkedin" | "twitter"): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const popup = window.open(url, `ittera-${platform}-connect`, "width=520,height=720");
-    if (!popup) {
-      reject(new Error("Popup was blocked. Allow popups and try again."));
-      return;
-    }
-
-    const cleanup = () => {
-      window.removeEventListener("message", onMessage);
-      window.clearInterval(checkClosed);
-      window.clearTimeout(timeout);
-    };
-
-    const onMessage = (event: MessageEvent) => {
-      const payload = event.data;
-      if (!payload || payload.type !== "ittera_oauth" || payload.platform !== platform) return;
-      cleanup();
-      if (payload.status === "connected") {
-        resolve();
-      } else {
-        reject(new Error(payload.error || `${platform} connection failed.`));
-      }
-    };
-
-    const checkClosed = window.setInterval(() => {
-      if (popup.closed) {
-        cleanup();
-        reject(new Error(`${platform} connection was cancelled.`));
-      }
-    }, 500);
-
-    const timeout = window.setTimeout(() => {
-      cleanup();
-      try {
-        popup.close();
-      } catch {
-        // Ignore popup cleanup failures.
-      }
-      reject(new Error(`${platform} connection timed out.`));
-    }, 120000);
-
-    window.addEventListener("message", onMessage);
-  });
-}
-
 function mediaApiBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_API_URL;
   if (raw === "" || raw === "same-origin") return "";
@@ -385,12 +340,10 @@ export const productService = {
   linkedinStatus: () => apiFetch<LinkedInStatus>("/api/v1/linkedin/status"),
   socialConnections: () => apiFetch<SocialConnectionStatus[]>("/api/v1/connect/status"),
   connectLinkedIn: async () => {
-    const token = await getAccessToken();
-    await openConnectPopup(`/api/v1/connect/linkedin/start?token=${encodeURIComponent(token)}`, "linkedin");
+    await connectWithOAuthPopup("linkedin");
   },
   connectTwitter: async () => {
-    const token = await getAccessToken();
-    await openConnectPopup(`/api/v1/connect/twitter/start?token=${encodeURIComponent(token)}`, "twitter");
+    await connectWithOAuthPopup("twitter");
   },
   syncLinkedIn: () => apiFetch<LinkedInRealSyncResult>("/api/v1/linkedin/sync/real", { method: "POST" }),
   syncPlatform: (platform: string) =>
