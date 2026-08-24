@@ -13,15 +13,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.permissions import Permission
 from app.db.datetime_helpers import ensure_aware, utc_now
 from app.dependencies.auth import get_current_user
 from app.dependencies.db import get_db
-from app.dependencies.workspace import can_use_ai_predict, get_current_workspace
+from app.dependencies.workspace import (
+    can_use_ai_predict,
+    can_use_ai_predict_required,
+)
 from app.models.organization import Prediction, Workspace
 from app.models.user import User
 
-router = APIRouter(prefix="/predictions", tags=["predictions"])
+router = APIRouter(tags=["predictions"])
 
 
 # ---------------------------------------------------------------------------
@@ -510,7 +512,7 @@ async def predict_all(
 async def list_cached_predictions(
     prediction_type: str | None = None,
     limit: int = 50,
-    workspace: Workspace | None = Depends(can_use_ai_predict),
+    workspace: Workspace = Depends(can_use_ai_predict_required),
     db: Session = Depends(get_db),
 ):
     """List cached predictions for the workspace."""
@@ -547,7 +549,7 @@ async def list_cached_predictions(
 @router.delete("/cache/{prediction_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_cached_prediction(
     prediction_id: str,
-    workspace: Workspace | None = Depends(can_use_ai_predict),
+    workspace: Workspace = Depends(can_use_ai_predict_required),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

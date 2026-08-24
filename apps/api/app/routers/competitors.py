@@ -27,7 +27,7 @@ from app.models.organization import (
 from app.models.user import User
 from app.services import workspace_service
 
-router = APIRouter(prefix="/competitors", tags=["competitors"])
+router = APIRouter(tags=["competitors"])
 
 
 # ---------------------------------------------------------------------------

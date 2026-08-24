@@ -14,7 +14,7 @@ from app.models.organization import Workspace
 from app.models.user import User
 from app.services import workspace_service
 
-router = APIRouter(prefix="/workspaces", tags=["workspaces"])
+router = APIRouter(tags=["workspaces"])
 
 
 # ---------------------------------------------------------------------------

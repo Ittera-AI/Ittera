@@ -62,9 +62,20 @@ jobs:
           ruff check apps/api/
           ruff check packages/ai-engine/
 
+      - name: Verify PostgreSQL migrations
+        env:
+          DATABASE_URL: postgresql://iterra:iterra@localhost:5432/iterra_test
+          SECRET_KEY: test-secret-key
+          OPENAI_API_KEY: sk-test
+        run: |
+          cd apps/api
+          python -m alembic upgrade head
+          python -m alembic current
+
       - name: Test API
         env:
           DATABASE_URL: postgresql://iterra:iterra@localhost:5432/iterra_test
+          POSTGRES_TEST_DATABASE_URL: postgresql://iterra:iterra@localhost:5432/iterra_test
           SECRET_KEY: test-secret-key
           OPENAI_API_KEY: sk-test
         run: |

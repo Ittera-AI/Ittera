@@ -14,19 +14,18 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.permissions import Permission
 from app.dependencies.auth import get_current_user
 from app.dependencies.db import get_db
 from app.dependencies.workspace import (
     can_create_reports,
+    can_create_reports_required,
     can_use_whitelabel,
-    get_current_workspace,
 )
 from app.models.organization import Workspace
 from app.models.user import User
 from app.services import reporting_service, workspace_service
 
-router = APIRouter(prefix="/reports", tags=["reports"])
+router = APIRouter(tags=["reports"])
 
 
 # ---------------------------------------------------------------------------
@@ -143,8 +142,6 @@ def _store_report(
     workspace_id: str | None,
 ) -> str:
     """Store report and return download URL."""
-    import hashlib
-    
     # In production, upload to S3/cloud storage
     # For now, store in memory
     _report_storage[report_id] = {
@@ -220,7 +217,7 @@ async def generate_analytics_report(
 @router.post("/competitive", response_model=ReportResponse)
 async def generate_competitive_report(
     request: CompetitiveReportRequest,
-    workspace: Workspace | None = Depends(can_create_reports),
+    workspace: Workspace = Depends(can_create_reports_required),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
