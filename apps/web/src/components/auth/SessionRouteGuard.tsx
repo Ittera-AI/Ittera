@@ -12,7 +12,13 @@ export default function SessionRouteGuard({ children }: { children: ReactNode })
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user, hasWorkspaceAccess, sessionLoading } = useAuth();
+  const {
+    user,
+    hasWorkspaceAccess,
+    sessionLoading,
+    workspaceAccessChecked,
+    workspaceAccessLoading,
+  } = useAuth();
 
   // Defer session-presence check to a client-side effect to avoid hydration mismatch.
   // On the server, localStorage isn't available so hasStoredSupabaseSession() would
@@ -21,8 +27,11 @@ export default function SessionRouteGuard({ children }: { children: ReactNode })
   const [likelySession, setLikelySession] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    setLikelySession(hasStoredSupabaseSession());
+    const frame = requestAnimationFrame(() => {
+      setMounted(true);
+      setLikelySession(hasStoredSupabaseSession());
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   const isMarketingRoute = MARKETING_PATHS.some(
@@ -48,10 +57,23 @@ export default function SessionRouteGuard({ children }: { children: ReactNode })
   }, [pathname, searchParams, router, user]);
 
   useEffect(() => {
-    if (!isMarketingRoute || !user) return;
-    // Always route to dashboard and let its layout check workspace access properly
-    router.replace(ROUTES.dashboard);
-  }, [isMarketingRoute, user, router]);
+    if (
+      !isMarketingRoute ||
+      !user ||
+      workspaceAccessLoading ||
+      !workspaceAccessChecked
+    ) {
+      return;
+    }
+    router.replace(waitlistDestination(hasWorkspaceAccess));
+  }, [
+    hasWorkspaceAccess,
+    isMarketingRoute,
+    router,
+    user,
+    workspaceAccessChecked,
+    workspaceAccessLoading,
+  ]);
 
   if (hideMarketing) {
     return <AuthTransitionScreen />;

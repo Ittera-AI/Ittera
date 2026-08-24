@@ -41,7 +41,15 @@ function AuthCallbackContent() {
           return;
         }
         await supabase.auth.getSession();
-        router.replace("/dashboard");
+        if (!cancelled) router.replace("/dashboard");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setAsyncError(
+          error instanceof Error
+            ? error.message
+            : "Could not complete sign-in. Please try again.",
+        );
       });
 
     return () => {

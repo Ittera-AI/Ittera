@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ArrowRight, Zap, Star, Shield, Users, ChevronRight, TrendingUp } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
-import { supabase } from "@/lib/supabase";
+import {
+  ensureWaitlistEntry,
+  fetchWaitlistMemberStatus,
+  fetchWaitlistStats,
+} from "@/services/waitlist-access";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
-const DEFAULT_TOTAL_SEATS = 100;
 
 type WaitlistStats = {
   total_joined: number;
@@ -78,15 +81,6 @@ const PERKS = [
   { icon: Shield, title: "Beta testing cohort", desc: "Reserved for the first 100 members joining the beta program." },
 ];
 
-function buildFallbackStats(): WaitlistStats {
-  return {
-    total_joined: 0,
-    total_seats: DEFAULT_TOTAL_SEATS,
-    remaining_seats: DEFAULT_TOTAL_SEATS,
-    recent_joiners: [],
-  };
-}
-
 export default function Waitlist() {
   const shouldReduceMotion = useReducedMotion();
   const { theme } = useTheme();
@@ -101,40 +95,39 @@ export default function Waitlist() {
   const [alreadyJoined, setAlreadyJoined] = useState(false);
   const [position, setPosition] = useState(0);
   const [error, setError] = useState("");
-  const [stats, setStats] = useState<WaitlistStats>(buildFallbackStats);
+  const [stats, setStats] = useState<WaitlistStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
   const [memberStatus, setMemberStatus] = useState<WaitlistMemberStatus | null>(null);
-  const { count, ref } = useCounter(stats.total_joined);
+  const statsRequestRef = useRef(0);
+  const { count, ref } = useCounter(stats?.total_joined ?? 0);
 
-  // Load total waitlist count from Supabase
-  useEffect(() => {
-    let cancelled = false;
+  const refreshStats = useCallback(async () => {
+    const requestId = ++statsRequestRef.current;
+    setStatsLoading(true);
+    setStatsError(null);
 
-    const loadStats = async () => {
-      try {
-        const { count: total } = await supabase
-          .from("waitlist")
-          .select("*", { count: "exact", head: true });
-
-        if (!cancelled && total !== null) {
-          setStats({
-            total_joined: total,
-            total_seats: DEFAULT_TOTAL_SEATS,
-            remaining_seats: Math.max(DEFAULT_TOTAL_SEATS - total, 0),
-            recent_joiners: [],
-          });
-        }
-      } catch {
-        // Keep local fallback values when Supabase is unavailable.
+    try {
+      const nextStats = await fetchWaitlistStats();
+      if (statsRequestRef.current === requestId) setStats(nextStats);
+    } catch {
+      if (statsRequestRef.current === requestId) {
+        setStatsError("Live cohort availability is unavailable. Please try again.");
       }
-    };
-
-    loadStats();
-    return () => {
-      cancelled = true;
-    };
+    } finally {
+      if (statsRequestRef.current === requestId) setStatsLoading(false);
+    }
   }, []);
 
-  // Check if signed-in user is already on the waitlist
+  // Load aggregate waitlist data through the FastAPI boundary.
+  useEffect(() => {
+    void refreshStats();
+    return () => {
+      statsRequestRef.current += 1;
+    };
+  }, [refreshStats]);
+
+  // Check signed-in membership through the authenticated API boundary.
   useEffect(() => {
     if (!user?.email) {
       setMemberStatus(null);
@@ -142,42 +135,15 @@ export default function Waitlist() {
     }
 
     let cancelled = false;
+    void fetchWaitlistMemberStatus().then(({ status, error: statusError }) => {
+      if (cancelled) return;
+      setMemberStatus(status);
+      if (statusError) setError(statusError);
+    });
 
-    const loadMemberStatus = async () => {
-      try {
-        const { data: row } = await supabase
-          .from("waitlist")
-          .select("created_at")
-          .eq("email", user.email)
-          .single();
-
-        if (!row || cancelled) return;
-
-        const { count: pos } = await supabase
-          .from("waitlist")
-          .select("*", { count: "exact", head: true })
-          .lte("created_at", row.created_at);
-
-        if (!cancelled) {
-          setMemberStatus({
-            email: user.email,
-            joined: true,
-            position: pos ?? null,
-            total_joined: stats.total_joined,
-            total_seats: stats.total_seats,
-            remaining_seats: stats.remaining_seats,
-          });
-        }
-      } catch {
-        // Keep the waitlist state interactive even if the status lookup fails.
-      }
-    };
-
-    loadMemberStatus();
     return () => {
       cancelled = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   useEffect(() => {
@@ -206,67 +172,33 @@ export default function Waitlist() {
     setLoading(true);
 
     try {
-      // Attempt insert — unique constraint on email catches duplicates
-      const { data: inserted, error: insertError } = await supabase
-        .from("waitlist")
-        .insert({ email: normalizedEmail, name: name.trim() || null, profession: profession || null })
-        .select("created_at")
-        .single();
+      const enrollment = await ensureWaitlistEntry(
+        normalizedEmail,
+        name,
+        profession,
+      );
 
-      let pos: number | null = null;
-      let isAlreadyJoined = false;
-
-      if (insertError) {
-        // PostgreSQL unique violation code
-        if (insertError.code === "23505") {
-          isAlreadyJoined = true;
-          const { data: existing } = await supabase
-            .from("waitlist")
-            .select("created_at")
-            .eq("email", normalizedEmail)
-            .single();
-
-          if (existing) {
-            const { count } = await supabase
-              .from("waitlist")
-              .select("*", { count: "exact", head: true })
-              .lte("created_at", existing.created_at);
-            pos = count ?? null;
-          }
-        } else {
-          setError(insertError.message || "Something went wrong. Try again.");
-          return;
-        }
-      } else if (inserted) {
-        const { count } = await supabase
-          .from("waitlist")
-          .select("*", { count: "exact", head: true })
-          .lte("created_at", inserted.created_at);
-        pos = count ?? null;
-      }
-
-      const { count: newTotal } = await supabase
-        .from("waitlist")
-        .select("*", { count: "exact", head: true });
-
-      setPosition(pos ?? 0);
-      setAlreadyJoined(isAlreadyJoined);
+      // Enrollment is committed by the POST. Aggregate availability is a
+      // secondary read and must never turn that success into a false failure.
+      setPosition(enrollment.position ?? 0);
+      setAlreadyJoined(enrollment.alreadyJoined);
       setSubmitted(true);
-      setStats({
-        total_joined: newTotal ?? stats.total_joined,
-        total_seats: DEFAULT_TOTAL_SEATS,
-        remaining_seats: Math.max(DEFAULT_TOTAL_SEATS - (newTotal ?? stats.total_joined), 0),
-        recent_joiners: [],
-      });
-    } catch {
-      setError("Network error. Please try again.");
+      void refreshStats();
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Network error. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const progressPct =
-    stats.total_seats > 0 ? Math.min((stats.total_joined / stats.total_seats) * 100, 100) : 0;
+    stats && stats.total_seats > 0
+      ? Math.min((stats.total_joined / stats.total_seats) * 100, 100)
+      : 0;
   const signedInWaitlisted = Boolean(user && memberStatus?.joined);
   const showSuccessState = submitted || signedInWaitlisted;
   const effectivePosition = memberStatus?.position ?? position;
@@ -323,7 +255,11 @@ export default function Waitlist() {
           >
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#A38A70]" />
             <span className="text-[11px] font-semibold uppercase tracking-wider text-[#8B6F52]">
-              Beta Cohort · {stats.remaining_seats} seats left
+              {stats
+                ? `Beta Cohort · ${stats.remaining_seats} seats left`
+                : statsLoading
+                  ? "Beta Cohort · loading availability"
+                  : "Beta Cohort · availability unavailable"}
             </span>
           </div>
         </motion.div>
@@ -339,7 +275,7 @@ export default function Waitlist() {
             className="text-[52px] sm:text-[80px] md:text-[100px] font-bold leading-none tracking-[-0.04em] tabular-nums"
             style={{ color: isDark ? "#C4A882" : "#2B241E" }}
           >
-            {count.toLocaleString()}
+            {stats ? count.toLocaleString() : "—"}
           </span>
         </motion.div>
 
@@ -350,7 +286,7 @@ export default function Waitlist() {
           transition={{ duration: 0.55, delay: 0.1 }}
           className="mb-4 text-[22px] sm:text-[34px] md:text-[44px] font-bold leading-[1.1] tracking-[-0.03em] text-neutral-900"
         >
-          creators already waiting.
+          {stats ? "creators already waiting." : "Live cohort count unavailable."}
           <br />
           <span className="text-neutral-500">Don&apos;t get left behind.</span>
         </motion.h2>
@@ -373,21 +309,41 @@ export default function Waitlist() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="mx-auto mb-8 max-w-sm"
         >
-          <div className="mb-1.5 flex justify-between text-[11px] text-neutral-500">
-            <span>{stats.total_joined} joined</span>
-            <span className="font-medium text-[#A38A70]/80">{stats.remaining_seats} seats remaining</span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full" style={{ background: progressTrack }}>
-            <motion.div
-              className="h-full rounded-full"
-              style={{ background: "linear-gradient(90deg, #0F172A, #A38A70, #7A8B76)" }}
-              initial={{ width: 0 }}
-              whileInView={{ width: `${progressPct}%` }}
-              viewport={{ once: true }}
-              transition={{ duration: 1.2, delay: 0.4, ease: EASE }}
-            />
-          </div>
-          <div className="mt-1 text-right text-[10px] text-neutral-400">{stats.total_seats} total seats</div>
+          {stats ? (
+            <>
+              <div className="mb-1.5 flex justify-between text-[11px] text-neutral-500">
+                <span>{stats.total_joined} joined</span>
+                <span className="font-medium text-[#A38A70]/80">{stats.remaining_seats} seats remaining</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full" style={{ background: progressTrack }}>
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ background: "linear-gradient(90deg, #0F172A, #A38A70, #7A8B76)" }}
+                  initial={{ width: 0 }}
+                  whileInView={{ width: `${progressPct}%` }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 1.2, delay: 0.4, ease: EASE }}
+                />
+              </div>
+              <div className="mt-1 text-right text-[10px] text-neutral-400">{stats.total_seats} total seats</div>
+            </>
+          ) : (
+            <div
+              className="rounded-xl border border-[#A38A70]/20 bg-[#A38A70]/5 px-4 py-3 text-[12px] text-neutral-500"
+              role="status"
+            >
+              <p>{statsLoading ? "Loading live cohort availability…" : statsError}</p>
+              {!statsLoading && (
+                <button
+                  type="button"
+                  onClick={() => void refreshStats()}
+                  className="mt-2 font-semibold text-[#8B6F52] underline decoration-[#A38A70]/40 underline-offset-4"
+                >
+                  Retry live cohort stats
+                </button>
+              )}
+            </div>
+          )}
         </motion.div>
 
         <motion.div
@@ -569,20 +525,28 @@ export default function Waitlist() {
               className="mx-auto flex flex-wrap max-w-md items-center justify-between rounded-xl px-4 py-3 gap-x-4 gap-y-2"
               style={{ background: isDark ? "rgba(255,255,255,0.03)" : "rgba(15,23,42,0.03)", border: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.06)"}` }}
             >
-              <div className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#7A8B76] animate-pulse" />
+              {stats ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#7A8B76] animate-pulse" />
+                    <span className="text-[11px] font-medium" style={{ color: isDark ? "rgba(242,237,232,0.55)" : "#737373" }}>
+                      <span className="font-semibold tabular-nums" style={{ color: isDark ? "#F2EDE8" : "#262626" }}>{stats.total_joined}</span> people joined
+                    </span>
+                  </div>
+                  <div className="h-3 w-px" style={{ background: isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)" }} />
+                  <div className="flex items-center gap-1.5">
+                    <TrendingUp className="h-3 w-3 text-[#A38A70]" />
+                    <span className="text-[11px]" style={{ color: isDark ? "rgba(242,237,232,0.55)" : "#737373" }}>
+                      <span className="font-semibold tabular-nums" style={{ color: "#A38A70" }}>{stats.remaining_seats}</span> seats left
+                    </span>
+                  </div>
+                  <div className="h-3 w-px" style={{ background: isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)" }} />
+                </>
+              ) : (
                 <span className="text-[11px] font-medium" style={{ color: isDark ? "rgba(242,237,232,0.55)" : "#737373" }}>
-                  <span className="font-semibold tabular-nums" style={{ color: isDark ? "#F2EDE8" : "#262626" }}>{stats.total_joined}</span> people joined
+                  Live cohort stats unavailable
                 </span>
-              </div>
-              <div className="h-3 w-px" style={{ background: isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)" }} />
-              <div className="flex items-center gap-1.5">
-                <TrendingUp className="h-3 w-3 text-[#A38A70]" />
-                <span className="text-[11px]" style={{ color: isDark ? "rgba(242,237,232,0.55)" : "#737373" }}>
-                  <span className="font-semibold tabular-nums" style={{ color: "#A38A70" }}>{stats.remaining_seats}</span> seats left
-                </span>
-              </div>
-              <div className="h-3 w-px" style={{ background: isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)" }} />
+              )}
               <p className="text-[11px]" style={{ color: isDark ? "rgba(242,237,232,0.35)" : "#A3A3A3" }}>No spam · Unsubscribe anytime</p>
             </div>
           </motion.div>

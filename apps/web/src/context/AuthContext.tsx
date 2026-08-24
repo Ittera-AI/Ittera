@@ -1,11 +1,12 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
+import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
+import { resetAuthBoundState } from "@/lib/auth-bound-state";
+import { clearStoredSupabaseSessions, supabase } from "@/lib/supabase";
 import { api } from "@/lib/api";
 
-export type User = { email: string; name: string; initials: string };
+export type User = { id: string; email: string; name: string; initials: string };
 export type AuthMode = "signin" | "signup";
 
 interface AuthContextType {
@@ -60,6 +61,7 @@ function userFromSupabase(supabaseUser: SupabaseUser): User {
     supabaseUser.email?.split("@")[0] ||
     "User";
   return {
+    id: supabaseUser.id,
     email: supabaseUser.email ?? "",
     name,
     initials: makeInitials(name),
@@ -76,44 +78,100 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [authSeedEmail, setAuthSeedEmail] = useState("");
+  const principalIdRef = useRef<string | null>(null);
+  const accessRequestGenerationRef = useRef(0);
 
   const isAdmin = user ? parseAdminEmails().has(user.email.toLowerCase()) : false;
 
+  const clearWorkspaceAccessState = useCallback(() => {
+    setHasWorkspaceAccess(false);
+    setWaitlistPosition(null);
+    setWorkspaceAccessChecked(false);
+    setWorkspaceAccessLoading(false);
+  }, []);
+
+  const invalidateWorkspaceAccess = useCallback(() => {
+    accessRequestGenerationRef.current += 1;
+    clearWorkspaceAccessState();
+  }, [clearWorkspaceAccessState]);
+
   const refreshWorkspaceAccess = useCallback(async (): Promise<boolean> => {
-    setWorkspaceAccessLoading(true);
+    const principalId = principalIdRef.current;
+    const requestGeneration = ++accessRequestGenerationRef.current;
+
+    setHasWorkspaceAccess(false);
+    setWaitlistPosition(null);
+    setWorkspaceAccessChecked(false);
+    setWorkspaceAccessLoading(Boolean(principalId));
+
+    if (!principalId) return false;
+
+    const isCurrentRequest = () =>
+      accessRequestGenerationRef.current === requestGeneration &&
+      principalIdRef.current === principalId;
+
     try {
       const status = await api.waitlist.myStatus();
+      if (!isCurrentRequest()) return false;
+
       setHasWorkspaceAccess(status.access_approved);
       setWaitlistPosition(status.position);
       setWorkspaceAccessChecked(true);
       return status.access_approved;
     } catch {
+      if (!isCurrentRequest()) return false;
+
       setHasWorkspaceAccess(false);
       setWaitlistPosition(null);
       setWorkspaceAccessChecked(true);
       return false;
     } finally {
-      setWorkspaceAccessLoading(false);
+      if (isCurrentRequest()) setWorkspaceAccessLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    const resetAuthState = () => {
-      setUser(null);
-      setHasWorkspaceAccess(false);
-      setWaitlistPosition(null);
-      setWorkspaceAccessChecked(false);
-    };
+  const applySession = useCallback(
+    (session: Session | null) => {
+      const previousPrincipalId = principalIdRef.current;
+      const nextPrincipalId = session?.user.id ?? null;
 
-    window.addEventListener("ittera-auth-invalid", resetAuthState);
+      if (previousPrincipalId !== nextPrincipalId) {
+        invalidateWorkspaceAccess();
+        if (previousPrincipalId !== null) resetAuthBoundState("auth");
+      }
+      principalIdRef.current = nextPrincipalId;
+
+      if (session?.user) {
+        setUser(userFromSupabase(session.user));
+        setAuthOpen(false);
+        setAuthSeedEmail("");
+      } else {
+        setUser(null);
+        clearWorkspaceAccessState();
+      }
+    },
+    [clearWorkspaceAccessState, invalidateWorkspaceAccess],
+  );
+
+  const handleInvalidSession = useCallback(() => {
+    principalIdRef.current = null;
+    invalidateWorkspaceAccess();
+    resetAuthBoundState("auth");
+    setUser(null);
+  }, [invalidateWorkspaceAccess]);
+
+  useEffect(() => {
+    // Purge legacy globally-persisted product/workspace data on first hydration.
+    resetAuthBoundState("auth");
+    window.addEventListener("ittera-auth-invalid", handleInvalidSession);
 
     supabase.auth
       .getSession()
       .then(({ data: { session } }) => {
-        setUser(session?.user ? userFromSupabase(session.user) : null);
+        applySession(session);
       })
       .catch(() => {
-        setUser(null);
+        handleInvalidSession();
       })
       .finally(() => {
         setSessionLoading(false);
@@ -122,20 +180,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ? userFromSupabase(session.user) : null);
-      if (session) {
-        setAuthOpen(false);
-        setAuthSeedEmail("");
-      } else {
-        resetAuthState();
-      }
+      applySession(session);
     });
 
     return () => {
-      window.removeEventListener("ittera-auth-invalid", resetAuthState);
+      accessRequestGenerationRef.current += 1;
+      window.removeEventListener("ittera-auth-invalid", handleInvalidSession);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [applySession, handleInvalidSession]);
 
   useEffect(() => {
     if (!user) return;
@@ -153,31 +206,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthSeedEmail("");
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
-    if (error) throw new Error(error.message);
-    if (data.session?.user) {
-      setUser(userFromSupabase(data.session.user));
-    }
-  }, []);
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (error) throw new Error(error.message);
+      if (data.session) applySession(data.session);
+    },
+    [applySession],
+  );
 
-  const signUp = useCallback(async (email: string, password: string, name: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password,
-      options: {
-        data: { full_name: name.trim(), name: name.trim() },
-      },
-    });
-    if (error) throw new Error(error.message);
-    if (data.session?.user) {
-      setUser(userFromSupabase(data.session.user));
-    }
-    return { needsEmailConfirmation: !data.session };
-  }, []);
+  const signUp = useCallback(
+    async (email: string, password: string, name: string) => {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          data: { full_name: name.trim(), name: name.trim() },
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data.session) applySession(data.session);
+      return { needsEmailConfirmation: !data.session };
+    },
+    [applySession],
+  );
 
   const signInWithGoogle = useCallback(() => {
     supabase.auth.signInWithOAuth({
@@ -205,13 +260,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const completeOAuthSignIn = useCallback(async (_token: string) => {}, []);
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    // Invalidate access synchronously so no in-flight request can re-authorize or
+    // repopulate state while either logout transport is still pending.
+    principalIdRef.current = null;
+    invalidateWorkspaceAccess();
+    resetAuthBoundState("auth");
     setUser(null);
-    setHasWorkspaceAccess(false);
-    setWaitlistPosition(null);
-    setWorkspaceAccessChecked(false);
     setAuthOpen(false);
-  }, []);
+
+    const [, supabaseResult] = await Promise.allSettled([
+      api.auth.logout(),
+      supabase.auth.signOut(),
+    ]);
+    if (
+      supabaseResult.status === "rejected" ||
+      (supabaseResult.status === "fulfilled" && supabaseResult.value.error)
+    ) {
+      clearStoredSupabaseSessions();
+    }
+  }, [invalidateWorkspaceAccess]);
 
   return (
     <AuthContext.Provider

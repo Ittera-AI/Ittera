@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
 
 import { useAuth } from "@/hooks/useAuth";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -23,8 +24,7 @@ function LoginForm() {
       // Use hard navigation to avoid competing with SessionRouteGuard's soft redirect.
       // Only allow same-origin paths for `next` to prevent open-redirect attacks.
       const next = searchParams.get("next");
-      const destination = next?.startsWith("/") ? next : "/dashboard";
-      window.location.replace(destination);
+      window.location.replace(safeRedirectPath(next, "/dashboard"));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "An error occurred");
       setIsLoading(false);

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api, PersonaProfile } from "@/lib/api";
+import { connectWithOAuthPopup } from "@/lib/oauth-popup";
 import { PersonaResults } from "@/components/persona/PersonaResults";
 import { supabase } from "@/lib/supabase";
 import {
@@ -104,15 +105,6 @@ const LOADING_PHRASES = [
   "Finalizing your persona...",
 ];
 
-// ─── Popup OAuth helper ───────────────────────────────────────────────────────
-
-function openOAuthPopup(url: string): Window | null {
-  const w = 520, h = 680;
-  const left = window.screenX + (window.outerWidth - w) / 2;
-  const top = window.screenY + (window.outerHeight - h) / 2;
-  return window.open(url, "ittera_oauth", `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0`);
-}
-
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 type WizardStep = "welcome" | "connect" | "loading" | "results";
@@ -158,23 +150,6 @@ export default function PersonaOnboardingPage() {
     }).catch(() => {});
   }, []);
 
-  // Listen for postMessage from OAuth popup
-  useEffect(() => {
-    function handleMessage(e: MessageEvent) {
-      if (e.data?.type !== "ittera_oauth") return;
-      const { platform, status: s, username, error } = e.data;
-      setConnecting(null);
-      if (s === "connected") {
-        setConnected((prev) => ({ ...prev, [platform]: username }));
-        setConnectError(null);
-      } else {
-        setConnectError(error || "Connection failed. Please try again.");
-      }
-    }
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
-
   // Loading animation
   useEffect(() => {
     if (step !== "loading") return;
@@ -189,34 +164,20 @@ export default function PersonaOnboardingPage() {
 
   const connectedCount = Object.keys(connected).length;
 
-  function handleConnect(platformId: PlatformId) {
+  async function handleConnect(platformId: PlatformId) {
     setConnectError(null);
     setConnecting(platformId);
-    // Open the popup synchronously within the click gesture (avoids popup
-    // blockers), then navigate it once we have a single-use connect token. The
-    // raw Supabase JWT is never placed in the start URL.
-    const popup = openOAuthPopup("about:blank");
-    if (!popup) {
+    try {
+      const result = await connectWithOAuthPopup(platformId);
+      setConnected((prev) => ({
+        ...prev,
+        [platformId]: result.username || platformId,
+      }));
+    } catch (error: unknown) {
+      setConnectError(getErrorMessage(error) || "Could not start the connection. Please try again.");
+    } finally {
       setConnecting(null);
-      setConnectError("Popup was blocked. Please allow popups for this site.");
-      return;
     }
-    api.connect
-      .createSession()
-      .then(({ connect_token }) => {
-        popup.location.href = api.connect.startUrl(platformId, connect_token);
-        const timer = setInterval(() => {
-          if (popup.closed) {
-            clearInterval(timer);
-            setConnecting((prev) => (prev === platformId ? null : prev));
-          }
-        }, 500);
-      })
-      .catch((err: unknown) => {
-        popup.close();
-        setConnecting(null);
-        setConnectError(getErrorMessage(err) || "Could not start the connection. Please try again.");
-      });
   }
 
   async function handleDisconnect(platformId: PlatformId) {
@@ -389,10 +350,10 @@ export default function PersonaOnboardingPage() {
                   { icon: MessageSquare, label: "Tone", angle: 0 },
                   { icon: Target, label: "Pillars", angle: 120 },
                   { icon: Users, label: "Audience", angle: 240 }
-                ].map((item, i) => {
+                ].map((item) => {
                   const rad = (item.angle * Math.PI) / 180;
-                  const x = Math.cos(rad) * 150;
-                  const y = Math.sin(rad) * 150;
+                  const x = Number((Math.cos(rad) * 150).toFixed(3));
+                  const y = Number((Math.sin(rad) * 150).toFixed(3));
                   const Icon = item.icon;
                   return (
                     <div key={item.label} className="absolute flex flex-col items-center gap-2 transition-transform duration-1000 hover:scale-110"

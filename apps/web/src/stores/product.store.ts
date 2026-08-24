@@ -1,7 +1,9 @@
 "use client";
 
 import { create } from "zustand";
-import { devtools, persist } from "zustand/middleware";
+import { devtools } from "zustand/middleware";
+
+import { registerAuthBoundStateResetter } from "@/lib/auth-bound-state";
 
 import {
   productService,
@@ -81,6 +83,7 @@ type ProductState = {
   // Actions
   clearError: () => void;
   clearCoachResult: () => void;
+  reset: () => void;
   selectDraft: (draftId: string) => void;
   
   // Async Actions
@@ -164,10 +167,32 @@ function handleError(error: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
+type ProductRequest = {
+  set: (partial: Partial<ProductState>) => void;
+  isCurrent: () => boolean;
+};
+
+let productStoreGeneration = 0;
+
+function createProductRequest(
+  storeSet: (partial: Partial<ProductState>) => void,
+): ProductRequest {
+  const generation = productStoreGeneration;
+  const isCurrent = () => generation === productStoreGeneration;
+
+  return {
+    isCurrent,
+    set: (partial) => {
+      if (isCurrent()) storeSet(partial);
+    },
+  };
+}
+
 export const useProductStore = create<ProductState>()(
   devtools(
-    persist(
-      (set, get) => ({
+    (set, get) => {
+      const storeSet = set;
+      return ({
         // Initial State
         linkedin: null,
         socialConnections: [],
@@ -205,6 +230,38 @@ export const useProductStore = create<ProductState>()(
         
         clearCoachResult: () => set({ coachResult: null }),
 
+        reset: () => {
+          productStoreGeneration += 1;
+          set({
+          linkedin: null,
+          socialConnections: [],
+          publishingSettings: null,
+          brandProfile: null,
+          trends: null,
+          suggestions: [],
+          drafts: [],
+          analytics: [],
+          analyticsSummary: null,
+          calendar: [],
+          currentDraft: null,
+          coachResult: null,
+          radarResult: null,
+          trendsData: null,
+          trendDetection: null,
+          contentInsights: null,
+          trendsFilter: {
+            metric: "engagement_rate",
+            periodDays: 30,
+            interval: "week",
+          },
+          predictionsData: null,
+          isLoading: false,
+          loadingStates: { ...initialLoadingState },
+          error: null,
+          lastUpdated: {},
+          });
+        },
+
         selectDraft: (draftId) => {
           const drafts = get().drafts;
           const draft = drafts.find((item) => item.id === draftId) ?? null;
@@ -212,6 +269,8 @@ export const useProductStore = create<ProductState>()(
         },
 
         loadDashboard: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           const key = "dashboard";
           if (isCacheValid(get().lastUpdated[key], CACHE_TTL.dashboard) && get().linkedin) {
             return; // Use cached data
@@ -235,6 +294,7 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ 
               error: handleError(error),
               loadingStates: { ...get().loadingStates, dashboard: "error" },
@@ -244,24 +304,31 @@ export const useProductStore = create<ProductState>()(
         },
 
         connectLinkedIn: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             await productService.connectLinkedIn();
+            if (!request.isCurrent()) return;
             const [linkedin, socialConnections] = await Promise.all([
               productService.linkedinStatus(),
               productService.socialConnections(),
             ]);
             set({ linkedin, socialConnections, isLoading: false, lastUpdated: { ...get().lastUpdated, dashboard: 0 } });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         syncLinkedIn: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             const result = await productService.syncLinkedIn();
+            if (!request.isCurrent()) return;
             if (result.sync_path === "unavailable") {
               throw new Error(result.message);
             }
@@ -276,51 +343,66 @@ export const useProductStore = create<ProductState>()(
               lastUpdated: { ...get().lastUpdated, analytics: Date.now() },
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         connectTwitter: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             await productService.connectTwitter();
+            if (!request.isCurrent()) return;
             const socialConnections = await productService.socialConnections();
             set({ socialConnections, isLoading: false, lastUpdated: { ...get().lastUpdated, dashboard: 0 } });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         disconnectLinkedIn: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             await productService.disconnectLinkedIn();
+            if (!request.isCurrent()) return;
             const [linkedin, socialConnections] = await Promise.all([
               productService.linkedinStatus(),
               productService.socialConnections(),
             ]);
             set({ linkedin, socialConnections, isLoading: false, lastUpdated: { ...get().lastUpdated, dashboard: 0 } });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         disconnectTwitter: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             await productService.disconnectTwitter();
+            if (!request.isCurrent()) return;
             const socialConnections = await productService.socialConnections();
             set({ socialConnections, isLoading: false, lastUpdated: { ...get().lastUpdated, dashboard: 0 } });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         loadPublishingSettings: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           try {
             const [publishingSettings, socialConnections] = await Promise.all([
               productService.getPublishingSettings(),
@@ -328,56 +410,71 @@ export const useProductStore = create<ProductState>()(
             ]);
             set({ publishingSettings, socialConnections, error: null });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error) });
             throw error;
           }
         },
 
         updatePublishingSettings: async (settings) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             const publishingSettings = await productService.updatePublishingSettings(settings);
             set({ publishingSettings, isLoading: false });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         generateBrandProfile: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             const brandProfile = await productService.generateBrandProfile();
             set({ brandProfile, isLoading: false });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         confirmBrandProfile: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             const brandProfile = await productService.confirmBrandProfile();
             set({ brandProfile, isLoading: false });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         updateBrandProfile: async (profile) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             const brandProfile = await productService.updateBrandProfile(profile);
             set({ brandProfile, isLoading: false });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         loadTrends: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           const key = "trends";
           if (isCacheValid(get().lastUpdated[key], CACHE_TTL.trends)) {
             return; // Use cached data
@@ -393,6 +490,7 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ 
               error: handleError(error),
               loadingStates: { ...get().loadingStates, trends: "error" },
@@ -402,20 +500,26 @@ export const useProductStore = create<ProductState>()(
         },
 
         suggest: async (platform, topic) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             const result = await productService.suggest(platform, topic);
             set({ suggestions: result.suggestions, isLoading: false, error: null });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         generate: async (platform, prompt, trend, suggestion) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             await productService.generate(platform, prompt, trend, suggestion);
+            if (!request.isCurrent()) return;
             const drafts = await productService.drafts();
             set({ 
               drafts, 
@@ -424,18 +528,22 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         repurpose: async (target) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           const draft = get().currentDraft;
           if (!draft) return;
           
           set({ isLoading: true, error: null });
           try {
             await productService.repurpose(draft.id, target);
+            if (!request.isCurrent()) return;
             const drafts = await productService.drafts();
             const updatedDraft = drafts.find((item) => item.id === draft.id);
             set({ 
@@ -445,12 +553,15 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         loadDrafts: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           const key = "drafts";
           if (isCacheValid(get().lastUpdated[key], CACHE_TTL.drafts)) {
             return; // Use cached data
@@ -467,6 +578,7 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ 
               error: handleError(error),
               loadingStates: { ...get().loadingStates, drafts: "error" },
@@ -476,62 +588,80 @@ export const useProductStore = create<ProductState>()(
         },
 
         updateDraft: async (draftId, data) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             const updated = await productService.updateDraft(draftId, data);
             const drafts = get().drafts.map((draft) => (draft.id === draftId ? updated : draft));
             set({ drafts, currentDraft: updated, isLoading: false });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         uploadDraftMedia: async (draftId, file) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             await productService.uploadDraftMedia(draftId, file);
+            if (!request.isCurrent()) return;
             const drafts = await productService.drafts();
             const updatedDraft = drafts.find((item) => item.id === draftId);
             set({ drafts, currentDraft: updatedDraft ?? get().currentDraft, isLoading: false });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         deleteDraftMedia: async (draftId, mediaId) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             await productService.deleteDraftMedia(draftId, mediaId);
+            if (!request.isCurrent()) return;
             const drafts = await productService.drafts();
             const updatedDraft = drafts.find((item) => item.id === draftId);
             set({ drafts, currentDraft: updatedDraft ?? get().currentDraft, isLoading: false });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         approveDraft: async (draftId) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             const updated = await productService.approveDraft(draftId);
+            if (!request.isCurrent()) return;
             const [drafts, calendar] = await Promise.all([
               productService.drafts(),
               productService.calendar(),
             ]);
             set({ drafts, calendar, currentDraft: updated, isLoading: false });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         publish: async (draftId) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             await productService.publish(draftId);
+            if (!request.isCurrent()) return;
             const [drafts, calendar] = await Promise.all([
               productService.drafts(),
               productService.calendar(),
@@ -543,15 +673,19 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         schedule: async (draftId, scheduledFor) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             await productService.schedule(draftId, scheduledFor);
+            if (!request.isCurrent()) return;
             const [drafts, calendar] = await Promise.all([
               productService.drafts(),
               productService.calendar(),
@@ -563,15 +697,19 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         cancelSchedule: async (draftId) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             await productService.cancelSchedule(draftId);
+            if (!request.isCurrent()) return;
             const [drafts, calendar] = await Promise.all([
               productService.drafts(),
               productService.calendar(),
@@ -583,12 +721,15 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         loadAnalytics: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           const key = "analytics";
           if (isCacheValid(get().lastUpdated[key], CACHE_TTL.analytics)) {
             return; // Use cached data
@@ -604,6 +745,7 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ 
               error: handleError(error),
               loadingStates: { ...get().loadingStates, analytics: "error" },
@@ -613,6 +755,8 @@ export const useProductStore = create<ProductState>()(
         },
 
         loadAnalyticsSummary: async (period_days = 30) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ loadingStates: { ...get().loadingStates, analytics: "loading" } });
           try {
             const analyticsSummary = await productService.analyticsSummary(period_days);
@@ -622,6 +766,7 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ 
               error: handleError(error),
               loadingStates: { ...get().loadingStates, analytics: "error" },
@@ -631,9 +776,12 @@ export const useProductStore = create<ProductState>()(
         },
 
         analyzePost: async (postId) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ isLoading: true, error: null });
           try {
             await productService.analyzePost(postId);
+            if (!request.isCurrent()) return;
             const analytics = await productService.analyticsPosts();
             set({ 
               analytics,
@@ -641,12 +789,15 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ error: handleError(error), isLoading: false });
             throw error;
           }
         },
 
         loadCalendar: async () => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           const key = "calendar";
           if (isCacheValid(get().lastUpdated[key], CACHE_TTL.calendar)) {
             return; // Use cached data
@@ -666,6 +817,7 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ 
               error: handleError(error),
               loadingStates: { ...get().loadingStates, calendar: "error" },
@@ -675,6 +827,8 @@ export const useProductStore = create<ProductState>()(
         },
 
         coachAnalyze: async (content, platform, goal) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ loadingStates: { ...get().loadingStates, coach: "loading" } });
           try {
             const result = await productService.coachAnalyze(content, platform, goal);
@@ -684,6 +838,7 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({ 
               error: handleError(error),
               loadingStates: { ...get().loadingStates, coach: "error" },
@@ -693,6 +848,8 @@ export const useProductStore = create<ProductState>()(
         },
 
         scanRadar: async (niche, platforms, limit) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ loadingStates: { ...get().loadingStates, radar: "loading" } });
           try {
             const result = await productService.radarScan(niche, platforms, limit);
@@ -702,6 +859,7 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({
               error: handleError(error),
               loadingStates: { ...get().loadingStates, radar: "error" },
@@ -712,6 +870,8 @@ export const useProductStore = create<ProductState>()(
         
         // Analytics trends
         loadTrendsData: async (filter) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           const currentFilter = get().trendsFilter;
           const newFilter = { ...currentFilter, ...filter };
           
@@ -732,6 +892,7 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({
               error: handleError(error),
               loadingStates: { ...get().loadingStates, trendsData: "error" },
@@ -741,6 +902,8 @@ export const useProductStore = create<ProductState>()(
         },
         
         loadTrendDetection: async (periodDays = 30) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ loadingStates: { ...get().loadingStates, trendsData: "loading" } });
           try {
             const result = await productService.getTrendsDetect(periodDays);
@@ -750,6 +913,7 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({
               error: handleError(error),
               loadingStates: { ...get().loadingStates, trendsData: "error" },
@@ -759,6 +923,8 @@ export const useProductStore = create<ProductState>()(
         },
         
         loadContentInsights: async (periodDays = 30) => {
+          const request = createProductRequest(storeSet);
+          const set = request.set;
           set({ loadingStates: { ...get().loadingStates, insights: "loading" } });
           try {
             const result = await productService.getInsights(periodDays);
@@ -768,6 +934,7 @@ export const useProductStore = create<ProductState>()(
               error: null,
             });
           } catch (error) {
+            if (!request.isCurrent()) return;
             set({
               error: handleError(error),
               loadingStates: { ...get().loadingStates, insights: "error" },
@@ -784,22 +951,12 @@ export const useProductStore = create<ProductState>()(
         setPredictionsData: (data) => {
           set({ predictionsData: data });
         },
-      }),
-      {
-        name: "iterra-product-store",
-        partialize: (state) => ({
-          // Only persist non-sensitive data
-          linkedin: state.linkedin,
-          socialConnections: state.socialConnections,
-          publishingSettings: state.publishingSettings,
-          brandProfile: state.brandProfile,
-          suggestions: state.suggestions,
-          drafts: state.drafts,
-          currentDraft: state.currentDraft,
-          lastUpdated: state.lastUpdated,
-        }),
-      }
-    ),
+      });
+    },
     { name: "ProductStore" }
   )
 );
+
+registerAuthBoundStateResetter("product-store", () => {
+  useProductStore.getState().reset();
+});

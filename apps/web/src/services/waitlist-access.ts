@@ -1,65 +1,58 @@
-import { ApiError, apiFetch } from "@/services/api";
+import {
+  ApiError,
+  api,
+  type WaitlistMemberStatus,
+  type WaitlistStats,
+} from "@/lib/api";
 
 export type WaitlistEnrollmentResult = {
   position: number | null;
   joined: boolean;
+  alreadyJoined: boolean;
 };
 
-type WaitlistJoinResponse = {
-  position: number;
-  already_joined: boolean;
-};
-
-/** Ensure the signed-in email has a waitlist row (idempotent). */
+/** Ensure the normalized email has a waitlist row. The API operation is idempotent. */
 export async function ensureWaitlistEntry(
   email: string,
   name?: string | null,
+  profession?: string | null,
 ): Promise<WaitlistEnrollmentResult> {
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail.includes("@")) {
-    return { position: null, joined: false };
+    throw new Error("Please enter a valid email address.");
   }
 
-  try {
-    const response = await apiFetch<WaitlistJoinResponse>("/api/v1/waitlist", {
-      method: "POST",
-      body: JSON.stringify({
-        email: normalizedEmail,
-        name: name?.trim() || null,
-      }),
-    });
-    return { position: response.position, joined: true };
-  } catch {
-    // Waitlist enrollment is best-effort; auth should still succeed.
-    return { position: null, joined: false };
-  }
+  const response = await api.waitlist.join({
+    email: normalizedEmail,
+    ...(name?.trim() ? { name: name.trim() } : {}),
+    ...(profession?.trim() ? { profession: profession.trim() } : {}),
+  });
+
+  return {
+    position: response.position,
+    joined: true,
+    alreadyJoined: response.already_joined,
+  };
 }
-
-export type WaitlistMemberStatus = {
-  email: string;
-  joined: boolean;
-  access_approved: boolean;
-  approved_at: string | null;
-  position: number | null;
-  total_joined: number;
-  total_seats: number;
-  remaining_seats: number;
-};
 
 export type WaitlistFetchResult = {
   status: WaitlistMemberStatus | null;
   error: string | null;
 };
 
-/** Fetch queue position for the signed-in user. */
+export function fetchWaitlistStats(): Promise<WaitlistStats> {
+  return api.waitlist.stats();
+}
+
+/** Fetch queue position for the signed-in user; failures remain explicit and fail closed. */
 export async function fetchWaitlistMemberStatus(): Promise<WaitlistFetchResult> {
   try {
-    const status = await apiFetch<WaitlistMemberStatus>("/api/v1/waitlist/me");
+    const status = await api.waitlist.myStatus();
     return { status, error: null };
-  } catch (err) {
+  } catch (error) {
     const message =
-      err instanceof ApiError
-        ? err.message
+      error instanceof ApiError
+        ? error.message
         : "Could not load your queue position. Is the API running?";
     return { status: null, error: message };
   }

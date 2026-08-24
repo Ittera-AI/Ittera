@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import {
+  AUTH_BOUND_STATE_RESET_EVENT,
+  resetAuthBoundState,
+  type AuthBoundStateScope,
+} from "@/lib/auth-bound-state";
+import { apiFetch } from "@/lib/api";
 
 interface Workspace {
   id: string;
@@ -35,75 +42,79 @@ interface Organization {
   };
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function staleWorkspaceRequest() {
+  const error = new Error("Workspace request crossed an auth or workspace boundary");
+  error.name = "AbortError";
+  return error;
+}
+
 export function useWorkspace() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestGenerationRef = useRef(0);
 
-  // Load my workspaces
   const loadWorkspaces = useCallback(async () => {
+    const requestGeneration = requestGenerationRef.current;
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/v1/workspaces/my", {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const data = await apiFetch<Workspace[]>("/api/v1/workspaces/my");
+      if (requestGeneration !== requestGenerationRef.current) return;
 
-      if (!response.ok) {
-        throw new Error("Failed to load workspaces");
-      }
-
-      const data = await response.json();
       setWorkspaces(data);
-
-      // Set first active workspace as current if none selected
-      if (!currentWorkspace && data.length > 0) {
-        const active = data.find((w: Workspace) => w.is_active) || data[0];
-        setCurrentWorkspace(active);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load workspaces");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentWorkspace]);
-
-  // Load my organizations
-  const loadOrganizations = useCallback(async () => {
-    try {
-      const response = await fetch("/api/v1/organizations/my", {
-        headers: {
-          "Content-Type": "application/json",
-        },
+      setCurrentWorkspace((selected) => {
+        if (selected) {
+          const stillAuthorized = data.find((workspace) => workspace.id === selected.id);
+          if (stillAuthorized) return stillAuthorized;
+        }
+        return data.find((workspace) => workspace.is_active) ?? data[0] ?? null;
       });
+    } catch (loadError) {
+      if (requestGeneration !== requestGenerationRef.current) return;
 
-      if (!response.ok) {
-        throw new Error("Failed to load organizations");
-      }
-
-      const data = await response.json();
-      setOrganizations(data);
-    } catch (err) {
-      console.error("Failed to load organizations:", err);
+      setWorkspaces([]);
+      setCurrentWorkspace(null);
+      setError(errorMessage(loadError, "Failed to load workspaces"));
+    } finally {
+      if (requestGeneration === requestGenerationRef.current) setIsLoading(false);
     }
   }, []);
 
-  // Switch workspace
-  const switchWorkspace = useCallback((workspaceId: string) => {
-    const workspace = workspaces.find((w) => w.id === workspaceId);
-    if (workspace) {
-      setCurrentWorkspace(workspace);
-      // Store in localStorage for persistence
-      localStorage.setItem("currentWorkspaceId", workspaceId);
-    }
-  }, [workspaces]);
+  const loadOrganizations = useCallback(async () => {
+    const requestGeneration = requestGenerationRef.current;
 
-  // Create workspace
+    try {
+      const data = await apiFetch<Organization[]>("/api/v1/organizations/my");
+      if (requestGeneration !== requestGenerationRef.current) return;
+      setOrganizations(data);
+    } catch (loadError) {
+      if (requestGeneration !== requestGenerationRef.current) return;
+      setOrganizations([]);
+      setError((current) => current ?? errorMessage(loadError, "Failed to load organizations"));
+    }
+  }, []);
+
+  const switchWorkspace = useCallback(
+    (workspaceId: string) => {
+      const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
+      if (!workspace || workspace.id === currentWorkspace?.id) return;
+
+      // B1 containment: invalidate every user/workspace-derived cache before exposing
+      // the newly selected workspace. Shared workspace tenancy is implemented in B2.
+      resetAuthBoundState("workspace");
+      setCurrentWorkspace(workspace);
+    },
+    [currentWorkspace?.id, workspaces],
+  );
+
   const createWorkspace = useCallback(
     async (data: {
       organization_id: string;
@@ -112,94 +123,103 @@ export function useWorkspace() {
       client_name?: string;
       client_email?: string;
     }) => {
+      const requestGeneration = requestGenerationRef.current;
       setIsLoading(true);
       setError(null);
 
       try {
-        const response = await fetch(
-          `/api/v1/organizations/${data.organization_id}/workspaces`,
+        const workspace = await apiFetch<Workspace>(
+          `/api/v1/organizations/${encodeURIComponent(data.organization_id)}/workspaces`,
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
             body: JSON.stringify(data),
-          }
+          },
         );
-
-        if (!response.ok) {
-          throw new Error("Failed to create workspace");
+        if (requestGeneration !== requestGenerationRef.current) {
+          throw staleWorkspaceRequest();
         }
 
-        const workspace = await response.json();
         await loadWorkspaces();
+        if (requestGeneration !== requestGenerationRef.current) {
+          throw staleWorkspaceRequest();
+        }
         return workspace;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to create workspace");
-        throw err;
+      } catch (createError) {
+        if (requestGeneration === requestGenerationRef.current) {
+          setError(errorMessage(createError, "Failed to create workspace"));
+        }
+        throw createError;
       } finally {
-        setIsLoading(false);
+        if (requestGeneration === requestGenerationRef.current) setIsLoading(false);
       }
     },
-    [loadWorkspaces]
+    [loadWorkspaces],
   );
 
-  // Create organization
   const createOrganization = useCallback(
     async (data: { name: string; slug: string; plan_type?: string }) => {
+      const requestGeneration = requestGenerationRef.current;
       setIsLoading(true);
       setError(null);
 
       try {
-        const response = await fetch("/api/v1/organizations", {
+        const organization = await apiFetch<Organization>("/api/v1/organizations", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify(data),
         });
-
-        if (!response.ok) {
-          throw new Error("Failed to create organization");
+        if (requestGeneration !== requestGenerationRef.current) {
+          throw staleWorkspaceRequest();
         }
 
-        const org = await response.json();
         await loadOrganizations();
-        return org;
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to create organization"
-        );
-        throw err;
+        if (requestGeneration !== requestGenerationRef.current) {
+          throw staleWorkspaceRequest();
+        }
+        return organization;
+      } catch (createError) {
+        if (requestGeneration === requestGenerationRef.current) {
+          setError(errorMessage(createError, "Failed to create organization"));
+        }
+        throw createError;
       } finally {
-        setIsLoading(false);
+        if (requestGeneration === requestGenerationRef.current) setIsLoading(false);
       }
     },
-    [loadOrganizations]
+    [loadOrganizations],
   );
 
-  // Get workspace context for API calls
   const getWorkspaceHeaders = useCallback(() => {
     if (!currentWorkspace) return {};
-    return {
-      "X-Workspace-ID": currentWorkspace.id,
-    };
+    return { "X-Workspace-ID": currentWorkspace.id };
   }, [currentWorkspace]);
 
-  // Initial load
   useEffect(() => {
-    loadWorkspaces();
-    loadOrganizations();
+    const handleReset = (event: Event) => {
+      const scope = (event as CustomEvent<AuthBoundStateScope>).detail;
+      requestGenerationRef.current += 1;
+      setIsLoading(false);
+      setError(null);
 
-    // Restore from localStorage
-    const savedId = localStorage.getItem("currentWorkspaceId");
-    if (savedId) {
-      const saved = workspaces.find((w) => w.id === savedId);
-      if (saved) {
-        setCurrentWorkspace(saved);
+      if (scope === "auth") {
+        setWorkspaces([]);
+        setOrganizations([]);
+        setCurrentWorkspace(null);
       }
-    }
-  }, []);
+    };
+
+    window.addEventListener(AUTH_BOUND_STATE_RESET_EVENT, handleReset);
+
+    // Remove the legacy global selector. B1 keeps selection in memory until B2 can
+    // scope it to a verified principal/workspace contract.
+    localStorage.removeItem("currentWorkspaceId");
+    void loadWorkspaces();
+    void loadOrganizations();
+
+    return () => {
+      requestGenerationRef.current += 1;
+      window.removeEventListener(AUTH_BOUND_STATE_RESET_EVENT, handleReset);
+    };
+  }, [loadOrganizations, loadWorkspaces]);
 
   return {
     workspaces,
