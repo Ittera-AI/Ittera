@@ -28,7 +28,6 @@ established pattern in test_post_bridge_properties.py.
 
 import uuid
 
-import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 

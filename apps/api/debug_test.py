@@ -1,4 +1,7 @@
 """Debug the failing sync progress tests."""
+# ruff: noqa: E402
+
+import os
 import sys
 from pathlib import Path
 
@@ -14,7 +17,6 @@ from app.models.social_connection import SocialConnection
 from app.models.user import User
 from app.services.linkedin_service import (
     SYNC_STATUS_COMPLETED,
-    SYNC_STATUS_FAILED,
     _get_sync_progress,
     _update_sync_progress,
 )
@@ -74,8 +76,7 @@ else:
 
 db.close()
 
-import os
 try:
     os.unlink("debug_test.db")
-except:
+except OSError:
     pass

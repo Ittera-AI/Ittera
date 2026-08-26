@@ -28,7 +28,10 @@ function dispatchOAuthMessage(
 
 function startConnection(platform: OAuthPlatform, popup = createPopup()) {
   const openWindow = vi.fn(() => popup);
-  const createSession = vi.fn(async () => ({ connect_token: "one-time-connect-token" }));
+  const createSession = vi.fn(async () => ({
+    schema_version: "connect-session.v1" as const,
+    connect_token: "one-time-connect-token",
+  }));
   const buildStartUrl = vi.fn(
     (selectedPlatform: string, token: string) =>
       `https://api.example.test/api/v1/connect/${selectedPlatform}/start?ct=${encodeURIComponent(token)}`,

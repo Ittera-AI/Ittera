@@ -1,10 +1,10 @@
-from typing import List, Dict, Any
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.dependencies.db import get_db
 from app.models.user import User
-from app.models.persona import PersonaProfile, PersonaSource, PersonaDocument, PersonaInsight
+from app.models.persona import PersonaProfile, PersonaSource, PersonaDocument
 from app.schemas.persona import PersonaProfileResponse, PersonaProfileUpdate, PersonaSourceCreate, PersonaSourceResponse
 from app.dependencies.auth import get_current_user
 from app.services.scraper import ScraperService

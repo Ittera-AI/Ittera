@@ -943,7 +943,7 @@ def _mirror_media_to_drive_if_connected(db: Session, user: User, media: ContentD
         .filter(
             SocialConnection.user_id == user.id,
             SocialConnection.platform == "google_drive",
-            SocialConnection.is_active == True,
+            SocialConnection.is_active.is_(True),
         )
         .first()
     )
@@ -1034,7 +1034,7 @@ def _save_draft_to_drive_if_connected(
         .filter(
             SocialConnection.user_id == user.id,
             SocialConnection.platform == "google_drive",
-            SocialConnection.is_active == True,
+            SocialConnection.is_active.is_(True),
         )
         .first()
     )
@@ -1119,7 +1119,7 @@ def _load_draft_from_drive(db: Session, user: User, draft: ContentDraft) -> str 
         .filter(
             SocialConnection.user_id == user.id,
             SocialConnection.platform == "google_drive",
-            SocialConnection.is_active == True,
+            SocialConnection.is_active.is_(True),
         )
         .first()
     )

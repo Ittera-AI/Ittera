@@ -10,7 +10,10 @@ one platform and distills a compact, durable narrative + structured
 recommendations + candidate facts.
 """
 
-from iterra_ai.insight.schemas import InsightSynthesisInput
+from collections.abc import Sequence
+from typing import Any
+
+from iterra_ai.insight.schemas import InsightSynthesisInput, PostPerformanceRecord
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # V1: Cross-Post Insight Synthesis (Production)
@@ -52,7 +55,7 @@ def build_prior_block(prior_summary: str | None) -> str:
     return f"PRIOR LEARNINGS (refine, do not discard):\n{prior_summary}\n"
 
 
-def _format_record(index: int, record) -> str:
+def _format_record(index: int, record: PostPerformanceRecord) -> str:
     """Format a single PostPerformanceRecord into a compact, scannable line."""
     parts = [f"#{index} [ER {record.engagement_rate:.2%}]"]
 
@@ -88,7 +91,7 @@ def _format_record(index: int, record) -> str:
     return f"{header}\nCONTENT: {content}"
 
 
-def build_records_block(records) -> str:
+def build_records_block(records: Sequence[PostPerformanceRecord]) -> str:
     """Build the ranked posts block, highest engagement first."""
     if not records:
         return "(no posts available)"
@@ -100,8 +103,8 @@ def build_records_block(records) -> str:
 
 
 def build_signals_block(
-    predicted_signals: dict | None,
-    competitive_signals: dict | None,
+    predicted_signals: dict[str, Any] | None,
+    competitive_signals: dict[str, Any] | None,
 ) -> str:
     """Build the optional off-loop signals block (soft context only)."""
     parts = []

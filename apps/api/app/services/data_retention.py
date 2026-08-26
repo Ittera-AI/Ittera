@@ -13,7 +13,6 @@ never touching user's Google Drive data.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from sqlalchemy.orm import Session
 

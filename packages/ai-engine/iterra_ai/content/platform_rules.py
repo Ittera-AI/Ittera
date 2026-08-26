@@ -1,4 +1,18 @@
-PLATFORM_RULES = {
+from typing import TypedDict
+
+
+class PlatformRules(TypedDict):
+    max_chars: int
+    target_chars: int
+    hook_style: str
+    cta_style: str
+    hashtag_count_min: int
+    hashtag_count_max: int
+    line_break_style: str
+    emoji: str
+
+
+PLATFORM_RULES: dict[str, PlatformRules] = {
     "linkedin": {
         "max_chars": 3000,
         "target_chars": 1200,
@@ -31,10 +45,11 @@ PLATFORM_RULES = {
     },
 }
 
-def get_rules(platform: str) -> dict:
+def get_rules(platform: str) -> PlatformRules:
     return PLATFORM_RULES.get(platform, PLATFORM_RULES["linkedin"])
 
-def format_content(content: str, platform: str, ctx=None) -> str:
+
+def format_content(content: str, platform: str, ctx: object | None = None) -> str:
     """Post-processes LLM output according to platform rules."""
     rules = get_rules(platform)
     max_chars = rules["max_chars"]

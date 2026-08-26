@@ -1,9 +1,11 @@
 """Pydantic schemas for competitive intelligence AI."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+JsonObject = dict[str, Any]
 
 
 class CompetitorProfileInput(BaseModel):
@@ -15,7 +17,7 @@ class CompetitorProfileInput(BaseModel):
     handle: str
     
     # Scraped/cached data about competitor
-    recent_posts: list[dict] = Field(
+    recent_posts: list[JsonObject] = Field(
         default_factory=list,
         description="Recent posts from competitor",
     )
@@ -33,7 +35,7 @@ class ContentGapAnalysisInput(BaseModel):
     author_content_pillars: list[str] = Field(default_factory=list)
     author_recent_topics: list[str] = Field(default_factory=list)
     
-    competitor_posts: list[dict] = Field(default_factory=list)
+    competitor_posts: list[JsonObject] = Field(default_factory=list)
     competitor_content_themes: list[str] = Field(default_factory=list)
     
     industry_trends: list[str] = Field(default_factory=list)
@@ -43,8 +45,8 @@ class TrendBenchmarkInput(BaseModel):
     """Input for trend benchmarking vs competitors."""
     
     trend_topic: str
-    author_performance: dict | None = None
-    competitor_performances: list[dict] = Field(default_factory=list)
+    author_performance: JsonObject | None = None
+    competitor_performances: list[JsonObject] = Field(default_factory=list)
     
     time_period: str = Field(default="30d")
 
@@ -57,11 +59,11 @@ class CompetitorStrategyOutput(BaseModel):
     analysis_type: Literal["strategy", "content_gaps", "trend_benchmark"] = "strategy"
     
     # Strategic findings
-    content_strategy: dict = Field(
+    content_strategy: JsonObject = Field(
         default_factory=dict,
         description="Identified content strategy patterns",
     )
-    posting_patterns: dict = Field(
+    posting_patterns: JsonObject = Field(
         default_factory=dict,
         description="When and how often they post",
     )
@@ -71,7 +73,7 @@ class CompetitorStrategyOutput(BaseModel):
     )
     
     # Content analysis
-    top_performing_themes: list[dict] = Field(
+    top_performing_themes: list[JsonObject] = Field(
         default_factory=list,
         description="Themes that perform well for competitor",
     )
@@ -95,7 +97,7 @@ class CompetitorStrategyOutput(BaseModel):
     )
     
     # Opportunities
-    opportunities: list[dict] = Field(
+    opportunities: list[JsonObject] = Field(
         default_factory=list,
         description="Identified opportunities",
     )
@@ -128,33 +130,33 @@ class ContentGapOutput(BaseModel):
     analysis_type: Literal["content_gaps"] = "content_gaps"
     
     # Gap identification
-    covered_topics: list[dict] = Field(
+    covered_topics: list[JsonObject] = Field(
         default_factory=list,
         description="Topics you cover well",
     )
-    gap_topics: list[dict] = Field(
+    gap_topics: list[JsonObject] = Field(
         default_factory=list,
         description="Topics competitors cover that you don't",
     )
-    underserved_topics: list[dict] = Field(
+    underserved_topics: list[JsonObject] = Field(
         default_factory=list,
         description="Topics with low competition",
     )
     
     # Format gaps
-    format_gaps: list[dict] = Field(
+    format_gaps: list[JsonObject] = Field(
         default_factory=list,
         description="Content formats you underutilize",
     )
     
     # Audience gaps
-    audience_segment_gaps: list[dict] = Field(
+    audience_segment_gaps: list[JsonObject] = Field(
         default_factory=list,
         description="Audience segments not addressed",
     )
     
     # Priority recommendations
-    high_impact_opportunities: list[dict] = Field(
+    high_impact_opportunities: list[JsonObject] = Field(
         default_factory=list,
         description="Highest priority gaps to fill",
     )
@@ -164,7 +166,7 @@ class ContentGapOutput(BaseModel):
     )
     
     # Content calendar suggestions
-    suggested_content_calendar: list[dict] = Field(
+    suggested_content_calendar: list[JsonObject] = Field(
         default_factory=list,
         description="Suggested content based on gaps",
     )
@@ -183,11 +185,11 @@ class TrendBenchmarkOutput(BaseModel):
     trend_topic: str
     
     # Performance comparison
-    your_performance: dict = Field(
+    your_performance: JsonObject = Field(
         default_factory=dict,
         description="Your performance on this trend",
     )
-    competitor_performances: list[dict] = Field(
+    competitor_performances: list[JsonObject] = Field(
         default_factory=list,
         description="Competitor performances",
     )
@@ -210,7 +212,9 @@ class TrendBenchmarkOutput(BaseModel):
     )
     
     # Timing analysis
-    trend_lifecycle: Literal["emerging", "peak", "saturated", "declining"] = Field(
+    trend_lifecycle: Literal[
+        "emerging", "peak", "saturated", "declining", "unknown"
+    ] = Field(
         default="emerging",
     )
     window_of_opportunity: str | None = Field(

@@ -9,11 +9,15 @@
  *   const drafts = await api.content.listDrafts();
  */
 
+import type { components } from "@iterra/shared-types";
+
 import {
   registerAuthBoundStateResetter,
   resetAuthBoundState,
 } from "@/lib/auth-bound-state";
 import { clearStoredSupabaseSessions, supabase } from "@/lib/supabase";
+
+type SharedSchemas = components["schemas"];
 
 function resolveApiBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_API_URL;
@@ -256,32 +260,11 @@ export interface ApiUser {
   created_at: string;
 }
 
-export interface WaitlistStats {
-  total_joined: number;
-  total_seats: number;
-  remaining_seats: number;
-  recent_joiners: string[];
-}
-
-export interface WaitlistJoinResult {
-  position: number;
-  already_joined: boolean;
-}
-
-export interface WaitlistMemberStatus extends WaitlistStats {
-  email: string;
-  joined: boolean;
-  access_approved: boolean;
-  approved_at: string | null;
-  position: number | null;
-}
-
-export interface SocialConnectionStatus {
-  platform: string;
-  username: string;
-  connected_at: string;
-  last_synced: string | null;
-}
+export type WaitlistStats = SharedSchemas["WaitlistStatsResponse"];
+export type WaitlistJoinRequest = SharedSchemas["WaitlistRequest"];
+export type WaitlistJoinResult = SharedSchemas["WaitlistResponse"];
+export type WaitlistMemberStatus = SharedSchemas["WaitlistMemberStatusResponse"];
+export type SocialConnectionStatus = SharedSchemas["PlatformStatusResponse"];
 
 export interface PersonaSource {
   id: string;
@@ -432,14 +415,14 @@ const auth = {
 const waitlist = {
   stats: ()                                   => get<WaitlistStats>("/api/v1/waitlist"),
   myStatus: ()                                => get<WaitlistMemberStatus>("/api/v1/waitlist/me"),
-  join: (payload: { email: string; name?: string; profession?: string }) =>
+  join: (payload: WaitlistJoinRequest) =>
     post<WaitlistJoinResult>("/api/v1/waitlist", payload),
 };
 
 const connect = {
   status: ()                                  => get<SocialConnectionStatus[]>("/api/v1/connect/status"),
   // Mint a single-use connect token (Bearer auth) so the JWT never enters the start URL.
-  createSession: ()                           => post<{ connect_token: string }>("/api/v1/connect/session", {}),
+  createSession: ()                           => post<SharedSchemas["ConnectSessionResponseV1"]>("/api/v1/connect/session", {}),
   // Build the OAuth start URL from a single-use connect token (not the raw JWT).
   startUrl: (platform: string, connectToken: string) =>
     `${BASE_URL}/api/v1/connect/${platform}/start?ct=${encodeURIComponent(connectToken)}`,
@@ -508,6 +491,13 @@ const context = {
     ),
 };
 
+const workspace = {
+  authorizationContext: (workspaceId: string) =>
+    get<SharedSchemas["AuthorizationContextV1"]>(
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/authorization-context`,
+    ),
+};
+
 const trends = {
   list: ()                                   => get("/api/v1/trends"),
   refresh: ()                                => post("/api/v1/trends/refresh", {}),
@@ -526,5 +516,6 @@ export const api = {
   brandProfile,
   analytics,
   context,
+  workspace,
   trends,
 };

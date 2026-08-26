@@ -2,9 +2,10 @@
 
 import json
 import os
+
 from iterra_ai.core.base_engine import BaseEngine
+from iterra_ai.prompts.repurpose import REPURPOSE_PROMPT, REPURPOSE_PROMPT_WITH_LIMIT, SYSTEM_PROMPT
 from iterra_ai.repurpose.schemas import RepurposedItem, RepurposeInput, RepurposeOutput
-from iterra_ai.prompts.repurpose import SYSTEM_PROMPT, REPURPOSE_PROMPT, REPURPOSE_PROMPT_WITH_LIMIT
 
 
 class RepurposeEngine(BaseEngine[RepurposeInput, RepurposeOutput]):
@@ -52,7 +53,7 @@ class RepurposeEngine(BaseEngine[RepurposeInput, RepurposeOutput]):
                     )
                 )
             return RepurposeOutput(repurposed=items)
-        except Exception as e:
+        except Exception:
             # Fallback if parsing fails
             return self._mock_repurpose(input)
 
@@ -65,12 +66,20 @@ class RepurposeEngine(BaseEngine[RepurposeInput, RepurposeOutput]):
                 fmt = "caption"
             elif platform == "twitter" and max_chars <= 280:
                 # Respect character limit in mock output
-                truncated = input.original_content[:max_chars - 3] + "..." if len(input.original_content) > max_chars else input.original_content
+                truncated = (
+                    input.original_content[:max_chars - 3] + "..."
+                    if len(input.original_content) > max_chars
+                    else input.original_content
+                )
                 content = truncated[:max_chars]
                 fmt = "tweet"
             else:
                 # Premium Twitter or other — fit within limit
-                content = input.original_content[:max_chars] if len(input.original_content) > max_chars else input.original_content
+                content = (
+                    input.original_content[:max_chars]
+                    if len(input.original_content) > max_chars
+                    else input.original_content
+                )
                 fmt = "post"
             items.append(RepurposedItem(platform=platform, content=content, format=fmt))
         return RepurposeOutput(repurposed=items)

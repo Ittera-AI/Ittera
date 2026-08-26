@@ -320,7 +320,7 @@ def _save_brand_analysis_to_drive_if_connected(
         .filter(
             SocialConnection.user_id == user.id,
             SocialConnection.platform == "google_drive",
-            SocialConnection.is_active == True,
+            SocialConnection.is_active.is_(True),
         )
         .first()
     )

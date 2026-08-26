@@ -30,7 +30,11 @@ jobs:
 
       - name: Install shared-types dependencies
         working-directory: packages/shared-types
-        run: npm install
+        run: npm ci
+
+      - name: Compile generated shared types
+        working-directory: packages/shared-types
+        run: npx tsc --noEmit
 
       - name: Install web dependencies
         working-directory: apps/web

@@ -24,7 +24,7 @@ import logging
 import os
 import re
 from collections import Counter, defaultdict
-from typing import Any
+from typing import Any, cast
 
 from iterra_ai.core.base_engine import BaseEngine
 from iterra_ai.insight.schemas import (
@@ -71,7 +71,7 @@ class InsightSynthesisEngine(BaseEngine[InsightSynthesisInput, InsightSynthesisO
 
     def __init__(self, model: str | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self.model = model or os.getenv("AIML_MODEL", self.DEFAULT_MODEL)
+        self.model: str = model or os.getenv("AIML_MODEL") or self.DEFAULT_MODEL
 
     def generate(self, input: InsightSynthesisInput) -> InsightSynthesisOutput:
         """
@@ -117,7 +117,7 @@ class InsightSynthesisEngine(BaseEngine[InsightSynthesisInput, InsightSynthesisO
         response = raw_response.strip()
 
         try:
-            return json.loads(response)
+            return cast(dict[str, Any], json.loads(response))
         except json.JSONDecodeError:
             pass
 
@@ -130,14 +130,14 @@ class InsightSynthesisEngine(BaseEngine[InsightSynthesisInput, InsightSynthesisO
             match = re.search(pattern, response, re.DOTALL)
             if match:
                 try:
-                    return json.loads(match.group(1).strip())
+                    return cast(dict[str, Any], json.loads(match.group(1).strip()))
                 except json.JSONDecodeError:
                     continue
 
         json_match = re.search(r"(\{.*\})", response, re.DOTALL)
         if json_match:
             try:
-                return json.loads(json_match.group(1))
+                return cast(dict[str, Any], json.loads(json_match.group(1)))
             except json.JSONDecodeError:
                 pass
 
@@ -197,7 +197,7 @@ class InsightSynthesisEngine(BaseEngine[InsightSynthesisInput, InsightSynthesisO
             return []
         if isinstance(value, str):
             return [value] if value.strip() else []
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, list | tuple):
             return [str(v) for v in value if v is not None and str(v).strip()]
         return [str(value)]
 
@@ -542,7 +542,8 @@ class InsightSynthesisEngine(BaseEngine[InsightSynthesisInput, InsightSynthesisO
         best_hours = time_patterns.get("best_performing_hours") or []
         if best_hours:
             parts.append(
-                f", and posting around {best_hours[0]:02d}:00 UTC correlates with stronger engagement"
+                f", and posting around {best_hours[0]:02d}:00 UTC "
+                "correlates with stronger engagement"
             )
         parts.append(".")
         return "".join(parts)

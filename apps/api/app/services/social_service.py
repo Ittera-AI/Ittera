@@ -21,7 +21,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.core.security import decrypt_value, encrypt_value
+from app.core.security import encrypt_value
 from app.models.social_connection import SocialConnection
 from app.schemas.social import PlatformStatus, SocialStatusResponse
 from app.services.storage_service import StorageService

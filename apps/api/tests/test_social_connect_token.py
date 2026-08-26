@@ -40,3 +40,23 @@ def test_twitter_start_requires_a_token(client, monkeypatch):
 
     assert res.status_code == 200
     assert "No connect token provided" in res.text
+
+
+def test_create_connect_session_produces_versioned_contract(client, monkeypatch):
+    authenticated_user = type("AuthenticatedUser", (), {"id": "user-123"})()
+    client.app.dependency_overrides[so.get_current_user] = lambda: authenticated_user
+    monkeypatch.setattr(so, "mint_connect_token", lambda user_id: f"ct-for-{user_id}")
+
+    response = client.post("/api/v1/connect/session", json={})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "schema_version": "connect-session.v1",
+        "connect_token": "ct-for-user-123",
+    }
+    response_schema = client.app.openapi()["paths"]["/api/v1/connect/session"]["post"][
+        "responses"
+    ]["200"]["content"]["application/json"]["schema"]
+    assert response_schema == {
+        "$ref": "#/components/schemas/ConnectSessionResponseV1"
+    }

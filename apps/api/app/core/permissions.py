@@ -4,9 +4,6 @@ Defines permission constants, role mappings, and helper functions
 for checking access rights across the application.
 """
 
-from enum import Enum
-
-
 class Permission:
     """
     Permission constants for role-based access control.

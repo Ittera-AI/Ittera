@@ -51,31 +51,31 @@ from iterra_ai.predictions.predictor_engine import (
     PredictorEngine,
     get_predictor_engine,
 )
-from iterra_ai.predictions.viral_engine import (
-    ViralPredictionEngine,
-    get_viral_engine,
+from iterra_ai.predictions.schemas import (
+    ConfidenceInterval,
+    # Input schemas
+    ContentInput,
+    # Output schemas
+    ContentPredictionOutput,
+    FeatureImportance,
+    PredictionConfidence,
+    # Metric schemas
+    PredictionMetrics,
+    TimeSlotScore,
+    TimingInput,
+    TimingOutput,
+    TimingPattern,
+    ViralPattern,
+    ViralPotentialOutput,
+    ViralScoreInput,
 )
 from iterra_ai.predictions.timing_engine import (
     TimingPredictionEngine,
     get_timing_engine,
 )
-from iterra_ai.predictions.schemas import (
-    # Input schemas
-    ContentInput,
-    ViralScoreInput,
-    TimingInput,
-    # Output schemas
-    ContentPredictionOutput,
-    ViralPotentialOutput,
-    TimingOutput,
-    ViralPattern,
-    TimeSlotScore,
-    TimingPattern,
-    # Metric schemas
-    PredictionMetrics,
-    ConfidenceInterval,
-    PredictionConfidence,
-    FeatureImportance,
+from iterra_ai.predictions.viral_engine import (
+    ViralPredictionEngine,
+    get_viral_engine,
 )
 
 __all__ = [

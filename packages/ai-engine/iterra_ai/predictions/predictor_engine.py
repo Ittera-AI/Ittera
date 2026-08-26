@@ -18,22 +18,27 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, TypedDict, cast
 
 from openai import OpenAI
 
+from iterra_ai.core.cost_tracker import CostTracker
+from iterra_ai.predictions.prompts import build_predictor_prompt
 from iterra_ai.predictions.schemas import (
+    ConfidenceInterval,
     ContentInput,
     ContentPredictionOutput,
-    ConfidenceInterval,
     FeatureImportance,
     PredictionConfidence,
     PredictionMetrics,
 )
-from iterra_ai.predictions.prompts import build_predictor_prompt
-from iterra_ai.core.cost_tracker import CostTracker
 
 logger = logging.getLogger(__name__)
+
+
+class _TokenUsage(TypedDict):
+    input_tokens: int
+    output_tokens: int
 
 
 class PredictorEngine:
@@ -59,11 +64,11 @@ class PredictorEngine:
             api_key=api_key or os.getenv("AIML_API_KEY"),
             base_url=os.getenv("AIML_BASE_URL", "https://api.aimlapi.com/v1"),
         )
-        self.model = model or os.getenv("AIML_MODEL", "gpt-4o-mini")
+        self.model: str = model or os.getenv("AIML_MODEL") or "gpt-4o-mini"
         self.max_tokens = 4096
         self.cost_tracker = CostTracker()
         
-    def _compute_content_hash(self, content: str, context: dict) -> str:
+    def _compute_content_hash(self, content: str, context: dict[str, Any]) -> str:
         """
         Compute hash of input for caching.
         
@@ -85,7 +90,9 @@ class PredictorEngine:
         hash_str = json.dumps(hash_input, sort_keys=True)
         return hashlib.sha256(hash_str.encode()).hexdigest()[:32]
     
-    def _call_llm(self, system_prompt: str, user_prompt: str) -> tuple[str, dict]:
+    def _call_llm(
+        self, system_prompt: str, user_prompt: str
+    ) -> tuple[str, _TokenUsage]:
         """
         Call the configured OpenAI-compatible API with prompts.
         
@@ -101,15 +108,16 @@ class PredictorEngine:
                     {"role": "user", "content": user_prompt},
                 ],
             )
-            content = response.choices[0].message.content if response.choices else ""
-            usage = {
+            raw_content = response.choices[0].message.content if response.choices else ""
+            content = raw_content if isinstance(raw_content, str) else ""
+            usage: _TokenUsage = {
                 "input_tokens": getattr(response.usage, "prompt_tokens", 0),
                 "output_tokens": getattr(response.usage, "completion_tokens", 0),
             }
             self.cost_tracker.log(
                 "predictor", usage["input_tokens"], usage["output_tokens"]
             )
-            return content or "", usage
+            return content, usage
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
             raise
@@ -125,7 +133,7 @@ class PredictorEngine:
         """
         # Try direct JSON parsing
         try:
-            return json.loads(text)
+            return cast(dict[str, Any], json.loads(text))
         except json.JSONDecodeError:
             pass
         
@@ -134,7 +142,7 @@ class PredictorEngine:
         json_match = re.search(r'```(?:json)?\s*\n?([\s\S]*?)```', text)
         if json_match:
             try:
-                return json.loads(json_match.group(1))
+                return cast(dict[str, Any], json.loads(json_match.group(1)))
             except json.JSONDecodeError:
                 pass
         
@@ -143,13 +151,15 @@ class PredictorEngine:
         brace_match = re.search(r'\{[\s\S]*\}', text)
         if brace_match:
             try:
-                return json.loads(brace_match.group(0))
+                return cast(dict[str, Any], json.loads(brace_match.group(0)))
             except json.JSONDecodeError:
                 pass
         
         raise ValueError(f"Could not extract JSON from response: {text[:200]}")
     
-    def _parse_prediction_response(self, response: dict) -> ContentPredictionOutput:
+    def _parse_prediction_response(
+        self, response: dict[str, Any]
+    ) -> ContentPredictionOutput:
         """
         Parse LLM response into typed prediction output.
         """
@@ -200,7 +210,10 @@ class PredictorEngine:
         ]
         
         return ContentPredictionOutput(
-            prediction_id=f"pred_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{self._compute_content_hash('', {})[:8]}",
+            prediction_id=(
+                f"pred_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_"
+                f"{self._compute_content_hash('', {})[:8]}"
+            ),
             content_hash="",  # Will be set by caller
             metrics=metrics,
             confidence=confidence,
@@ -270,8 +283,9 @@ class PredictorEngine:
         # Add metadata
         output.content_hash = content_hash
         output.processing_time_ms = int((time.time() - start_time) * 1000)
-        output.tokens_used = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
-        output.estimated_cost_usd = (output.tokens_used / 1000) * 0.003  # Approximate cost
+        tokens_used = usage["input_tokens"] + usage["output_tokens"]
+        output.tokens_used = tokens_used
+        output.estimated_cost_usd = (tokens_used / 1000) * 0.003  # Approximate cost
         
         logger.info(
             f"Prediction generated for {input_data.platform} content: "
@@ -282,7 +296,9 @@ class PredictorEngine:
         
         return output
     
-    def predict_batch(self, inputs: list[ContentInput]) -> list[ContentPredictionOutput]:
+    def predict_batch(
+        self, inputs: list[ContentInput]
+    ) -> list[ContentPredictionOutput | None]:
         """
         Generate predictions for multiple content items.
         
@@ -293,9 +309,9 @@ class PredictorEngine:
             inputs: List of ContentInput objects
             
         Returns:
-            List of ContentPredictionOutput objects
+            One result per input; failed items are represented by None
         """
-        results = []
+        results: list[ContentPredictionOutput | None] = []
         for inp in inputs:
             try:
                 result = self.predict(inp)

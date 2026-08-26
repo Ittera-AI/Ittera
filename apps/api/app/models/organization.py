@@ -1,17 +1,12 @@
 """Organization and workspace models for agency multi-client support."""
 
 import uuid
-from datetime import datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text, Numeric
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
 from app.db.datetime_helpers import utc_now
-
-if TYPE_CHECKING:
-    from app.models.user import User
 
 
 class Organization(Base):

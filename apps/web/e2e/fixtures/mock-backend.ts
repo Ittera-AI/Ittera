@@ -1,5 +1,13 @@
 import type { Page } from "@playwright/test";
 
+import {
+  AUTHORIZATION_CONTEXT_FIXTURE,
+  CONNECT_SESSION_FIXTURE,
+  createWaitlistMemberStatusFixture,
+  EMPTY_PLATFORM_STATUS_FIXTURE,
+  WAITLIST_STATS_FIXTURE,
+} from "../../src/test/fixtures/shared-contracts";
+
 export const MOCK_SUPABASE_ORIGIN = "https://supabase.e2e.test";
 export const MOCK_CONNECT_TOKEN = "ct-e2e-single-use";
 
@@ -87,40 +95,36 @@ export async function installMockBackend(
   await page.route("**/api/v1/waitlist/me", async (route) => {
     await route.fulfill({
       status: 200,
-      json: {
+      json: createWaitlistMemberStatusFixture({
         email: state.authEmails.at(-1) || "member@example.test",
-        joined: true,
         access_approved: accessApproved,
         approved_at: accessApproved ? new Date(0).toISOString() : null,
-        position: 4,
-        total_joined: 42,
-        total_seats: 100,
-        remaining_seats: 58,
-        recent_joiners: [],
-      },
+      }),
     });
   });
 
   await page.route("**/api/v1/waitlist", async (route) => {
-    await route.fulfill({
-      status: 200,
-      json: {
-        total_joined: 42,
-        total_seats: 100,
-        remaining_seats: 58,
-        recent_joiners: [],
-      },
-    });
+    await route.fulfill({ status: 200, json: WAITLIST_STATS_FIXTURE });
   });
 
   await page.route("**/api/v1/connect/status", async (route) => {
-    await route.fulfill({ status: 200, json: [] });
+    await route.fulfill({ status: 200, json: EMPTY_PLATFORM_STATUS_FIXTURE });
   });
+
+  await page.route(
+    "**/api/v1/workspaces/*/authorization-context",
+    async (route) => {
+      await route.fulfill({ status: 200, json: AUTHORIZATION_CONTEXT_FIXTURE });
+    },
+  );
 
   await page.route("**/api/v1/connect/session", async (route) => {
     await route.fulfill({
       status: 200,
-      json: { connect_token: MOCK_CONNECT_TOKEN },
+      json: {
+        ...CONNECT_SESSION_FIXTURE,
+        connect_token: MOCK_CONNECT_TOKEN,
+      },
     });
   });
 

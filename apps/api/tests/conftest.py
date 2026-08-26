@@ -1,3 +1,5 @@
+# ruff: noqa: E402
+
 import os
 import socket as _socket_module
 import sys

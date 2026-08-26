@@ -1,11 +1,14 @@
+from typing import Any
+
 from pydantic import BaseModel
+
 
 class ContentGenerationInput(BaseModel):
     platform: str
     prompt: str
     hook: str | None = None
     system_prompt: str
-    platform_rules: dict
+    platform_rules: dict[str, Any]
 
 class ContentGenerationOutput(BaseModel):
     content: str

@@ -31,7 +31,7 @@ jobs:
         run: ruff check packages/ai-engine/
 
       - name: Type check (mypy)
-        run: mypy packages/ai-engine/iterra_ai/
+        run: python -m mypy --config-file packages/ai-engine/pyproject.toml packages/ai-engine/iterra_ai --show-error-codes
 
       - name: Run tests
         run: |

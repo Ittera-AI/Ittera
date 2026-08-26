@@ -10,7 +10,7 @@ Uses tenacity for robust retry logic with configurable:
 
 import logging
 from functools import wraps
-from typing import Callable, Optional, Tuple, Type, Union
+from typing import Callable, Optional, Tuple, Type
 
 from tenacity import (
     retry,

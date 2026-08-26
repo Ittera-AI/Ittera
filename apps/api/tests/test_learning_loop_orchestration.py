@@ -11,8 +11,6 @@ staging validation, which requires a real Celery worker + Redis broker.
 
 import uuid
 
-import pytest
-
 from app.config import settings
 from app.db.datetime_helpers import utc_now
 from app.models.post import Post
