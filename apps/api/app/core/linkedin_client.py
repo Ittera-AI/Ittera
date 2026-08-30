@@ -203,7 +203,7 @@ class LinkedInClient:
         except httpx.NetworkError as e:
             logger.warning("Network error fetching profile: %s", e)
             raise LinkedInAPIError(f"Network error: {e}") from e
-        except Exception as e:
+        except Exception:
             logger.exception("Unexpected error fetching profile")
             raise
 
@@ -267,7 +267,7 @@ class LinkedInClient:
         except httpx.NetworkError as e:
             logger.warning("Network error fetching posts: %s", e)
             raise LinkedInAPIError(f"Network error: {e}") from e
-        except Exception as e:
+        except Exception:
             logger.exception("Unexpected error fetching posts")
             raise
 
@@ -325,7 +325,7 @@ class LinkedInClient:
         except httpx.NetworkError as e:
             logger.warning("Network error fetching social actions: %s", e)
             return {"likes": 0, "comments": 0, "shares": 0, "raw": None}
-        except Exception as e:
+        except Exception:
             logger.exception("Unexpected error fetching social actions")
             return {"likes": 0, "comments": 0, "shares": 0, "raw": None}
 
@@ -401,7 +401,7 @@ class LinkedInClient:
         except httpx.NetworkError as e:
             logger.warning("Network error publishing post: %s", e)
             raise LinkedInAPIError(f"Network error: {e}") from e
-        except Exception as e:
+        except Exception:
             logger.exception("Unexpected error publishing post")
             raise
 

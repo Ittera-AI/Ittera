@@ -9,8 +9,7 @@ Tests cover:
 - Retry logic
 """
 
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -195,7 +194,7 @@ def test_validate_drive_scopes_empty():
 
 def test_audit_log_sanitization():
     """Test that sensitive data is sanitized in audit logs."""
-    from app.core.audit_logger import AuditLogger, AuditAction
+    from app.core.audit_logger import AuditLogger
 
     logger = AuditLogger()
     details = {
@@ -224,7 +223,7 @@ def test_audit_log_sanitization():
 
 def test_data_retention_service_get_period():
     """Test data retention service calculates correct retention period."""
-    from app.services.data_retention import DataRetentionService, DEFAULT_RETENTION_DAYS
+    from app.services.data_retention import DataRetentionService
 
     # Mock user with no retention set
     class MockUser:
@@ -276,7 +275,6 @@ def test_storage_queue_job_creation(monkeypatch):
 def test_drive_api_retry_decorator():
     """Test that retry decorator is properly configured."""
     from app.core.retry import drive_api_retry
-    from tenacity import RetryCallState
 
     # Get the retry configuration
     retry_config = drive_api_retry(max_attempts=3)

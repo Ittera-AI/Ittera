@@ -2208,6 +2208,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/authorization-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Authorization Context
+         * @description Return the frozen A2/B2 authorization boundary over current data.
+         *
+         *     This is a real Gate 1 stub, not the A2 tenancy implementation. The contract
+         *     stays stable while A2 replaces its internals and B2 develops against a fake.
+         */
+        get: operations["get_authorization_context_api_v1_workspaces__workspace_id__authorization_context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/predictions/performance": {
         parameters: {
             query?: never;
@@ -3133,6 +3156,33 @@ export interface components {
             missing_layers?: string[];
         };
         /**
+         * AuthorizationContextV1
+         * @description Developer A-owned authorization contract consumed by Developer B.
+         */
+        AuthorizationContextV1: {
+            /**
+             * Schema Version
+             * @default authorization-context.v1
+             * @constant
+             */
+            schema_version: "authorization-context.v1";
+            /**
+             * Availability
+             * @default available
+             * @enum {string}
+             */
+            availability: "available" | "degraded" | "unavailable";
+            /** Reason */
+            reason?: string | null;
+            workspace: components["schemas"]["WorkspaceSummaryV1"];
+            brand: components["schemas"]["BrandSummaryV1"];
+            /** Role */
+            role: string;
+            /** Permissions */
+            permissions: string[];
+            white_label: components["schemas"]["WhiteLabelSummaryV1"];
+        };
+        /**
          * AutoPostUpdateRequest
          * @description Request body for toggling auto-post on/off for a platform.
          */
@@ -3263,6 +3313,39 @@ export interface components {
         /** BrandProfileUpdateRequest */
         BrandProfileUpdateRequest: {
             profile: components["schemas"]["BrandProfileData"];
+        };
+        /**
+         * BrandSummaryV1
+         * @description Developer A-owned brand summary with an explicit degraded state.
+         */
+        BrandSummaryV1: {
+            /**
+             * Schema Version
+             * @default brand-summary.v1
+             * @constant
+             */
+            schema_version: "brand-summary.v1";
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "available" | "degraded" | "unavailable";
+            /** Reason */
+            reason?: string | null;
+            /** Id */
+            id?: string | null;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** Profile Version */
+            profile_version?: number | null;
+            /** Brand Colors */
+            brand_colors?: {
+                [key: string]: string;
+            };
+            /** Logo Url */
+            logo_url?: string | null;
         };
         /** CalendarEventResponse */
         CalendarEventResponse: {
@@ -3432,6 +3515,22 @@ export interface components {
             upper: number;
             /** Confidence */
             confidence: number;
+        };
+        /**
+         * ConnectSessionResponseV1
+         * @description Versioned one-time OAuth connect-token contract.
+         *
+         *     Contract owner: Developer A. Primary consumer: Developer B web OAuth flow.
+         */
+        ConnectSessionResponseV1: {
+            /**
+             * Schema Version
+             * @default connect-session.v1
+             * @constant
+             */
+            schema_version: "connect-session.v1";
+            /** Connect Token */
+            connect_token: string;
         };
         /** ContentGapRequest */
         ContentGapRequest: {
@@ -5650,6 +5749,41 @@ export interface components {
             /** Hide Powered By */
             hide_powered_by: boolean;
         };
+        /**
+         * WhiteLabelSummaryV1
+         * @description Stable presentation subset; raw organization settings stay internal.
+         */
+        WhiteLabelSummaryV1: {
+            /**
+             * Schema Version
+             * @default white-label-summary.v1
+             * @constant
+             */
+            schema_version: "white-label-summary.v1";
+            /**
+             * Availability
+             * @default available
+             * @enum {string}
+             */
+            availability: "available" | "degraded" | "unavailable";
+            /** Reason */
+            reason?: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Primary Color */
+            primary_color?: string | null;
+            /** Secondary Color */
+            secondary_color?: string | null;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Sender Name */
+            sender_name?: string | null;
+            /**
+             * Hide Powered By
+             * @default false
+             */
+            hide_powered_by: boolean;
+        };
         /** WorkflowCreate */
         WorkflowCreate: {
             /** Name */
@@ -5797,6 +5931,38 @@ export interface components {
             competitors_count: number;
             /** Members Count */
             members_count: number;
+        };
+        /**
+         * WorkspaceSummaryV1
+         * @description Developer A-owned workspace identity consumed by Developer B.
+         */
+        WorkspaceSummaryV1: {
+            /**
+             * Schema Version
+             * @default workspace-summary.v1
+             * @constant
+             */
+            schema_version: "workspace-summary.v1";
+            /**
+             * Availability
+             * @default available
+             * @enum {string}
+             */
+            availability: "available" | "degraded" | "unavailable";
+            /** Reason */
+            reason?: string | null;
+            /** Id */
+            id: string;
+            /** Organization Id */
+            organization_id: string;
+            /** Organization Name */
+            organization_name: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Is Active */
+            is_active: boolean;
         };
         /** WorkspaceUpdate */
         WorkspaceUpdate: {
@@ -8618,7 +8784,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConnectSessionResponseV1"];
                 };
             };
             /** @description Validation Error */
@@ -10052,6 +10218,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_authorization_context_api_v1_workspaces__workspace_id__authorization_context_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-ID"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: {
+                ittera_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizationContextV1"];
                 };
             };
             /** @description Validation Error */

@@ -1,7 +1,7 @@
 import json
 import os
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -15,7 +15,7 @@ OutputT = TypeVar("OutputT", bound=BaseModel)
 class BaseEngine(ABC, Generic[InputT, OutputT]):
     """Base class for typed Iterra AI engines."""
 
-    def __init__(self, client=None, tracker: CostTracker | None = None) -> None:
+    def __init__(self, client: Any = None, tracker: CostTracker | None = None) -> None:
         self._client = client
         self._tracker = tracker or CostTracker()
 
@@ -52,7 +52,10 @@ class BaseEngine(ABC, Generic[InputT, OutputT]):
                 response = self._client.chat.completions.create(**request)
                 usage = getattr(response, "usage", None)
                 message = response.choices[0].message if response.choices else None
-                response_text = getattr(message, "content", "") or ""
+                raw_response_text = getattr(message, "content", "")
+                response_text = (
+                    raw_response_text if isinstance(raw_response_text, str) else ""
+                )
                 input_tokens = getattr(usage, "prompt_tokens", 0)
                 output_tokens = getattr(usage, "completion_tokens", 0)
             else:
@@ -63,10 +66,13 @@ class BaseEngine(ABC, Generic[InputT, OutputT]):
                     messages=[{"role": "user", "content": user}],
                 )
                 usage = getattr(response, "usage", None)
-                response_text = (
+                raw_response_text = (
                     response.content[0].text
                     if getattr(response, "content", None)
                     else ""
+                )
+                response_text = (
+                    raw_response_text if isinstance(raw_response_text, str) else ""
                 )
                 input_tokens = getattr(usage, "input_tokens", 0)
                 output_tokens = getattr(usage, "output_tokens", 0)
@@ -106,4 +112,7 @@ class BaseEngine(ABC, Generic[InputT, OutputT]):
         return json.dumps(parsed)
 
     def _get_model(self) -> str:
-        return getattr(self, "model", None) or os.getenv("AIML_MODEL", "gpt-4o-mini")
+        configured_model = getattr(self, "model", None)
+        if isinstance(configured_model, str) and configured_model:
+            return configured_model
+        return os.getenv("AIML_MODEL") or "gpt-4o-mini"

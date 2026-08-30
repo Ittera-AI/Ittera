@@ -18,17 +18,18 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from openai import OpenAI
 
-from iterra_ai.predictions.schemas import (
-    ViralScoreInput,
-    ViralPotentialOutput,
-    ViralPattern,
-)
-from iterra_ai.predictions.prompts import build_viral_prompt
 from iterra_ai.core.cost_tracker import CostTracker
+from iterra_ai.predictions.prompts import build_viral_prompt
+from iterra_ai.predictions.schemas import (
+    ViralCategory,
+    ViralPattern,
+    ViralPotentialOutput,
+    ViralScoreInput,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class ViralPredictionEngine:
     """
     
     # Score thresholds for categories
-    CATEGORY_THRESHOLDS = {
+    CATEGORY_THRESHOLDS: dict[ViralCategory, int] = {
         "highly_viral": 75,
         "viral_potential": 60,
         "average": 40,
@@ -68,7 +69,7 @@ class ViralPredictionEngine:
             api_key=api_key or os.getenv("AIML_API_KEY"),
             base_url=os.getenv("AIML_BASE_URL", "https://api.aimlapi.com/v1"),
         )
-        self.model = model or os.getenv("AIML_MODEL", "gpt-4o-mini")
+        self.model: str = model or os.getenv("AIML_MODEL") or "gpt-4o-mini"
         self.max_tokens = 4096
         self.cost_tracker = CostTracker()
     
@@ -78,7 +79,9 @@ class ViralPredictionEngine:
         hash_input = f"{normalized[:500]}:{platform}"
         return hashlib.sha256(hash_input.encode()).hexdigest()[:32]
     
-    def _call_llm(self, system_prompt: str, user_prompt: str) -> tuple[str, dict]:
+    def _call_llm(
+        self, system_prompt: str, user_prompt: str
+    ) -> tuple[str, dict[str, int]]:
         """Call the configured OpenAI-compatible API."""
         try:
             response = self.client.chat.completions.create(
@@ -89,15 +92,16 @@ class ViralPredictionEngine:
                     {"role": "user", "content": user_prompt},
                 ],
             )
-            content = response.choices[0].message.content if response.choices else ""
-            usage = {
+            raw_content = response.choices[0].message.content if response.choices else ""
+            content = raw_content if isinstance(raw_content, str) else ""
+            usage: dict[str, int] = {
                 "input_tokens": getattr(response.usage, "prompt_tokens", 0),
                 "output_tokens": getattr(response.usage, "completion_tokens", 0),
             }
             self.cost_tracker.log(
                 "viral", usage["input_tokens"], usage["output_tokens"]
             )
-            return content or "", usage
+            return content, usage
         except Exception as e:
             logger.error(f"Viral LLM call failed: {e}")
             raise
@@ -105,7 +109,7 @@ class ViralPredictionEngine:
     def _extract_json(self, text: str) -> dict[str, Any]:
         """Extract JSON from response."""
         try:
-            return json.loads(text)
+            return cast(dict[str, Any], json.loads(text))
         except json.JSONDecodeError:
             pass
         
@@ -115,7 +119,7 @@ class ViralPredictionEngine:
         json_match = re.search(r'```(?:json)?\s*\n?([\s\S]*?)```', text)
         if json_match:
             try:
-                return json.loads(json_match.group(1))
+                return cast(dict[str, Any], json.loads(json_match.group(1)))
             except json.JSONDecodeError:
                 pass
         
@@ -123,13 +127,13 @@ class ViralPredictionEngine:
         brace_match = re.search(r'\{[\s\S]*\}', text)
         if brace_match:
             try:
-                return json.loads(brace_match.group(0))
+                return cast(dict[str, Any], json.loads(brace_match.group(0)))
             except json.JSONDecodeError:
                 pass
         
         raise ValueError(f"Could not extract JSON from viral response: {text[:200]}")
     
-    def _determine_category(self, score: float) -> str:
+    def _determine_category(self, score: float) -> ViralCategory:
         """Determine viral category from score."""
         if score >= self.CATEGORY_THRESHOLDS["highly_viral"]:
             return "highly_viral"
@@ -142,7 +146,9 @@ class ViralPredictionEngine:
         else:
             return "unlikely"
     
-    def _parse_viral_response(self, response: dict, content_hash: str) -> ViralPotentialOutput:
+    def _parse_viral_response(
+        self, response: dict[str, Any], content_hash: str
+    ) -> ViralPotentialOutput:
         """Parse LLM response into typed output."""
         
         # Build patterns
@@ -175,9 +181,13 @@ class ViralPredictionEngine:
             viral_probability = viral_score / 100
         
         # Determine category
-        category = response.get("category")
-        if not category:
-            category = self._determine_category(viral_score)
+        raw_category = response.get("category")
+        category = (
+            cast(ViralCategory, raw_category)
+            if isinstance(raw_category, str)
+            and raw_category in self.CATEGORY_THRESHOLDS
+            else self._determine_category(viral_score)
+        )
         
         return ViralPotentialOutput(
             prediction_id=f"viral_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{content_hash[:8]}",
@@ -237,7 +247,8 @@ class ViralPredictionEngine:
         
         logger.info(
             f"Viral analysis complete: score={output.viral_score:.1f}, "
-            f"category={output.category}, tokens={usage.get('input_tokens', 0) + usage.get('output_tokens', 0)}"
+            f"category={output.category}, "
+            f"tokens={usage.get('input_tokens', 0) + usage.get('output_tokens', 0)}"
         )
         
         return output
@@ -267,12 +278,25 @@ class ViralPredictionEngine:
             pattern_type="hook_strength",
             score=min(1.0, hook_score),
             detected=hook_score > 0.6,
-            explanation="Based on opening sentence structure" if first_sentence else "No clear hook detected",
+            explanation=(
+                "Based on opening sentence structure"
+                if first_sentence
+                else "No clear hook detected"
+            ),
             examples=[first_sentence[:100]] if first_sentence else [],
         ))
         
         # Emotional resonance
-        emotion_words = ["love", "hate", "amazing", "terrible", "shocking", "incredible", "never", "always"]
+        emotion_words = [
+            "love",
+            "hate",
+            "amazing",
+            "terrible",
+            "shocking",
+            "incredible",
+            "never",
+            "always",
+        ]
         emotion_count = sum(1 for w in emotion_words if w in content_lower)
         emotion_score = min(1.0, 0.3 + emotion_count * 0.15)
         patterns.append(ViralPattern(
@@ -297,6 +321,12 @@ class ViralPredictionEngine:
         # Calculate overall score from patterns
         avg_score = sum(p.score for p in patterns) / len(patterns) if patterns else 0.5
         viral_score = avg_score * 100
+
+        viral_triggers: list[str] = []
+        if hook_score > 0.6:
+            viral_triggers.append("Short punchy opening")
+        if emotion_score > 0.5:
+            viral_triggers.append("Emotional language detected")
         
         return ViralPotentialOutput(
             prediction_id=f"viral_fallback_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
@@ -307,8 +337,7 @@ class ViralPredictionEngine:
             patterns=patterns,
             percentile_rank=50,
             comparison_to_top_performers="Heuristic analysis (LLM unavailable)",
-            viral_triggers=["Short punchy opening" if hook_score > 0.6 else None] + 
-                          ["Emotional language detected" if emotion_score > 0.5 else None],
+            viral_triggers=viral_triggers,
             amplification_suggestions=[
                 "Add a question hook in first sentence",
                 "Include emotional trigger words",

@@ -14,10 +14,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.permissions import Permission
 from app.dependencies.auth import get_current_user
 from app.dependencies.db import get_db
-from app.dependencies.workspace import can_view_competitors, get_current_workspace
+from app.dependencies.workspace import can_view_competitors
 from app.models.organization import (
     Competitor,
     CompetitorAnalysis,
@@ -25,7 +24,6 @@ from app.models.organization import (
     Workspace,
 )
 from app.models.user import User
-from app.services import workspace_service
 
 router = APIRouter(tags=["competitors"])
 
@@ -148,7 +146,7 @@ async def list_competitors(
     
     competitors = (
         db.query(Competitor)
-        .filter(Competitor.workspace_id == workspace.id, Competitor.is_active == True)
+        .filter(Competitor.workspace_id == workspace.id, Competitor.is_active.is_(True))
         .all()
     )
     
@@ -499,7 +497,7 @@ async def analyze_content_gaps(
     # Get competitor data
     query = db.query(Competitor).filter(
         Competitor.workspace_id == workspace.id,
-        Competitor.is_active == True,
+        Competitor.is_active.is_(True),
     )
     
     if request.competitor_ids:
@@ -619,7 +617,7 @@ async def benchmark_trend(
     # Get competitor posts on trend
     query = db.query(Competitor).filter(
         Competitor.workspace_id == workspace.id,
-        Competitor.is_active == True,
+        Competitor.is_active.is_(True),
     )
     
     if request.competitor_ids:

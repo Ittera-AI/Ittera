@@ -1,0 +1,2 @@
+[lint.per-file-ignores]
+"app/db/migrations/versions/65130da7c837_add_organization_workspace_support.py" = ["F401"]

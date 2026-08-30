@@ -14,13 +14,9 @@ Features:
 - Async generation via Celery
 """
 
-import base64
-import io
-import json
 import logging
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.orm import Session
 
 from app.db.datetime_helpers import utc_now

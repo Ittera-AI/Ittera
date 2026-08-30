@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from iterra_ai.core.base_engine import BaseEngine
 from iterra_ai.prompts.radar import SCAN_PROMPT, SYSTEM_PROMPT
@@ -41,7 +41,7 @@ class TrendRadar(BaseEngine[RadarInput, RadarOutput]):
                     if item.get("topic")
                 ]
                 if trends:
-                    return RadarOutput(trends=trends, scanned_at=datetime.now(timezone.utc))
+                    return RadarOutput(trends=trends, scanned_at=datetime.now(UTC))
             except Exception:
                 pass
 
@@ -62,7 +62,7 @@ class TrendRadar(BaseEngine[RadarInput, RadarOutput]):
                 summary="Teams want speed without losing human taste and approval.",
             ),
         ][: input.limit]
-        return RadarOutput(trends=trends, scanned_at=datetime.now(timezone.utc))
+        return RadarOutput(trends=trends, scanned_at=datetime.now(UTC))
 
     def generate(self, input: RadarInput) -> RadarOutput:
         return self.scan(input)

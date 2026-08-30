@@ -4,6 +4,8 @@ Routes: /api/v1/social/*
 All logic delegated to social_service. Routers are thin HTTP handlers only.
 """
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
@@ -30,6 +32,9 @@ from app.schemas.social import (
     TwitterTierUpdateResponse,
 )
 from app.services import social_service
+
+if TYPE_CHECKING:
+    from app.models.social_connection import SocialConnection
 
 router = APIRouter()
 
@@ -357,10 +362,7 @@ async def get_twitter_tier_endpoint(
     db: Session = Depends(get_db),
 ):
     """Get the user's current Twitter subscription tier and associated limits."""
-    from app.services.platform_limits import (
-        PLATFORM_CHAR_LIMITS,
-        resolve_content_limit,
-    )
+    from app.services.platform_limits import resolve_content_limit
 
     content_limit = resolve_content_limit(db, str(current_user.id), "twitter")
     return {
@@ -501,7 +503,7 @@ def _get_platform_connection(
         .filter(
             SocialConnection.user_id == user_id,
             SocialConnection.platform == platform,
-            SocialConnection.is_active == True,
+            SocialConnection.is_active.is_(True),
         )
         .first()
     )

@@ -15,13 +15,18 @@ import json
 import logging
 import os
 import re
-from typing import Any
+from typing import Any, TypedDict, cast
 
 from iterra_ai.coach.schemas import CoachInput, CoachOutput
 from iterra_ai.core.base_engine import BaseEngine
-from iterra_ai.prompts.coach import format_coach_prompt, COACH_ANALYSIS_SYSTEM_V2
+from iterra_ai.prompts.coach import COACH_ANALYSIS_SYSTEM_V2, format_coach_prompt
 
 logger = logging.getLogger(__name__)
+
+
+class _CoachPlatformConfig(TypedDict):
+    optimal_length: tuple[int, int]
+    line_break_ideal: int
 
 
 class CoachEngineError(Exception):
@@ -161,7 +166,7 @@ class EngagementCoach(BaseEngine[CoachInput, CoachOutput]):
 
         # Strategy 1: Direct JSON parsing
         try:
-            return json.loads(response)
+            return cast(dict[str, Any], json.loads(response))
         except json.JSONDecodeError:
             pass
 
@@ -175,7 +180,7 @@ class EngagementCoach(BaseEngine[CoachInput, CoachOutput]):
             match = re.search(pattern, response, re.DOTALL)
             if match:
                 try:
-                    return json.loads(match.group(1).strip())
+                    return cast(dict[str, Any], json.loads(match.group(1).strip()))
                 except json.JSONDecodeError:
                     continue
 
@@ -184,7 +189,7 @@ class EngagementCoach(BaseEngine[CoachInput, CoachOutput]):
         json_match = re.search(r'(\{.*\})', response, re.DOTALL)
         if json_match:
             try:
-                return json.loads(json_match.group(1))
+                return cast(dict[str, Any], json.loads(json_match.group(1)))
             except json.JSONDecodeError:
                 pass
 
@@ -253,12 +258,12 @@ class EngagementCoach(BaseEngine[CoachInput, CoachOutput]):
         content = input.content.strip()
         
         # Platform-specific constants
-        PLATFORM_CONFIG = {
+        platform_config: dict[str, _CoachPlatformConfig] = {
             "linkedin": {"optimal_length": (800, 3000), "line_break_ideal": 4},
             "twitter": {"optimal_length": (100, 280), "line_break_ideal": 2},
             "instagram": {"optimal_length": (100, 2200), "line_break_ideal": 3},
         }
-        config = PLATFORM_CONFIG.get(input.platform, PLATFORM_CONFIG["linkedin"])
+        config = platform_config.get(input.platform, platform_config["linkedin"])
 
         # Hook analysis (first 100 chars)
         opening = content[:100].lower()
@@ -292,7 +297,7 @@ class EngagementCoach(BaseEngine[CoachInput, CoachOutput]):
 
         # Structure analysis
         lines = content.split('\n')
-        non_empty_lines = [l for l in lines if l.strip()]
+        non_empty_lines = [line for line in lines if line.strip()]
         
         structure_score = 5  # baseline
         
@@ -381,7 +386,7 @@ class EngagementCoach(BaseEngine[CoachInput, CoachOutput]):
     ) -> str:
         """Identify the strongest aspect of the post."""
         scores = {"hook": hook, "tone": tone, "structure": structure}
-        best = max(scores, key=scores.get)
+        best = max(scores, key=lambda name: scores[name])
         
         if best == "hook" and hook >= 7:
             return "Strong opening that creates curiosity or pattern interrupt"
@@ -396,8 +401,6 @@ class EngagementCoach(BaseEngine[CoachInput, CoachOutput]):
         self, hook: int, tone: int, structure: int, cta: str, content: str
     ) -> str:
         """Identify the highest-impact improvement opportunity."""
-        scores = {"hook": hook, "structure": structure, "cta": cta}
-        
         if hook < 6:
             return "Strengthen the opening hook - make the first 2 sentences unmissable"
         elif structure < 6:
@@ -418,19 +421,29 @@ class EngagementCoach(BaseEngine[CoachInput, CoachOutput]):
         if hook >= 8:
             parts.append("Opening is compelling and creates curiosity.")
         elif hook < 5:
-            parts.append("Opening could be stronger - consider a pattern interrupt or curiosity gap.")
+            parts.append(
+                "Opening could be stronger - consider a pattern interrupt "
+                "or curiosity gap."
+            )
         
         if structure >= 8:
             parts.append("Excellent formatting and readability.")
         elif structure < 5:
-            parts.append("Structure needs improvement - add white space and break up long paragraphs.")
+            parts.append(
+                "Structure needs improvement - add white space and break up "
+                "long paragraphs."
+            )
         
         if cta == "strong":
             parts.append("Call-to-action is clear and drives engagement.")
         elif cta == "none":
             parts.append("Missing a clear ending - add a question or specific ask.")
         
-        return " ".join(parts) if parts else "Post is competent but could be strengthened in key areas."
+        return (
+            " ".join(parts)
+            if parts
+            else "Post is competent but could be strengthened in key areas."
+        )
 
     def _generate_rewrite_suggestion(self, content: str, platform: str) -> str:
         """Generate a stronger opening based on content."""

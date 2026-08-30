@@ -6,7 +6,6 @@ from uuid import uuid4
 from app.models.content_draft import ContentDraft
 from app.models.content_draft import ContentDraftMedia
 from app.models.social_connection import SocialConnection
-from app.models.user import User
 from app.services.publisher_service import PublishError
 
 

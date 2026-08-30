@@ -9,14 +9,10 @@ Covers:
 """
 
 import uuid
-from datetime import datetime, timezone
-
-import pytest
 
 from app.models.social_connection import SocialConnection
 from app.services.platform_limits import (
     DEFAULT_TWITTER_TIER,
-    PLATFORM_CHAR_LIMITS,
     TwitterTier,
     resolve_content_limit,
     update_twitter_tier,

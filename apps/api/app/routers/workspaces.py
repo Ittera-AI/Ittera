@@ -12,6 +12,12 @@ from app.dependencies.db import get_db
 from app.dependencies.workspace import get_current_workspace
 from app.models.organization import Workspace
 from app.models.user import User
+from app.schemas.workspace_contracts import (
+    AuthorizationContextV1,
+    BrandSummaryV1,
+    WhiteLabelSummaryV1,
+    WorkspaceSummaryV1,
+)
 from app.services import workspace_service
 
 router = APIRouter(tags=["workspaces"])
@@ -452,3 +458,90 @@ async def get_workspace_context(
         "brand_colors": workspace.brand_colors,
         "logo_url": workspace.logo_url,
     }
+
+
+@router.get(
+    "/{workspace_id}/authorization-context",
+    response_model=AuthorizationContextV1,
+)
+async def get_authorization_context(
+    workspace_id: str,
+    workspace: Workspace | None = Depends(get_current_workspace),
+    current_user: User = Depends(get_current_user),
+) -> AuthorizationContextV1:
+    """Return the frozen A2/B2 authorization boundary over current data.
+
+    This is a real Gate 1 stub, not the A2 tenancy implementation. The contract
+    stays stable while A2 replaces its internals and B2 develops against a fake.
+    """
+    if not workspace or workspace.id != workspace_id:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    member = workspace.get_member(current_user.id)
+    organization_member = workspace.organization.get_member(current_user.id)
+    if member:
+        role = member.role
+        permissions = sorted(member.get_permissions())
+    elif organization_member:
+        role = organization_member.role
+        permissions = sorted(organization_member.get_permissions())
+    else:  # Defensive: get_current_workspace already denies this state.
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    white_label_settings = workspace_service.get_white_label_settings(
+        workspace.organization
+    )
+    if role == "client":
+        white_label_settings = {
+            "enabled": white_label_settings.get("enabled", False),
+            "logo_url": white_label_settings.get("logo_url"),
+            "primary_color": white_label_settings.get("primary_color"),
+            "sender_name": white_label_settings.get("sender_name"),
+        }
+
+    brand_profile_count = len(workspace.brand_profiles)
+    brand_profile = (
+        workspace.brand_profiles[0] if brand_profile_count == 1 else None
+    )
+    profile = brand_profile.profile if brand_profile and brand_profile.profile else {}
+    if brand_profile_count == 1:
+        brand_reason = None
+    elif brand_profile_count == 0:
+        brand_reason = "brand_profile_not_provisioned"
+    else:
+        brand_reason = "brand_profile_ambiguous"
+
+    return AuthorizationContextV1(
+        workspace=WorkspaceSummaryV1(
+            id=workspace.id,
+            organization_id=workspace.organization_id,
+            organization_name=workspace.organization.name,
+            name=workspace.name,
+            slug=workspace.slug,
+            is_active=workspace.is_active,
+        ),
+        brand=BrandSummaryV1(
+            availability="available" if brand_profile else "degraded",
+            reason=brand_reason,
+            id=brand_profile.id if brand_profile else None,
+            workspace_id=workspace.id,
+            name=profile.get("brand_name")
+            or workspace.client_name
+            or workspace.name,
+            profile_version=brand_profile.version if brand_profile else None,
+            brand_colors=workspace.brand_colors or {},
+            logo_url=workspace.logo_url,
+        ),
+        role=role,
+        permissions=permissions,
+        white_label=WhiteLabelSummaryV1(
+            enabled=bool(white_label_settings.get("enabled", False)),
+            primary_color=white_label_settings.get("primary_color"),
+            secondary_color=white_label_settings.get("secondary_color"),
+            logo_url=white_label_settings.get("logo_url"),
+            sender_name=white_label_settings.get("sender_name"),
+            hide_powered_by=bool(
+                white_label_settings.get("hide_powered_by", False)
+            ),
+        ),
+    )

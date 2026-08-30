@@ -37,6 +37,8 @@ def _registered_operations() -> Counter[tuple[str, str]]:
 
 def test_all_canonical_router_operations_are_registered_once() -> None:
     operations = _registered_operations()
+    assert {operation: count for operation, count in operations.items() if count != 1} == {}
+
     canonical_operations = {
         operation: count
         for operation, count in operations.items()

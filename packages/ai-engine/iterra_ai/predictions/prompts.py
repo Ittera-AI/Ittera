@@ -6,7 +6,9 @@ Contains system and user prompts for:
   - Optimal timing (TimingPredictionEngine)
 """
 
+from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 # =============================================================================
 # PERFORMANCE PREDICTION PROMPTS
@@ -322,7 +324,11 @@ def build_viral_prompt(
         content=content,
         has_story="Yes" if has_story else ("No" if has_story is False else "Unknown"),
         has_data="Yes" if has_data else ("No" if has_data is False else "Unknown"),
-        has_controversy="Yes" if has_controversy else ("No" if has_controversy is False else "Unknown"),
+        has_controversy=(
+            "Yes"
+            if has_controversy
+            else ("No" if has_controversy is False else "Unknown")
+        ),
         emotional_tone=emotional_tone or "Unknown",
     )
     
@@ -333,10 +339,10 @@ def build_timing_prompt(
     content: str,
     platform: str,
     timezone: str,
-    allowed_days: list[str],
+    allowed_days: Sequence[str],
     allowed_hours_start: int,
     allowed_hours_end: int,
-    historical_posts: list[dict],
+    historical_posts: list[dict[str, Any]],
 ) -> tuple[str, str]:
     """Build timing prediction prompt pair."""
     

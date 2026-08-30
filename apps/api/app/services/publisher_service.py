@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import HTTPException, status
+from fastapi import status
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -72,7 +72,7 @@ def _connection(db: Session, user: User, platform: str) -> SocialConnection | No
         .filter(
             SocialConnection.user_id == user.id,
             SocialConnection.platform == platform,
-            SocialConnection.is_active == True,
+            SocialConnection.is_active.is_(True),
         )
         .first()
     )

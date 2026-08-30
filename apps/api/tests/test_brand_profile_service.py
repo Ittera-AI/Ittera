@@ -3,8 +3,6 @@
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
-import pytest
-
 from app.services.brand_profile_service import (
     MIN_POSTS_FOR_ANALYSIS,
     _build_platform_style_notes,

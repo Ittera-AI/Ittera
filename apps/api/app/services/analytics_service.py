@@ -13,7 +13,7 @@ Features:
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func, text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.datetime_helpers import ensure_aware
@@ -281,12 +281,6 @@ def analytics_summary(
     # Current Period Metrics
     # ─────────────────────────────────────────────────────────────────────────
     
-    # Base query for user's posts in period
-    base_query = db.query(Post).filter(
-        Post.user_id == user.id,
-        Post.published_at >= cutoff
-    )
-
     # Aggregate metrics with null handling
     aggregates = db.query(
         func.count(Post.id).label("total_posts"),

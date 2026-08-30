@@ -1,9 +1,18 @@
 """Pydantic schemas for AI-powered content predictions."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
+
+DayOfWeek = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+ViralCategory = Literal[
+    "highly_viral", "viral_potential", "average", "below_average", "unlikely"
+]
+
+
+def _default_allowed_days() -> list[DayOfWeek]:
+    return ["mon", "tue", "wed", "thu", "fri"]
 
 
 class ContentInput(BaseModel):
@@ -85,7 +94,7 @@ class ConfidenceInterval(BaseModel):
     
     @field_validator("upper")
     @classmethod
-    def upper_gt_lower(cls, v: float, info) -> float:
+    def upper_gt_lower(cls, v: float, info: ValidationInfo) -> float:
         if "lower" in info.data and v < info.data["lower"]:
             raise ValueError("Upper bound must be >= lower bound")
         return v
@@ -245,9 +254,7 @@ class ViralPotentialOutput(BaseModel):
     )
     
     # Category scoring
-    category: Literal[
-        "highly_viral", "viral_potential", "average", "below_average", "unlikely"
-    ] = Field(..., description="Viral potential category")
+    category: ViralCategory = Field(..., description="Viral potential category")
     
     # Pattern analysis
     patterns: list[ViralPattern] = Field(
@@ -293,14 +300,14 @@ class TimingInput(BaseModel):
     timezone: str = Field(default="UTC", description="Target audience timezone")
     
     # Historical data
-    author_historical_posts: list[dict] = Field(
+    author_historical_posts: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Historical posts with timing and performance",
     )
     
     # Constraints
-    allowed_days: list[Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]] = Field(
-        default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"],
+    allowed_days: list[DayOfWeek] = Field(
+        default_factory=_default_allowed_days,
         description="Days allowed for posting",
     )
     allowed_hours_start: int = Field(
@@ -320,7 +327,7 @@ class TimingInput(BaseModel):
 class TimeSlotScore(BaseModel):
     """Score for a specific time slot."""
     
-    day: Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"] = Field(...)
+    day: DayOfWeek = Field(...)
     hour: int = Field(..., ge=0, le=23)
     score: float = Field(..., ge=0, le=1, description="Quality score (0-1)")
     

@@ -13,12 +13,11 @@ Features:
 - Actionable recommendations
 """
 
-import hashlib
 import json
 import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from openai import OpenAI
 
@@ -60,11 +59,13 @@ class CompetitiveAnalysisEngine:
             api_key=api_key or os.getenv("AIML_API_KEY"),
             base_url=os.getenv("AIML_BASE_URL", "https://api.aimlapi.com/v1"),
         )
-        self.model = model or os.getenv("AIML_MODEL", "gpt-4o-mini")
+        self.model: str = model or os.getenv("AIML_MODEL") or "gpt-4o-mini"
         self.max_tokens = 4096
         self.cost_tracker = CostTracker()
     
-    def _call_llm(self, system_prompt: str, user_prompt: str) -> tuple[str, dict]:
+    def _call_llm(
+        self, system_prompt: str, user_prompt: str
+    ) -> tuple[str, dict[str, int]]:
         """Call the configured OpenAI-compatible API."""
         try:
             response = self.client.chat.completions.create(
@@ -75,15 +76,16 @@ class CompetitiveAnalysisEngine:
                     {"role": "user", "content": user_prompt},
                 ],
             )
-            content = response.choices[0].message.content if response.choices else ""
-            usage = {
+            raw_content = response.choices[0].message.content if response.choices else ""
+            content = raw_content if isinstance(raw_content, str) else ""
+            usage: dict[str, int] = {
                 "input_tokens": getattr(response.usage, "prompt_tokens", 0),
                 "output_tokens": getattr(response.usage, "completion_tokens", 0),
             }
             self.cost_tracker.log(
                 "competitive", usage["input_tokens"], usage["output_tokens"]
             )
-            return content or "", usage
+            return content, usage
         except Exception as e:
             logger.error(f"Competitive analysis LLM call failed: {e}")
             raise
@@ -91,7 +93,7 @@ class CompetitiveAnalysisEngine:
     def _extract_json(self, text: str) -> dict[str, Any]:
         """Extract JSON from LLM response."""
         try:
-            return json.loads(text)
+            return cast(dict[str, Any], json.loads(text))
         except json.JSONDecodeError:
             pass
         
@@ -101,7 +103,7 @@ class CompetitiveAnalysisEngine:
         json_match = re.search(r'```(?:json)?\s*\n?([\s\S]*?)```', text)
         if json_match:
             try:
-                return json.loads(json_match.group(1))
+                return cast(dict[str, Any], json.loads(json_match.group(1)))
             except json.JSONDecodeError:
                 pass
         
@@ -109,7 +111,7 @@ class CompetitiveAnalysisEngine:
         brace_match = re.search(r'\{[\s\S]*\}', text)
         if brace_match:
             try:
-                return json.loads(brace_match.group(0))
+                return cast(dict[str, Any], json.loads(brace_match.group(0)))
             except json.JSONDecodeError:
                 pass
         
@@ -125,15 +127,16 @@ class CompetitiveAnalysisEngine:
         Analyzes their posting patterns, content themes, engagement tactics,
         and identifies opportunities and threats.
         """
-        import time
-        start_time = time.time()
         
         # Build user prompt
-        posts_summary = "\n\n".join([
-            f"Post {i+1} ({p.get('published_at', 'unknown')}):\n{p.get('content', 'N/A')[:200]}...\n"
-            f"Engagement: {p.get('engagement_rate', 'N/A')}%"
-            for i, p in enumerate(input_data.recent_posts[:10])
-        ])
+        posts_summary = "\n\n".join(
+            [
+                f"Post {i+1} ({p.get('published_at', 'unknown')}):\n"
+                f"{p.get('content', 'N/A')[:200]}...\n"
+                f"Engagement: {p.get('engagement_rate', 'N/A')}%"
+                for i, p in enumerate(input_data.recent_posts[:10])
+            ]
+        )
         
         user_prompt = f"""Analyze this competitor's content strategy:
 
@@ -253,12 +256,17 @@ COMPETITOR POST EXAMPLES:
         Identifies why some creators succeed more than others on the same topic.
         """
         # Build prompt
+        author_performance = (
+            json.dumps(input_data.author_performance, indent=2)
+            if input_data.author_performance
+            else "No posts on this trend"
+        )
         user_prompt = f"""Benchmark performance on the trend: "{input_data.trend_topic}"
 
 TIME PERIOD: {input_data.time_period}
 
 AUTHOR PERFORMANCE:
-{json.dumps(input_data.author_performance, indent=2) if input_data.author_performance else 'No posts on this trend'}
+{author_performance}
 
 COMPETITOR PERFORMANCES:
 """
@@ -282,7 +290,9 @@ COMPETITOR PERFORMANCES:
             your_performance=response_json.get("your_performance", {}),
             competitor_performances=response_json.get("competitor_performances", []),
             your_rank=response_json.get("your_rank"),
-            total_competitors=response_json.get("total_competitors", len(input_data.competitor_performances) + 1),
+            total_competitors=response_json.get(
+                "total_competitors", len(input_data.competitor_performances) + 1
+            ),
             why_top_performers_succeeded=response_json.get("why_top_performers_succeeded", []),
             your_gaps_vs_top=response_json.get("your_gaps_vs_top", []),
             trend_lifecycle=response_json.get("trend_lifecycle", "emerging"),
@@ -293,7 +303,9 @@ COMPETITOR PERFORMANCES:
             analysis_time=datetime.utcnow(),
         )
     
-    def _generate_fallback_strategy(self, input_data: CompetitorProfileInput) -> CompetitorStrategyOutput:
+    def _generate_fallback_strategy(
+        self, input_data: CompetitorProfileInput
+    ) -> CompetitorStrategyOutput:
         """Generate basic strategy analysis when LLM fails."""
         return CompetitorStrategyOutput(
             analysis_id=f"strategy_fallback_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
@@ -306,6 +318,7 @@ COMPETITOR PERFORMANCES:
             posting_patterns={},
             engagement_tactics=["Analyze posts manually for engagement patterns"],
             top_performing_themes=[],
+            tone_and_voice=None,
             recommended_actions=["Re-run analysis with more sample posts"],
             model_version="fallback",
             analysis_time=datetime.utcnow(),
@@ -342,7 +355,9 @@ COMPETITOR PERFORMANCES:
             analysis_id=f"trend_fallback_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
             trend_topic=input_data.trend_topic,
             your_performance=input_data.author_performance or {},
+            your_rank=None,
             trend_lifecycle="unknown",
+            window_of_opportunity=None,
             how_to_improve=["Analyze top performing posts manually"],
             model_version="fallback",
             analysis_time=datetime.utcnow(),

@@ -414,3 +414,74 @@ def test_delayed_retry_cannot_approve_the_next_step(client, db) -> None:
     assert persisted.current_step == 1
     assert persisted.status == "pending"
     assert db.query(ApprovalDecision).filter_by(approval_id=approval.id).count() == 1
+
+
+def test_resource_and_selected_workspace_disagreement_fails_closed(client, db) -> None:
+    actor, headers = _authenticated_user(
+        client, db, "approval-resource-mismatch@example.com"
+    )
+    resource_workspace = _workspace(db, "resource-mismatch-a")
+    selected_workspace = _workspace(db, "resource-mismatch-b")
+    _add_member(db, resource_workspace, actor, "manager")
+    _add_member(db, selected_workspace, actor, "manager")
+    approval = _pending_approval(
+        db,
+        resource_workspace,
+        actor,
+        suffix="resource-mismatch",
+        step={
+            "step_number": 1,
+            "role_required": "manager",
+            "title": "Manager review",
+        },
+    )
+
+    response = client.post(
+        f"/api/v1/approvals/{approval.id}/decision",
+        headers={**headers, "X-Workspace-ID": selected_workspace.id},
+        json={"expected_step": 0, "decision": "approved"},
+    )
+
+    assert response.status_code == 404
+    assert db.query(ApprovalDecision).filter_by(approval_id=approval.id).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("actor_role", "expected_status"),
+    [("manager", 200), ("editor", 403), ("viewer", 403), ("client", 403)],
+)
+def test_approval_actor_role_matrix(
+    client,
+    db,
+    actor_role: str,
+    expected_status: int,
+) -> None:
+    actor, headers = _authenticated_user(
+        client, db, f"approval-matrix-{actor_role}@example.com"
+    )
+    workspace = _workspace(db, f"matrix-{actor_role}")
+    _add_member(db, workspace, actor, actor_role)
+    approval = _pending_approval(
+        db,
+        workspace,
+        actor,
+        suffix=f"matrix-{actor_role}",
+        step={
+            "step_number": 1,
+            "role_required": "manager",
+            "title": "Manager review",
+        },
+    )
+
+    response = client.post(
+        f"/api/v1/approvals/{approval.id}/decision",
+        headers={**headers, "X-Workspace-ID": workspace.id},
+        json={"expected_step": 0, "decision": "approved"},
+    )
+
+    assert response.status_code == expected_status
+    expected_decisions = 1 if expected_status == 200 else 0
+    assert (
+        db.query(ApprovalDecision).filter_by(approval_id=approval.id).count()
+        == expected_decisions
+    )

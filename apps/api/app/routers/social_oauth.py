@@ -30,6 +30,7 @@ from app.dependencies.auth import get_current_user
 from app.dependencies.db import get_db
 from app.models.social_connection import SocialConnection
 from app.models.user import User
+from app.schemas.social import ConnectSessionResponseV1
 from app.services.connect_state_store import (
     ConnectStateStoreError,
     bind_connect_state,
@@ -193,8 +194,10 @@ def connection_status(current_user: User = Depends(get_current_user), db: Sessio
     return [_connection_status_payload(c) for c in conns]
 
 
-@router.post("/session")
-def create_connect_session(current_user: User = Depends(get_current_user)):
+@router.post("/session", response_model=ConnectSessionResponseV1)
+def create_connect_session(
+    current_user: User = Depends(get_current_user),
+) -> ConnectSessionResponseV1:
     """Mint a single-use connect token for the authenticated user.
 
     The frontend calls this (Bearer auth) and passes the returned token to
@@ -208,7 +211,7 @@ def create_connect_session(current_user: User = Depends(get_current_user)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Could not reach the connect-token store. Please try again.",
         )
-    return {"connect_token": connect_token}
+    return ConnectSessionResponseV1(connect_token=connect_token)
 
 
 @router.delete("/{platform}")

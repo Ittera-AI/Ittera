@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, field_validator
@@ -6,6 +7,16 @@ from pydantic import BaseModel, field_validator
 
 class OAuthConnectResponse(BaseModel):
     authorization_url: str
+
+
+class ConnectSessionResponseV1(BaseModel):
+    """Versioned one-time OAuth connect-token contract.
+
+    Contract owner: Developer A. Primary consumer: Developer B web OAuth flow.
+    """
+
+    schema_version: Literal["connect-session.v1"] = "connect-session.v1"
+    connect_token: str
 
 
 class LinkedInCredentialsRequest(BaseModel):
@@ -110,9 +121,6 @@ class PlatformPreferencesResponse(BaseModel):
 
 
 # ── Settings Platforms Endpoint Schemas (Requirement 5.1, 5.2, 5.3) ──────────
-
-from datetime import datetime
-
 
 class SettingsPlatformStatus(BaseModel):
     """Rich per-platform status for the settings page.

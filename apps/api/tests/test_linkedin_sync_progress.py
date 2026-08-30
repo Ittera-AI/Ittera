@@ -10,13 +10,10 @@ Validates:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 
-from app.db.datetime_helpers import utc_now
 from app.models.post import Post
 from app.models.social_connection import SocialConnection
 from app.models.user import User

@@ -381,8 +381,6 @@ def detect_trends(
     Returns:
         Dict with detected trends and anomalies
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
-    
     # Get engagement rate time series
     engagement_series = get_time_series_data(
         db, user, "engagement_rate", period_days, "day"

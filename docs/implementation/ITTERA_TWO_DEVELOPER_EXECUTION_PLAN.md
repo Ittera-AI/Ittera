@@ -441,10 +441,37 @@ flowchart TB
 
 ### Checkpoint 1: Contracts and readiness
 
+Checkpoint 1 freezes the initial cross-track contracts required to start A2/B2: `ConnectSessionResponseV1`, `AuthorizationContextV1`, `WorkspaceSummaryV1`, `BrandSummaryV1`, and `WhiteLabelSummaryV1`. Later contracts in the ownership table freeze immediately before their first dependent work package; this avoids inventing provider, publication, approval, metric, recommendation, or learning behavior prematurely.
+
 - Shared schemas validate.
 - Fakes and real stubs pass the same contracts.
 - Both developers pass Temporal readiness.
 - PostgreSQL and frontend tests run meaningfully in CI.
+
+#### Checkpoint 1 role-swap evidence — 2026-08-23
+
+| Exercise | Operator evidence | Independent diagnostician evidence | Role swap |
+|---|---|---|---|
+| Lost Activity response, retry, worker replacement, duplicate Signals, and replay | Developer A ran `python -m pytest -q tests/temporal_readiness/test_temporal_readiness.py::test_retry_restart_replay_signal_timer_and_safe_history`: 1 passed in 12.77s; two attempts, one logical effect, two Signal deliveries, and replay without failure. | Developer B explained that Activity retry re-executes side-effecting code, workflow replay rebuilds state from history, and the stable operation ID reconciles remote success after a lost response. | Developer B then operated the same scenario with `pytest ... -v`: 1 passed in 13.26s. Developer A diagnosed the same history and identified effect cardinality or divergent remote IDs as duplicate-effect evidence. |
+
+The exercise uses only the in-memory simulator and local Temporal test environment. It proves graceful worker replacement after Activity completion, not an operating-system crash during an in-flight Activity or durable provider-side idempotency.
+
+Migration evidence for this checkpoint is an isolated PostgreSQL upgrade/downgrade/re-upgrade, one coordinated Alembic head, and A1 PostgreSQL integration tests. Blanket `alembic check` metadata parity is not retroactively added to this gate; known legacy model/schema drift remains migration-reservation work for A2 and must not be patched by rewriting shared historical migrations.
+
+#### Checkpoint 1 gate verdict — 2026-08-23
+
+**PASS. A2 and B2 are unblocked to start in parallel under the dependency and ownership rules in this plan.** This verdict covers the shared Gate 1 contract/readiness boundary only; no A2/B2 production implementation is included in the Gate diff.
+
+Final evidence:
+
+- Canonical OpenAPI generation is idempotent. The generated authorization operation requires `path.workspace_id`, shared TypeScript compiles, and real stubs/web fakes conform to the versioned contracts. Final SHA-256 values are `232E9510ED6331D12E6516D743950B2CA5834DC49A206C2443F310DB7A2796F6` for `openapi.json` and `F511B3EFC62521096A4F4D0CB79C8FC94E26DA9753FEC751842D78ACC8CFB4FA` for `src/index.ts`.
+- The PostgreSQL-backed non-Temporal API suite passed 218 tests while reporting 55% whole-app coverage. The explicit A1 safety gate passed 34 tests at 66.05%, above the unchanged 60% threshold. Temporal readiness passed all 4 tests.
+- The isolated PostgreSQL 18 database completed upgrade to head, downgrade to base, and re-upgrade; database and script heads both resolved to `011_idempotency_reconnect`. The protected historical migration remains byte-identical to `HEAD`.
+- All 17 AI tests passed. Whole-package coverage remains visible at 38%, while the five directly tested engines pass the separate unchanged 60% aggregate gate at 72%. Strict mypy passes all 49 source files with the package configuration explicitly loaded; API and AI Ruff checks pass without prompt-literal changes.
+- Frontend evidence remains green: lint has zero errors, typecheck passes, all 36 unit tests pass, the production build generates 22 routes, and both B1 Playwright cases pass.
+- Final whole-worktree semantic review found zero blockers and confirmed that A2/B2 production work has not started. Two missing edge-case regression tests remain recorded as low, non-blocking follow-up debt: ambiguous multi-profile brand degradation and full-name timing output.
+
+These are local CI-equivalent results, not an actual GitHub Actions run. Docker Desktop was unavailable, so migration/PostgreSQL evidence used a disposable local cluster that was stopped after validation. No live provider call, deployment, commit, or staging action occurred.
 
 ### Checkpoint 2: Tenant and Content
 

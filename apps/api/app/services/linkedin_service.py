@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
 
 from celery import Celery
 from sqlalchemy.orm import Session
@@ -803,7 +802,7 @@ def _save_scraped_posts_to_drive_if_connected(
         .filter(
             SocialConnection.user_id == user.id,
             SocialConnection.platform == "google_drive",
-            SocialConnection.is_active == True,
+            SocialConnection.is_active.is_(True),
         )
         .first()
     )
@@ -826,7 +825,7 @@ def _save_scraped_posts_to_drive_if_connected(
         .filter(
             SocialConnection.user_id == user.id,
             SocialConnection.platform == "linkedin",
-            SocialConnection.is_active == True,
+            SocialConnection.is_active.is_(True),
         )
         .first()
     )

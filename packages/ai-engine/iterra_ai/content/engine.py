@@ -1,9 +1,9 @@
 import os
 
-from iterra_ai.core.base_engine import BaseEngine
-from iterra_ai.content.schemas import ContentGenerationInput, ContentGenerationOutput
-from iterra_ai.prompts.content import CONTENT_GENERATION_USER_PROMPT
 from iterra_ai.content.platform_rules import format_content
+from iterra_ai.content.schemas import ContentGenerationInput, ContentGenerationOutput
+from iterra_ai.core.base_engine import BaseEngine
+from iterra_ai.prompts.content import CONTENT_GENERATION_USER_PROMPT
 
 
 class ContentGenerationEngine(BaseEngine[ContentGenerationInput, ContentGenerationOutput]):

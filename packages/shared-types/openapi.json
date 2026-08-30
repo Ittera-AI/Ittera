@@ -4965,7 +4965,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectSessionResponseV1"
+                }
               }
             }
           },
@@ -7758,6 +7760,87 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/authorization-context": {
+      "get": {
+        "tags": [
+          "workspaces",
+          "workspaces"
+        ],
+        "summary": "Get Authorization Context",
+        "description": "Return the frozen A2/B2 authorization boundary over current data.\n\nThis is a real Gate 1 stub, not the A2 tenancy implementation. The contract\nstays stable while A2 replaces its internals and B2 develops against a fake.",
+        "operationId": "get_authorization_context_api_v1_workspaces__workspace_id__authorization_context_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "X-Workspace-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "name": "ittera_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ittera Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationContextV1"
+                }
               }
             }
           },
@@ -10991,6 +11074,67 @@
         "title": "AssembledContext",
         "description": "The fully assembled context passed to every LLM content generation call.\nsystem_prompt is injected as the system message; the three source objects\nare retained for debugging, logging, and cost attribution."
       },
+      "AuthorizationContextV1": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "authorization-context.v1",
+            "title": "Schema Version",
+            "default": "authorization-context.v1"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Availability",
+            "default": "available"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceSummaryV1"
+          },
+          "brand": {
+            "$ref": "#/components/schemas/BrandSummaryV1"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions"
+          },
+          "white_label": {
+            "$ref": "#/components/schemas/WhiteLabelSummaryV1"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace",
+          "brand",
+          "role",
+          "permissions",
+          "white_label"
+        ],
+        "title": "AuthorizationContextV1",
+        "description": "Developer A-owned authorization contract consumed by Developer B."
+      },
       "AutoPostUpdateRequest": {
         "properties": {
           "enabled": {
@@ -11334,6 +11478,92 @@
           "profile"
         ],
         "title": "BrandProfileUpdateRequest"
+      },
+      "BrandSummaryV1": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "brand-summary.v1",
+            "title": "Schema Version",
+            "default": "brand-summary.v1"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Availability"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "profile_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Version"
+          },
+          "brand_colors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Brand Colors"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "availability",
+          "workspace_id",
+          "name"
+        ],
+        "title": "BrandSummaryV1",
+        "description": "Developer A-owned brand summary with an explicit degraded state."
       },
       "CalendarEventResponse": {
         "properties": {
@@ -11827,6 +12057,26 @@
           "confidence"
         ],
         "title": "ConfidenceIntervalResponse"
+      },
+      "ConnectSessionResponseV1": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "connect-session.v1",
+            "title": "Schema Version",
+            "default": "connect-session.v1"
+          },
+          "connect_token": {
+            "type": "string",
+            "title": "Connect Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connect_token"
+        ],
+        "title": "ConnectSessionResponseV1",
+        "description": "Versioned one-time OAuth connect-token contract.\n\nContract owner: Developer A. Primary consumer: Developer B web OAuth flow."
       },
       "ContentGapRequest": {
         "properties": {
@@ -17837,6 +18087,96 @@
         "title": "WhiteLabelSettingsResponse",
         "description": "White-label settings for reports."
       },
+      "WhiteLabelSummaryV1": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "white-label-summary.v1",
+            "title": "Schema Version",
+            "default": "white-label-summary.v1"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Availability",
+            "default": "available"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "primary_color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Color"
+          },
+          "secondary_color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondary Color"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "sender_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender Name"
+          },
+          "hide_powered_by": {
+            "type": "boolean",
+            "title": "Hide Powered By",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "WhiteLabelSummaryV1",
+        "description": "Stable presentation subset; raw organization settings stay internal."
+      },
       "WorkflowCreate": {
         "properties": {
           "name": {
@@ -18331,6 +18671,72 @@
           "members_count"
         ],
         "title": "WorkspaceStats"
+      },
+      "WorkspaceSummaryV1": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "workspace-summary.v1",
+            "title": "Schema Version",
+            "default": "workspace-summary.v1"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Availability",
+            "default": "available"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "organization_id": {
+            "type": "string",
+            "title": "Organization Id"
+          },
+          "organization_name": {
+            "type": "string",
+            "title": "Organization Name"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "organization_id",
+          "organization_name",
+          "name",
+          "slug",
+          "is_active"
+        ],
+        "title": "WorkspaceSummaryV1",
+        "description": "Developer A-owned workspace identity consumed by Developer B."
       },
       "WorkspaceUpdate": {
         "properties": {

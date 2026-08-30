@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from openai import AsyncOpenAI
 
 from app.config import settings
-from app.models.persona import PersonaDocument, PersonaProfile, PersonaInsight
+from app.models.persona import PersonaDocument, PersonaProfile
 from app.schemas.persona import AIPersonaExtraction
 
 class PersonaAIService:

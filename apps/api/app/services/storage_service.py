@@ -33,7 +33,7 @@ from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from google.oauth2.credentials import Credentials
 
 from app.config import settings
-from app.core.audit_logger import AuditAction, get_audit_logger
+from app.core.audit_logger import get_audit_logger
 from app.core.retry import drive_api_retry
 from app.core.security import decrypt_value
 from app.db.datetime_helpers import ensure_aware, utc_now

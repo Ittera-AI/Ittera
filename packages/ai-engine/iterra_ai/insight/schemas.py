@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -28,8 +30,8 @@ class InsightSynthesisInput(BaseModel):
     avg_engagement_rate: float | None = None
     records: list[PostPerformanceRecord]
     # Optional off-loop signals (Gap 8); engine treats them as soft context.
-    predicted_signals: dict | None = None  # from PredictorEngine
-    competitive_signals: dict | None = None  # from competitive engine
+    predicted_signals: dict[str, Any] | None = None  # from PredictorEngine
+    competitive_signals: dict[str, Any] | None = None  # from competitive engine
     # Prior memory so synthesis is incremental, not amnesiac.
     prior_summary: str | None = None
 

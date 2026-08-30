@@ -143,7 +143,7 @@ export default function PersonaOnboardingPage() {
       const map: Partial<Record<PlatformId, string>> = {};
       list.forEach((c) => {
         if (["twitter", "linkedin", "instagram"].includes(c.platform)) {
-          map[c.platform as PlatformId] = c.username;
+          map[c.platform as PlatformId] = c.platform_username || c.platform;
         }
       });
       if (Object.keys(map).length) setConnected(map);

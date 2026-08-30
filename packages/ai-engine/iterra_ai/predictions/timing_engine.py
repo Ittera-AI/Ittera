@@ -19,20 +19,28 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, TypedDict, cast
 
 from openai import OpenAI
 
+from iterra_ai.core.cost_tracker import CostTracker
+from iterra_ai.predictions.prompts import build_timing_prompt
 from iterra_ai.predictions.schemas import (
+    DayOfWeek,
+    TimeSlotScore,
     TimingInput,
     TimingOutput,
-    TimeSlotScore,
     TimingPattern,
 )
-from iterra_ai.predictions.prompts import build_timing_prompt
-from iterra_ai.core.cost_tracker import CostTracker
 
 logger = logging.getLogger(__name__)
+
+
+class _PlatformTimingPattern(TypedDict):
+    best_days: list[DayOfWeek]
+    best_hours: list[int]
+    avoid_hours: list[int]
+    weekend_ok: bool
 
 
 class TimingPredictionEngine:
@@ -50,7 +58,7 @@ class TimingPredictionEngine:
     """
     
     # Platform default patterns (used when no historical data)
-    PLATFORM_PATTERNS = {
+    PLATFORM_PATTERNS: dict[str, _PlatformTimingPattern] = {
         "linkedin": {
             "best_days": ["tue", "wed", "thu"],
             "best_hours": [8, 9, 17, 18],  # 8-10am, 5-6pm
@@ -77,7 +85,7 @@ class TimingPredictionEngine:
         },
     }
     
-    DAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    DAY_NAMES: list[DayOfWeek] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
     
     def __init__(self, api_key: str | None = None, model: str | None = None):
         """
@@ -91,11 +99,11 @@ class TimingPredictionEngine:
             api_key=api_key or os.getenv("AIML_API_KEY"),
             base_url=os.getenv("AIML_BASE_URL", "https://api.aimlapi.com/v1"),
         )
-        self.model = model or os.getenv("AIML_MODEL", "gpt-4o-mini")
+        self.model: str = model or os.getenv("AIML_MODEL") or "gpt-4o-mini"
         self.max_tokens = 4096
         self.cost_tracker = CostTracker()
     
-    def _compute_content_hash(self, content: str, context: dict) -> str:
+    def _compute_content_hash(self, content: str, context: dict[str, Any]) -> str:
         """Compute hash for caching."""
         normalized = content.strip().lower()[:200]  # First 200 chars
         hash_input = json.dumps({
@@ -105,7 +113,9 @@ class TimingPredictionEngine:
         }, sort_keys=True)
         return hashlib.sha256(hash_input.encode()).hexdigest()[:32]
     
-    def _call_llm(self, system_prompt: str, user_prompt: str) -> tuple[str, dict]:
+    def _call_llm(
+        self, system_prompt: str, user_prompt: str
+    ) -> tuple[str, dict[str, int]]:
         """Call the configured OpenAI-compatible API."""
         try:
             response = self.client.chat.completions.create(
@@ -116,15 +126,16 @@ class TimingPredictionEngine:
                     {"role": "user", "content": user_prompt},
                 ],
             )
-            content = response.choices[0].message.content if response.choices else ""
-            usage = {
+            raw_content = response.choices[0].message.content if response.choices else ""
+            content = raw_content if isinstance(raw_content, str) else ""
+            usage: dict[str, int] = {
                 "input_tokens": getattr(response.usage, "prompt_tokens", 0),
                 "output_tokens": getattr(response.usage, "completion_tokens", 0),
             }
             self.cost_tracker.log(
                 "timing", usage["input_tokens"], usage["output_tokens"]
             )
-            return content or "", usage
+            return content, usage
         except Exception as e:
             logger.error(f"Timing LLM call failed: {e}")
             raise
@@ -132,7 +143,7 @@ class TimingPredictionEngine:
     def _extract_json(self, text: str) -> dict[str, Any]:
         """Extract JSON from response."""
         try:
-            return json.loads(text)
+            return cast(dict[str, Any], json.loads(text))
         except json.JSONDecodeError:
             pass
         
@@ -141,14 +152,14 @@ class TimingPredictionEngine:
         json_match = re.search(r'```(?:json)?\s*\n?([\s\S]*?)```', text)
         if json_match:
             try:
-                return json.loads(json_match.group(1))
+                return cast(dict[str, Any], json.loads(json_match.group(1)))
             except json.JSONDecodeError:
                 pass
         
         brace_match = re.search(r'\{[\s\S]*\}', text)
         if brace_match:
             try:
-                return json.loads(brace_match.group(0))
+                return cast(dict[str, Any], json.loads(brace_match.group(0)))
             except json.JSONDecodeError:
                 pass
         
@@ -156,7 +167,7 @@ class TimingPredictionEngine:
     
     def _analyze_historical_patterns(
         self,
-        historical_posts: list[dict],
+        historical_posts: list[dict[str, Any]],
         platform: str,
     ) -> dict[str, Any]:
         """
@@ -200,16 +211,19 @@ class TimingPredictionEngine:
         }
         
         # Detect patterns
-        patterns: list[dict] = []
+        patterns: list[dict[str, Any]] = []
         
         # Best day pattern
         if day_scores:
-            best_day = max(day_scores, key=day_scores.get)
+            best_day = max(day_scores, key=lambda day: day_scores[day])
             best_day_score = day_scores[best_day]
             if best_day_score > 0:
                 patterns.append({
                     "type": "peak_engagement_time",
-                    "description": f"Posts on {best_day.capitalize()} show highest engagement ({best_day_score:.2f}%)",
+                    "description": (
+                        f"Posts on {best_day.capitalize()} show highest "
+                        f"engagement ({best_day_score:.2f}%)"
+                    ),
                     "confidence": 0.7 if len(historical_posts) > 10 else 0.5,
                     "action": f"Prioritize posting on {best_day.capitalize()}",
                 })
@@ -218,10 +232,13 @@ class TimingPredictionEngine:
         if hour_scores:
             valid_hours = {h: s for h, s in hour_scores.items() if s > 0}
             if valid_hours:
-                best_hour = max(valid_hours, key=valid_hours.get)
+                best_hour = max(valid_hours, key=lambda hour: valid_hours[hour])
                 patterns.append({
                     "type": "audience_active_hours",
-                    "description": f"Engagement peaks at {best_hour}:00 ({valid_hours[best_hour]:.2f}%)",
+                    "description": (
+                        f"Engagement peaks at {best_hour}:00 "
+                        f"({valid_hours[best_hour]:.2f}%)"
+                    ),
                     "confidence": 0.6,
                     "action": f"Try posting between {best_hour-1}:00 and {best_hour+1}:00",
                 })
@@ -238,7 +255,7 @@ class TimingPredictionEngine:
         self,
         input_data: TimingInput,
         content_hash: str,
-        historical_analysis: dict,
+        historical_analysis: dict[str, Any],
     ) -> TimingOutput:
         """
         Build timing output using heuristics when LLM fails.
@@ -277,7 +294,7 @@ class TimingPredictionEngine:
                 best_hours = list(dict.fromkeys(top_hist_hours + best_hours))[:4]
         
         # Filter by constraints
-        allowed_days = [d.lower() for d in input_data.allowed_days]
+        allowed_days = input_data.allowed_days.copy()
         filtered_days = [d for d in best_days if d in allowed_days]
         if not filtered_days and allowed_days:
             filtered_days = allowed_days[:3]
@@ -330,7 +347,9 @@ class TimingPredictionEngine:
                 
                 # Score based on position in best lists
                 day_score = (len(filtered_days) - filtered_days.index(day)) / len(filtered_days)
-                hour_score = (len(filtered_hours) - filtered_hours.index(hour)) / len(filtered_hours)
+                hour_score = (
+                    len(filtered_hours) - filtered_hours.index(hour)
+                ) / len(filtered_hours)
                 score = (day_score + hour_score) / 2 * 0.8  # Slightly lower than optimal
                 
                 # Historical boost
@@ -348,7 +367,11 @@ class TimingPredictionEngine:
                     predicted_reach=int(score * 1000),
                     audience_availability=score,
                     competition_level="medium",
-                    historical_performance=historical_analysis.get("day_scores", {}).get(day, 0) / 10 if historical_analysis.get("has_data") else None,
+                    historical_performance=(
+                        historical_analysis.get("day_scores", {}).get(day, 0) / 10
+                        if historical_analysis.get("has_data")
+                        else None
+                    ),
                     reasoning=f"Good {platform} posting time based on platform patterns",
                 ))
         
@@ -382,13 +405,18 @@ class TimingPredictionEngine:
             optimal_time=optimal_time,
             confidence_score=0.6 if historical_analysis.get("has_data") else 0.5,
             alternative_slots=alternative_slots,
+            weekly_heatmap=None,
             detected_patterns=detected_patterns,
-            best_days=filtered_days,
+            best_days=[str(day) for day in filtered_days],
             best_hours=filtered_hours,
             worst_times_to_post=[
                 f"Late night hours ({h}:00)" for h in platform_defaults.get("avoid_hours", [])[:3]
             ],
-            platform_insights=f"{platform.capitalize()} performs best during professional hours" if platform == "linkedin" else None,
+            platform_insights=(
+                f"{platform.capitalize()} performs best during professional hours"
+                if platform == "linkedin"
+                else None
+            ),
             prediction_time=datetime.utcnow(),
             processing_time_ms=50,
             historical_data_points_used=historical_analysis.get("data_points", 0),
@@ -396,7 +424,7 @@ class TimingPredictionEngine:
     
     def _parse_timing_response(
         self,
-        response: dict,
+        response: dict[str, Any],
         content_hash: str,
         historical_count: int,
     ) -> TimingOutput:
@@ -521,7 +549,7 @@ class TimingPredictionEngine:
         self,
         platform: str,
         timezone: str,
-        historical_posts: list[dict],
+        historical_posts: list[dict[str, Any]],
         allowed_days: list[str],
         allowed_hours_start: int,
         allowed_hours_end: int,
@@ -596,7 +624,11 @@ class TimingPredictionEngine:
                     predicted_reach=int(score * 1000),
                     audience_availability=score,
                     competition_level="medium" if 9 <= hour <= 17 else "low",
-                    historical_performance=historical_analysis.get("day_scores", {}).get(day, 0) / 10 if historical_analysis.get("has_data") else None,
+                    historical_performance=(
+                        historical_analysis.get("day_scores", {}).get(day, 0) / 10
+                        if historical_analysis.get("has_data")
+                        else None
+                    ),
                     reasoning=f"Score: {score:.2f} based on platform patterns and historical data",
                 ))
         

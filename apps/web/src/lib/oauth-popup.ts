@@ -8,7 +8,7 @@ export type OAuthPopupResult = {
 };
 
 type OAuthPopupDependencies = {
-  createSession?: () => Promise<{ connect_token: string }>;
+  createSession?: typeof api.connect.createSession;
   buildStartUrl?: (platform: string, connectToken: string) => string;
   openWindow?: (
     url?: string | URL,
